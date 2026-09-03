@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "recordType": "development-model-registration",
+  "modelId": "ultralytics-yolo11n-coco-dev-640-int8",
+  "version": "2026.08.20-export1",
+  "purpose": "development",
+  "releaseEligible": false,
+  "modelFile": {
+    "repositoryPath": "local-models/yolo11n_int8.tflite",
+    "trackedByGit": false,
+    "sizeBytes": 3085716,
+    "sha256": "2D3BB79F158618AE8717E4BE7F8D14C2139EE337FE3A610A70D882934BDDF824"
+  },
+  "sourceWeights": {
+    "name": "yolo11n.pt",
+    "url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n.pt",
+    "sizeBytes": 5613764,
+    "sha256": "0EBBC80D4A7680D14987A577CD21342B65ECFD94632BD9A8DA63AE6417644EE1"
+  },
+  "architecture": {
+    "name": "YOLO11n",
+    "task": "object-detection",
+    "parameterCount": 2616248,
+    "gigaFlopsAtInput": 6.5
+  },
+  "export": {
+    "operatingSystem": "WSL2 Ubuntu",
+    "python": "3.12.3",
+    "ultralytics": "8.4.123",
+    "torch": "2.12.1+cpu",
+    "torchvision": "0.27.1+cpu",
+    "litertTorch": "0.9.3",
+    "aiEdgeLiteRt": "2.1.6",
+    "aiEdgeQuantizer": "0.8.0",
+    "litertConverter": "0.3.1",
+    "arguments": {
+      "format": "litert",
+      "imgsz": 640,
+      "quantize": "int8",
+      "data": "coco8.yaml",
+      "nms": false,
+      "batch": 1,
+      "device": "cpu"
+    }
+  },
+  "calibration": {
+    "dataset": "Ultralytics COCO8",
+    "repositoryPath": "datasets/coco8",
+    "trackedByGit": false,
+    "configuredDatasetSize": 8,
+    "imagesUsedByExporter": 4,
+    "split": "val",
+    "recommendedMinimumImages": 300,
+    "suitableForBusinessAccuracy": false
+  },
+  "input": {
+    "tensorName": "serving_default_args_0",
+    "shape": [1, 3, 640, 640],
+    "layout": "NCHW",
+    "dtype": "float32",
+    "colorOrder": "RGB",
+    "valueRange": [0.0, 1.0],
+    "quantizationScale": 0.0,
+    "quantizationZeroPoint": 0
+  },
+  "output": {
+    "tensorName": "serving_default_output_0_output_dequant",
+    "shape": [1, 84, 8400],
+    "layout": "batch,channels,candidates",
+    "dtype": "float32",
+    "boxChannels": [0, 1, 2, 3],
+    "boxFormat": "center_x,center_y,width,height",
+    "boxCoordinateSpace": "normalized-input",
+    "classScoreChannels": {
+      "startInclusive": 4,
+      "endInclusive": 83
+    },
+    "classCount": 80,
+    "hasObjectnessChannel": false,
+    "requiresNms": true,
+    "quantizationScale": 0.0,
+    "quantizationZeroPoint": 0
+  },
+  "quantization": {
+    "scheme": "internal-int8-with-float32-boundary",
+    "internalTensorTypeCounts": {
+      "float32": 2,
+      "int8": 481,
+      "int32": 125
+    }
+  },
+  "labels": {
+    "repositoryPath": "docs/models/yolo11n-coco-labels.txt",
+    "count": 80,
+    "idRule": "zero-based line index",
+    "sha256": "BD17F1EE35D5F3C862A4894605855ABBB9DDA4B0621FDB0AC4C2C8C7BB7E730A"
+  },
+  "runtimeValidation": {
+    "tool": "ai_edge_litert.Interpreter 2.1.6",
+    "allocateTensorsSucceeded": true,
+    "zeroInputInvokeSucceeded": true
+  },
+  "license": {
+    "status": "reviewed-M03-T08-distribution-blocked",
+    "reviewedAt": "2026-08-21",
+    "reviewReport": "docs/模型与依赖许可证审查.md",
+    "allowedUse": "internal-development-chain-validation-only",
+    "distributionAllowed": false,
+    "releaseBlockReason": "Ultralytics states trained models are AGPL-3.0 by default; proprietary distribution requires an applicable Enterprise License or a separately reviewed replacement model chain. COCO8 images and labels also remain non-distributable development assets."
+  }
+}

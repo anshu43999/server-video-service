@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/server-video-service/video-protocol.schema.json",
+  "title": "Server Video Service protocol payloads",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/createStream" },
+    { "$ref": "#/$defs/yoloControl" },
+    { "$ref": "#/$defs/streamConfig" },
+    { "$ref": "#/$defs/ping" }
+  ],
+  "$defs": {
+    "streamId": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "createStream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stream_id"],
+      "properties": { "stream_id": { "$ref": "#/$defs/streamId" }, "source_url": { "type": ["string", "integer", "null"] } }
+    },
+    "yoloControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled"],
+      "properties": { "enabled": { "type": "boolean" } }
+    },
+    "streamConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "confidence": { "type": "number", "minimum": 0.01, "maximum": 0.99 },
+        "max_fps": { "type": "number", "minimum": 1, "maximum": 60 },
+        "yolo_enabled": { "type": "boolean" }
+      }
+    },
+    "ping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": { "type": { "const": "ping" }, "request_id": { "type": "string", "maxLength": 128 } }
+    }
+  }
+}

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>视频流控制台 · Server Video Service</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">◉</span><span>FIELD / VISION</span><small>SERVER VIDEO CONTROL</small></div>
+      <div class="topbar-meta"><span class="live-dot"></span><span id="service-state">连接中</span><span class="divider"></span><span id="clock">--:--:--</span></div>
+    </header>
+
+    <main class="dashboard">
+      <section class="hero">
+        <div><p class="eyebrow">OPERATIONS CONSOLE / 01</p><h1>视频流控制台</h1><p class="hero-copy">把实时画面交给服务器，把现场判断留给人。</p></div>
+        <button class="primary-btn" id="new-stream-btn"><span>＋</span> 新建流会话</button>
+      </section>
+
+      <section class="metrics" id="metrics">
+        <div class="metric-card"><span class="metric-label">活跃会话</span><strong id="metric-streams">0</strong><span class="metric-note">LIVE SESSIONS</span></div>
+        <div class="metric-card accent"><span class="metric-label">YOLO 分析中</span><strong id="metric-yolo">0</strong><span class="metric-note">SERVER INFERENCE</span></div>
+        <div class="metric-card"><span class="metric-label">累计接收帧</span><strong id="metric-frames">0</strong><span class="metric-note">FRAMES INGESTED</span></div>
+        <div class="metric-card"><span class="metric-label">模型状态</span><strong class="status-text" id="metric-model">待命</strong><span class="metric-note">MODEL RUNTIME</span></div>
+      </section>
+
+      <section class="workspace">
+        <div class="panel stream-panel"><div class="panel-heading"><div><p class="eyebrow">STREAM REGISTRY</p><h2>流会话</h2></div><button class="icon-btn" id="refresh-btn" title="刷新">↻</button></div><div id="stream-list" class="stream-list"><div class="empty-state">正在读取会话…</div></div></div>
+        <div class="panel inspector-panel"><div class="panel-heading"><div><p class="eyebrow">LIVE INSPECTOR</p><h2 id="inspector-title">选择一个流</h2></div><span class="pill muted" id="inspector-pill">未选择</span></div><div id="inspector-empty" class="empty-inspector"><div class="crosshair">＋</div><p>从左侧选择流会话<br>查看画面与运行参数</p></div><div id="inspector-content" class="inspector-content hidden"><div class="preview-wrap"><img id="preview" alt="实时视频预览"><div class="preview-overlay"><span id="preview-label">WAITING FOR FRAMES</span><span id="preview-fps">-- FPS</span></div></div><div class="control-grid"><label class="toggle-row"><span><b>YOLO 视频分析</b><small>服务器端叠加检测结果</small></span><input type="checkbox" id="yolo-toggle"><span class="toggle"></span></label><label class="field"><span>置信度阈值 <b id="confidence-value">0.25</b></span><input type="range" id="confidence" min="0.05" max="0.95" step="0.05" value="0.25"></label><label class="field"><span>最大处理 FPS <b id="fps-value">20</b></span><input type="range" id="max-fps" min="1" max="60" step="1" value="20"></label></div><div class="inspector-actions"><button class="danger-btn" id="delete-btn">删除会话</button><span id="save-state">参数自动保存</span></div></div></div>
+      </section>
+
+      <section class="panel model-panel"><div class="panel-heading"><div><p class="eyebrow">MODEL REGISTRY</p><h2>模型资产</h2></div><div class="panel-heading-actions"><button class="ghost-btn" id="register-model-btn">登记 Manifest</button><span class="pill muted" id="model-registry-state">读取中</span></div></div><div id="model-list" class="model-list"><div class="empty-state">正在读取模型注册表…</div></div></section>
+
+      <footer><span>SERVER VIDEO SERVICE · MVP CONSOLE</span><span>API <a href="/docs" target="_blank">/docs</a> · HEALTH <a href="/healthz" target="blank">/healthz</a></span></footer>
+    </main>
+  </div>
+
+  <dialog id="new-stream-dialog"><form method="dialog" id="new-stream-form"><div class="dialog-head"><div><p class="eyebrow">NEW SESSION</p><h2>新建视频流</h2></div><button class="close-btn" value="cancel">×</button></div><label class="field"><span>流 ID</span><input id="stream-id" required maxlength="128" placeholder="inspection-001"></label><label class="field"><span>服务端拉流地址 <em>可选</em></span><input id="source-url" placeholder="rtsp://… 或留空等待移动端推帧"></label><div class="dialog-actions"><button class="ghost-btn" value="cancel">取消</button><button class="primary-btn" value="default">创建会话</button></div></form></dialog>
+  <dialog id="register-model-dialog"><form method="dialog" id="register-model-form"><div class="dialog-head"><div><p class="eyebrow">MODEL REGISTRY</p><h2>登记转换产物</h2></div><button class="close-btn" value="cancel">×</button></div><label class="field"><span>Manifest 路径</span><input id="manifest-path" required maxlength="512" value="models/converted/yolo11n_640_manifest.json" placeholder="models/converted/model_manifest.json"></label><small>仅允许登记 models/ 目录下由转换工具生成且哈希匹配的 Manifest。</small><div class="dialog-actions"><button class="ghost-btn" value="cancel">取消</button><button class="primary-btn" value="default">登记并刷新</button></div></form></dialog>
+  <script src="/admin/app.js"></script>
+</body>
+</html>

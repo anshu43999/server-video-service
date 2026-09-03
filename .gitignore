@@ -1,0 +1,10 @@
+.venv/
+.test-convert/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.env
+models/*.pt
+models/*.onnx
+models/*.tflite
+models/converted/

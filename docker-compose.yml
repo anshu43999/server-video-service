@@ -1,0 +1,12 @@
+services:
+  video-service:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      YOLO_MODEL_PATH: /models/best.pt
+      YOLO_CONFIDENCE: "0.25"
+      MAX_FPS: "20"
+    volumes:
+      - ./models:/models:ro
+    restart: unless-stopped

@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "recordType": "development-model-profile-set",
+  "profileSetId": "ultralytics-yolo11n-coco-dev-int8-profiles",
+  "version": "2026.08.25-profiles-export1",
+  "purpose": "development",
+  "releaseEligible": false,
+  "sourceWeights": {
+    "name": "yolo11n.pt",
+    "url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n.pt",
+    "sizeBytes": 5613764,
+    "sha256": "0EBBC80D4A7680D14987A577CD21342B65ECFD94632BD9A8DA63AE6417644EE1"
+  },
+  "exportToolchain": {
+    "operatingSystem": "WSL2 Ubuntu",
+    "python": "3.12.3",
+    "ultralytics": "8.4.123",
+    "torch": "2.12.1+cpu",
+    "litertTorch": "0.9.3",
+    "aiEdgeLiteRt": "2.1.6",
+    "script": "tools/models/export_yolo11n_litert.py",
+    "commonArguments": {
+      "format": "litert",
+      "quantize": "int8",
+      "data": "coco8.yaml",
+      "nms": false,
+      "batch": 1,
+      "device": "cpu"
+    }
+  },
+  "profiles": [
+    {
+      "profile": "QUALITY_640",
+      "modelId": "ultralytics-yolo11n-coco-dev-640-int8",
+      "inputSize": 640,
+      "candidateCount": 8400,
+      "gigaFlops": 6.5,
+      "assetPath": "models/yolo11n_int8.tflite",
+      "repositoryPath": "local-models/android-assets/models/yolo11n_int8.tflite",
+      "trackedByGit": false,
+      "sizeBytes": 3085716,
+      "sha256": "2D3BB79F158618AE8717E4BE7F8D14C2139EE337FE3A610A70D882934BDDF824",
+      "inputShape": [1, 3, 640, 640],
+      "outputShape": [1, 84, 8400]
+    },
+    {
+      "profile": "BALANCED_416",
+      "modelId": "ultralytics-yolo11n-coco-dev-416-int8",
+      "inputSize": 416,
+      "candidateCount": 3549,
+      "gigaFlops": 2.7,
+      "assetPath": "models/yolo11n_416_int8.tflite",
+      "repositoryPath": "local-models/android-assets/models/yolo11n_416_int8.tflite",
+      "trackedByGit": false,
+      "sizeBytes": 3071492,
+      "sha256": "B9B11D63EE98F8BA1FFC9491ADD66B35A9A8F3A5031C323D50A1707E391021AA",
+      "inputShape": [1, 3, 416, 416],
+      "outputShape": [1, 84, 3549]
+    },
+    {
+      "profile": "SPEED_320",
+      "modelId": "ultralytics-yolo11n-coco-dev-320-int8",
+      "inputSize": 320,
+      "candidateCount": 2100,
+      "gigaFlops": 1.6,
+      "assetPath": "models/yolo11n_320_int8.tflite",
+      "repositoryPath": "local-models/android-assets/models/yolo11n_320_int8.tflite",
+      "trackedByGit": false,
+      "sizeBytes": 3067491,
+      "sha256": "6659FEEA4476A534FE61E3BDB3D1FB4022685F3EF2595049B77191B965E9409D",
+      "inputShape": [1, 3, 320, 320],
+      "outputShape": [1, 84, 2100]
+    }
+  ],
+  "sharedBoundary": {
+    "inputTensorName": "serving_default_args_0",
+    "inputLayout": "NCHW",
+    "inputDtype": "float32",
+    "inputColorOrder": "RGB",
+    "inputValueRange": [0.0, 1.0],
+    "outputTensorName": "serving_default_output_0_output_dequant",
+    "outputLayout": "batch,channels,candidates",
+    "outputDtype": "float32",
+    "classCount": 80,
+    "hasObjectnessChannel": false,
+    "requiresNms": true
+  },
+  "calibration": {
+    "dataset": "Ultralytics COCO8",
+    "imagesUsedByExporter": 4,
+    "recommendedMinimumImages": 300,
+    "suitableForBusinessAccuracy": false
+  },
+  "license": {
+    "status": "reviewed-M03-T08-distribution-blocked",
+    "reviewReport": "docs/模型与依赖许可证审查.md",
+    "allowedUse": "internal-development-chain-validation-only",
+    "distributionAllowed": false,
+    "releaseBlockReason": "Official Ultralytics development weights and COCO8 calibration assets are not approved for proprietary release distribution."
+  }
+}

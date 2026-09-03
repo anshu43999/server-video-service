@@ -1,0 +1,3 @@
+# Optional CPU runtime for serving ONNX artifacts. Python/platform wheels vary;
+# install this only on a supported deployment interpreter.
+onnxruntime>=1.17,<2
