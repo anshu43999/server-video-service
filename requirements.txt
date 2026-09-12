@@ -4,3 +4,4 @@ opencv-python-headless>=4.10,<5
 numpy>=1.26,<3
 pydantic-settings>=2.6,<3
 psutil>=6,<8
+cryptography>=43,<47

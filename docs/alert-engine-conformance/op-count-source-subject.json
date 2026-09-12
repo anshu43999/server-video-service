@@ -1,0 +1,115 @@
+{
+  "vectorId": "op-count-source-subject",
+  "description": "COUNT：source: 主体按整帧计数，不套 ROI（同一批检测里区域外那个也计入 → 计数 4）",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "site-total",
+      "ruleVersion": 1,
+      "name": "全场人数",
+      "enabled": true,
+      "subjectKind": "source",
+      "operator": "COUNT",
+      "requires": [
+        "BOX"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minCount": 4,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "Person"
+      ],
+      "severityBands": [
+        {
+          "severity": "MINOR",
+          "atLeast": 4
+        },
+        {
+          "severity": "MAJOR",
+          "atLeast": 8
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.15,
+            "y": 0.15,
+            "w": 0.1,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.88,
+          "box": {
+            "x": 0.3,
+            "y": 0.25,
+            "w": 0.1,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.92,
+          "box": {
+            "x": 0.45,
+            "y": 0.35,
+            "w": 0.1,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.4,
+          "box": {
+            "x": 0.2,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.95,
+          "box": {
+            "x": 0.8,
+            "y": 0.8,
+            "w": 0.1,
+            "h": 0.1
+          }
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "site-total",
+      "sourceId": "cam-01",
+      "subjectKey": "source:cam-01",
+      "operator": "COUNT",
+      "severity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 1000000,
+      "confirmedAtUs": 1000000,
+      "measuredValue": 4,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

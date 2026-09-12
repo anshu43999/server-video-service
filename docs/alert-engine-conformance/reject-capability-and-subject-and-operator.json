@@ -1,0 +1,123 @@
+{
+  "vectorId": "reject-capability-and-subject-and-operator",
+  "description": "绑定期显式拒绝，按 §6 固定顺序返回第一个原因：算子未实现 > 主体类型不支持 > 能力差集；被拒绝的规则不参与求值，同一向量里合法的规则照常产生事件",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "needs-track",
+      "ruleVersion": 1,
+      "name": "需要跟踪能力",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "DWELL",
+      "requires": [
+        "BOX",
+        "TRACK"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minDwellMs": 2000
+      },
+      "targetLabels": [
+        "Person"
+      ]
+    },
+    {
+      "ruleId": "frame-dwell",
+      "ruleVersion": 1,
+      "name": "单帧主体用时序算子",
+      "enabled": true,
+      "subjectKind": "frame",
+      "operator": "DWELL",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minDwellMs": 2000
+      },
+      "targetLabels": [
+        "fire"
+      ]
+    },
+    {
+      "ruleId": "metric-limit",
+      "ruleVersion": 1,
+      "name": "标量越限（预留未实现）",
+      "enabled": true,
+      "subjectKind": "metric",
+      "operator": "METRIC_THRESHOLD",
+      "requires": [
+        "SCALAR"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1
+      }
+    },
+    {
+      "ruleId": "fire-present",
+      "ruleVersion": 1,
+      "name": "火焰出现",
+      "enabled": true,
+      "subjectKind": "frame",
+      "operator": "PRESENCE",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.6,
+        "minConsecutiveFrames": 1
+      },
+      "targetLabels": [
+        "fire"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "img-9c2e",
+      "frameSeq": 0,
+      "capturedAtUs": 1000000,
+      "provides": [],
+      "classifications": [
+        {
+          "label": "fire",
+          "confidence": 0.8
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "fire-present",
+      "sourceId": "img-9c2e",
+      "subjectKey": "frame:img-9c2e",
+      "operator": "PRESENCE",
+      "severity": "MINOR",
+      "confirmedAtUs": 1000000,
+      "measuredValue": 0.8,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": [
+    {
+      "accepted": false,
+      "ruleId": "metric-limit",
+      "code": "OPERATOR_NOT_IMPLEMENTED"
+    },
+    {
+      "accepted": false,
+      "ruleId": "frame-dwell",
+      "code": "SUBJECT_KIND_UNSUPPORTED"
+    },
+    {
+      "accepted": false,
+      "ruleId": "needs-track",
+      "code": "CAPABILITY_UNSATISFIED",
+      "missing": [
+        "BOX",
+        "TRACK"
+      ]
+    }
+  ]
+}

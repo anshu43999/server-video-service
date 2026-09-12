@@ -602,6 +602,43 @@ def command_start(state: dict[str, Any], args: argparse.Namespace) -> None:
     print(f"Started {args.task_id}: {item['title']}")
 
 
+def command_add(state: dict[str, Any], args: argparse.Namespace) -> None:
+    """Add a pending subtask through the governed CLI.
+
+    This is intentionally a planning operation: it never starts work and it
+    always regenerates TASK_BOARD.md after updating the state source.
+    """
+    parent, parent_id = find_item(state, args.parent)
+    if parent_id is not None:
+        raise HarnessError("add requires a major task parent id")
+    if not ID_PATTERN.fullmatch(args.task_id) or "-T" not in args.task_id:
+        raise HarnessError(f"Invalid subtask id: {args.task_id}")
+    index, _ = build_index(state)
+    if args.task_id in index:
+        raise HarnessError(f"Task id already exists: {args.task_id}")
+    dependencies = list(args.depends_on or [])
+    for dependency in dependencies:
+        if dependency not in index:
+            raise HarnessError(f"Unknown dependency: {dependency}")
+        if dependency == args.task_id:
+            raise HarnessError("A task cannot depend on itself")
+    task = {
+        "id": args.task_id,
+        "title": args.title,
+        "status": "pending",
+        "dependsOn": dependencies,
+        "acceptance": args.acceptance,
+        "record": args.record or f"harness/records/{args.parent}/{args.task_id}.md",
+    }
+    parent.setdefault("subtasks", []).append(task)
+    if parent.get("status") == "completed":
+        parent["status"] = "in_progress"
+        parent.pop("completedAt", None)
+    save_state(state)
+    render_board(state)
+    print(f"Added {args.task_id} under {args.parent}: {args.title}")
+
+
 def command_complete(state: dict[str, Any], args: argparse.Namespace) -> None:
     item, parent_id = find_item(state, args.task_id)
     if parent_id is None:
@@ -769,6 +806,16 @@ def build_parser() -> argparse.ArgumentParser:
     start_parser.add_argument("task_id")
     start_parser.add_argument("--owner", required=True)
 
+    add_parser = subparsers.add_parser(
+        "add", help="Add a pending subtask to a major task"
+    )
+    add_parser.add_argument("task_id")
+    add_parser.add_argument("--parent", required=True)
+    add_parser.add_argument("--title", required=True)
+    add_parser.add_argument("--acceptance", required=True)
+    add_parser.add_argument("--depends-on", action="append", default=[])
+    add_parser.add_argument("--record")
+
     complete_parser = subparsers.add_parser(
         "complete", help="Complete one subtask and create its record"
     )
@@ -811,6 +858,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 COMMANDS = {
+    "add": command_add,
     "status": command_status,
     "next": command_next,
     "start": command_start,

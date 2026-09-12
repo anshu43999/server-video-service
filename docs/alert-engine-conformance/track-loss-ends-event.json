@@ -1,0 +1,110 @@
+{
+  "vectorId": "track-loss-ends-event",
+  "description": "跟踪丢失是正常的生命周期输入（§11.2）：lostTrackIds 结束进行中的事件而不是抛错（M07 原实现抛错）",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "person-present",
+      "ruleVersion": 1,
+      "name": "出现人员",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "PRESENCE",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "Person"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-05",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "21"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-05",
+      "frameSeq": 2,
+      "capturedAtUs": 2000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.92,
+          "box": {
+            "x": 0.32,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "21"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-05",
+      "frameSeq": 3,
+      "capturedAtUs": 3000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [],
+      "lostTrackIds": [
+        "21"
+      ]
+    },
+    {
+      "sourceId": "cam-05",
+      "frameSeq": 4,
+      "capturedAtUs": 4000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": []
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "person-present",
+      "sourceId": "cam-05",
+      "subjectKey": "track:21",
+      "operator": "PRESENCE",
+      "severity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 1000000,
+      "confirmedAtUs": 1000000,
+      "endedAtUs": 3000000,
+      "measuredValue": 0.9,
+      "state": "ENDED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

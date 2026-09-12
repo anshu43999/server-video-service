@@ -4,9 +4,13 @@
 
 输出传输协议见 [docs/adr-002-production-transport.md](docs/adr-002-production-transport.md)：**WebRTC/WHEP 是唯一生产播放路径，LL-HLS 是过渡与回退，RTSP 只给诊断工具，MJPEG/WebSocket JPEG 降级为测试与诊断通道。** App 只播放服务端推理后的流，不在远程流上做推理。
 
+告警引擎规格见 [docs/alert-engine-spec.md](docs/alert-engine-spec.md)（状态：冻结，机器可读契约 [docs/alert-engine.schema.json](docs/alert-engine.schema.json)）：**服务端与 App 共用同一份规格**，服务端实现远程视频流事件（`M11`），App 侧实现本地图片与相机事件（`M15`）。这是一个告警引擎，不是预警引擎，不做趋势外推与未来状态预测。双侧共用的一致性金样向量在 [docs/alert-engine-conformance/](docs/alert-engine-conformance/README.md)（29 条，服务端加载器 `tests/test_alert_engine_conformance.py`，App 侧原样复制执行）。
+
 项目的正式定位、范围、需求、接口契约和验收标准见 [PRODUCT_REQUIREMENTS.md](PRODUCT_REQUIREMENTS.md)。该服务只承接视频流链路，不修改现有 `mobile-app/`，移动端图片分析和本地相机分析继续保持原方案。
 
 启动后访问 `http://localhost:8080/` 可打开管理控制台；控制台用于人工查看流、切换 YOLO 和调整单路运行参数，移动端仍应使用独立 API/播放接口。
+
+模型资产页现提供 **PT 上传与异步本机/WSL 转换**：PT 在服务端验证后可直接按流绑定；TFLite 单独转换并登记下载产物。配置现有虚拟环境、校准集、任务重试与当前 App 接线边界见 [本机模型转换说明](docs/local-model-conversion.md)。COCO 仅用于用户功能测试。
 
 ## 一键启动（Windows）
 
@@ -119,7 +123,7 @@ Content-Type: application/json
 http://server:8080/api/streams/巡检-001/mjpeg
 ```
 
-生产播放走 MediaMTX 的 WHEP 地址（H.264），例如 `http://server:8889/巡检-001/whep`；WebRTC 不可用时回退 `http://server:8888/巡检-001/index.m3u8`。这两条路径依赖 H.264 编码与推流任务落地后才可用。
+生产播放先调用 `GET /api/streams/{stream_id}/playback` 获取 MediaMTX 的 WHEP 地址（H.264），例如 `http://server:8889/巡检-001/whep`；WebRTC 不可用时回退 `http://server:8888/巡检-001/index.m3u8`。接口同时返回 RTSP 诊断地址及各协议当前可用性。
 
 完整接口可打开 `http://server:8080/docs` 查看。
 
@@ -133,4 +137,4 @@ http://server:8080/api/streams/巡检-001/mjpeg
 
 ## 当前边界
 
-服务端 H.264 编码、MediaMTX 推流、WHEP/LL-HLS 播放和检测结果 WebSocket 旁路尚未实现，当前可运行的输出只有 MJPEG/WebSocket JPEG 这两条诊断通道。ADR-002 中的四项未验证假设（libwebrtc 在 API 27 的可用性与体积、公网 NAT 穿透、加入编码后的并发容量、实测端到端延迟）都还没有实测数据，不得当作已验证。生产环境需在前置网关增加鉴权、TLS 和限流。服务不会修改 `mobile-app/`。
+服务端已实现 H.264 编码、MediaMTX 推流、播放地址接口和检测结果 WebSocket 旁路；MJPEG/WebSocket JPEG 仍仅用于管理页和自动化诊断。ADR-002 中的四项未验证假设（libwebrtc 在 API 27 的可用性与体积、公网 NAT 穿透、加入编码后的并发容量、实测端到端延迟）都还没有实测数据，不得当作已验证。生产环境需在前置网关增加鉴权、TLS 和限流。服务不会修改 `mobile-app/`。

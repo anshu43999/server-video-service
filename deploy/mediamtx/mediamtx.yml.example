@@ -1,0 +1,43 @@
+###############################################
+# MediaMTX deployment template (1.20.x)
+# This file intentionally contains no credentials or certificates.
+###############################################
+logLevel: info
+logDestinations: [stdout]
+api: true
+apiAddress: :9997
+apiEncryption: false
+rtsp: true
+rtspAddress: :8554
+rtmp: false
+srt: false
+hls: true
+hlsAddress: :8888
+hlsVariant: lowLatency
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+webrtc: true
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+
+# Development-only anonymous publish/read/playback. Replace this block in
+# deploy/mediamtx/mediamtx.yml (ignored by git) for production auth/TLS.
+authMethod: internal
+authInternalUsers:
+  - user: any
+    pass:
+    ips: []
+    permissions:
+      - action: publish
+      - action: read
+      - action: playback
+  - user: any
+    pass:
+    ips: ["127.0.0.1", "::1"]
+    permissions:
+      - action: api
+      - action: metrics
+      - action: pprof
+paths:
+  all_others: {}

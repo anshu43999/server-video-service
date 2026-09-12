@@ -1,0 +1,153 @@
+{
+  "vectorId": "op-presence-track-consecutive-frames",
+  "description": "PRESENCE：低于 minConfidence 的帧不计入连续帧；第 3 个合格帧确认，measuredValue 取确认帧的置信度",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "person-present",
+      "ruleVersion": 1,
+      "name": "出现人员",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "PRESENCE",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 3,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "Person"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.4,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "7"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 2,
+      "capturedAtUs": 1100000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "7"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 3,
+      "capturedAtUs": 1200000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.92,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "7"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 4,
+      "capturedAtUs": 1300000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.88,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "7"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 5,
+      "capturedAtUs": 1400000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.95,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "7"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "person-present",
+      "sourceId": "cam-01",
+      "subjectKey": "track:7",
+      "operator": "PRESENCE",
+      "severity": "MINOR",
+      "notifySeverity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 1100000,
+      "confirmedAtUs": 1300000,
+      "measuredValue": 0.88,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

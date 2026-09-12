@@ -1,0 +1,480 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiyolo.local/schemas/alert-engine.schema.json",
+  "title": "公共告警引擎契约 v1",
+  "description": "服务端 M11 与 App 侧 M15 共用的机器可读契约。人类可读规格见 alert-engine-spec.md，冲突时以规格文档为准并同步修正本文件。规格状态：冻结。",
+  "x-specVersion": "v1",
+  "x-notImplemented": {
+    "operators": ["RELATION", "METRIC_THRESHOLD", "COMPOSITE"],
+    "subjectKinds": ["metric"],
+    "fields": ["Event/evidence/clipUri", "Observation/scalars"],
+    "note": "枚举值与字段位置已预留，实现遇到时必须按 RejectionReason 显式拒绝或恒为 null，不允许解析通过后静默不触发。"
+  },
+
+  "$defs": {
+    "SubjectKey": {
+      "type": "string",
+      "description": "<kind>:<id>，kind 取 track/roi/metric/source/frame，id 为 [A-Za-z0-9_.-]{1,64}",
+      "pattern": "^(track|roi|metric|source|frame):[A-Za-z0-9_.\\-]{1,64}$"
+    },
+    "SubjectKind": {
+      "type": "string",
+      "enum": ["track", "roi", "metric", "source", "frame"]
+    },
+    "Operator": {
+      "type": "string",
+      "enum": [
+        "PRESENCE", "IN_REGION", "LINE_CROSS", "DWELL",
+        "COUNT", "AREA_RATIO", "RATE", "ABSENCE",
+        "RELATION", "METRIC_THRESHOLD", "COMPOSITE"
+      ],
+      "description": "前八个已实现；RELATION / METRIC_THRESHOLD / COMPOSITE 仅预留，实现必须返回 OPERATOR_NOT_IMPLEMENTED。"
+    },
+    "Capability": {
+      "type": "string",
+      "enum": ["BOX", "TRACK", "MASK", "SCALAR", "POLYGON_ROI", "LINE_ROI"]
+    },
+    "Severity": {
+      "type": "string",
+      "enum": ["MINOR", "MAJOR", "CRITICAL"],
+      "description": "三档，升序。不设「预警」档 —— 那是趋势语义，本引擎不做。"
+    },
+    "RoiRelation": {
+      "type": "string",
+      "enum": ["ENTER", "INSIDE", "EXIT"]
+    },
+    "NormalizedPoint": {
+      "type": "array",
+      "description": "[x, y]，归一化，原点左上",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "type": "number", "minimum": 0, "maximum": 1 }
+    },
+    "NormalizedBox": {
+      "type": "object",
+      "description": "归一化框，要求 x+w ≤ 1、y+h ≤ 1（构造期校验，Schema 无法表达）",
+      "properties": {
+        "x": { "type": "number", "minimum": 0, "maximum": 1 },
+        "y": { "type": "number", "minimum": 0, "maximum": 1 },
+        "w": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+        "h": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 }
+      },
+      "required": ["x", "y", "w", "h"],
+      "additionalProperties": false
+    },
+    "TimestampUs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "微秒。引擎唯一的时间来源，由观测携带；求值路径不得读取系统时钟（C-1）。"
+    },
+    "DurationMs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "毫秒。所有时长与窗口配置统一用毫秒。"
+    },
+
+    "Roi": {
+      "type": "object",
+      "description": "三种形态，shape 为判别字段。退化几何在构造时拒绝，不在求值时静默返回不相交。",
+      "required": ["roiId", "shape"],
+      "properties": {
+        "roiId": { "type": "string", "pattern": "^[A-Za-z0-9_.\\-]{1,64}$" },
+        "shape": { "type": "string", "enum": ["RECT", "POLYGON", "LINE"] },
+        "rect": { "$ref": "#/$defs/NormalizedBox" },
+        "points": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NormalizedPoint" }
+        },
+        "positiveDirection": {
+          "type": "string",
+          "enum": ["LEFT_TO_RIGHT", "RIGHT_TO_LEFT"],
+          "description": "仅 LINE 使用。跨线方向取中心点位移向量与线段法向量的叉积符号。"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "shape": { "const": "RECT" } }, "required": ["shape"] },
+          "then": { "required": ["rect"] }
+        },
+        {
+          "if": { "properties": { "shape": { "const": "POLYGON" } }, "required": ["shape"] },
+          "then": {
+            "required": ["points"],
+            "properties": { "points": { "minItems": 3 } },
+            "description": "另需构造期校验：无重复相邻点、边不自相交、面积不为 0。"
+          }
+        },
+        {
+          "if": { "properties": { "shape": { "const": "LINE" } }, "required": ["shape"] },
+          "then": {
+            "required": ["points", "positiveDirection"],
+            "properties": { "points": { "minItems": 2, "maxItems": 2 } },
+            "description": "另需构造期校验：两点不重合（零长线段拒绝）。"
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+
+    "Thresholds": {
+      "type": "object",
+      "description": "七类阈值，含义不得混用。全部支持运行时修改且不重启进程，改后只对后续观测生效，不追溯已产生的事件。",
+      "properties": {
+        "minConfidence": {
+          "type": "number", "minimum": 0, "maximum": 1,
+          "description": "① 置信度：单条检测是否算「看见了」"
+        },
+        "minConsecutiveFrames": {
+          "type": "integer", "minimum": 1,
+          "description": "② 连续帧：抑制单帧闪烁"
+        },
+        "minDwellMs": {
+          "$ref": "#/$defs/DurationMs",
+          "description": "② 持续时长：DWELL 累计时长 / ABSENCE 缺失时长"
+        },
+        "minCount": {
+          "type": "integer", "minimum": 1,
+          "description": "③ 数量：超员、聚集"
+        },
+        "minAreaRatio": {
+          "type": "number", "exclusiveMinimum": 0, "maximum": 1,
+          "description": "④ 面积占比：烟雾扩散、积水、料堆占用"
+        },
+        "rateWindowMs": {
+          "$ref": "#/$defs/DurationMs",
+          "description": "⑤ 频次窗口。窗口只在观测到来时推进，不靠定时器滑动。"
+        },
+        "minRateHits": {
+          "type": "integer", "minimum": 1,
+          "description": "⑤ 频次：窗口内命中次数下限"
+        },
+        "cooldownMs": {
+          "$ref": "#/$defs/DurationMs",
+          "description": "⑥ 冷却窗口：只抑制同级重复"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "SeverityBand": {
+      "type": "object",
+      "description": "⑦ 分档：按 atLeast 升序，比较对象是算子的分档量，取成立的最高档。缺省时全部事件为 MINOR。",
+      "required": ["severity", "atLeast"],
+      "properties": {
+        "severity": { "$ref": "#/$defs/Severity" },
+        "atLeast": {
+          "type": "number",
+          "description": "单位随算子：置信度 0-1 / 次数 / 毫秒 / 个数 / 面积占比 0-1"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "Rule": {
+      "type": "object",
+      "required": ["ruleId", "ruleVersion", "name", "enabled", "subjectKind", "operator", "requires", "thresholds"],
+      "properties": {
+        "ruleId": { "type": "string", "pattern": "^[A-Za-z0-9_.\\-]{1,64}$" },
+        "ruleVersion": {
+          "type": "integer", "minimum": 1,
+          "description": "每次配置变更自增，随事件快照落库，用于事后复现判定依据。"
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "enabled": { "type": "boolean" },
+        "subjectKind": { "$ref": "#/$defs/SubjectKind" },
+        "operator": { "$ref": "#/$defs/Operator" },
+        "requires": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Capability" },
+          "uniqueItems": true,
+          "description": "与来源 provides 求差集，非空则拒绝绑定（C-3）。"
+        },
+        "targetLabels": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "标签来自场景包，引擎源码不得内置业务类别名。允许为空当且仅当算子为 ABSENCE 的补集语义或主体为 metric:。"
+        },
+        "roiId": { "type": "string", "pattern": "^[A-Za-z0-9_.\\-]{1,64}$" },
+        "roiRelation": { "$ref": "#/$defs/RoiRelation" },
+        "thresholds": { "$ref": "#/$defs/Thresholds" },
+        "severityBands": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/SeverityBand" }
+        },
+        "escalation": {
+          "type": "object",
+          "description": "未处置提级：只提升通知级别，不改写判定事实。由观测（含空信封）推进，不由定时器触发。",
+          "required": ["escalateAfterMs", "toSeverity"],
+          "properties": {
+            "escalateAfterMs": { "$ref": "#/$defs/DurationMs" },
+            "toSeverity": { "$ref": "#/$defs/Severity" }
+          },
+          "additionalProperties": false
+        },
+        "scope": {
+          "type": "object",
+          "properties": {
+            "sourceIds": {
+              "type": "array",
+              "items": { "type": "string", "minLength": 1 },
+              "uniqueItems": true
+            },
+            "thresholdOverrides": {
+              "type": "object",
+              "description": "按来源覆盖阈值：键为 sourceId，值为 Thresholds 的子集。同一条规则在不同摄像机上可有不同阈值，不需要复制规则。",
+              "additionalProperties": { "$ref": "#/$defs/Thresholds" }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "Detection": {
+      "type": "object",
+      "required": ["label", "confidence"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "box": { "$ref": "#/$defs/NormalizedBox", "description": "存在则提供 BOX 能力" },
+        "trackId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.\\-]{1,64}$",
+          "description": "存在则提供 TRACK 能力；对应主体 track:{trackId}。跟踪丢失后重新分配的 id 是另一个主体。"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Classification": {
+      "type": "object",
+      "description": "整帧标签。分类权重（如 yolo11-cls）只产生这一类载荷，拿不到 track: 主体，也无法参与 AREA_RATIO 与任何 ROI 算子。",
+      "required": ["label", "confidence"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "Mask": {
+      "type": "object",
+      "required": ["label", "confidence", "areaRatio"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "areaRatio": {
+          "type": "number", "minimum": 0, "maximum": 1,
+          "description": "存在则提供 MASK 能力；缺失时 AREA_RATIO 按框面积降级估算并在快照写 areaSource=BOX_FALLBACK。"
+        },
+        "polygon": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NormalizedPoint" },
+          "minItems": 3
+        }
+      },
+      "additionalProperties": false
+    },
+    "Scalar": {
+      "type": "object",
+      "description": "预留未实现：允许携带，当前不参与任何判定（METRIC_THRESHOLD 未实现）。",
+      "required": ["metricId", "value"],
+      "properties": {
+        "metricId": { "type": "string", "pattern": "^[A-Za-z0-9_.\\-]{1,64}$" },
+        "value": { "type": "number" },
+        "unit": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "Observation": {
+      "type": "object",
+      "description": "引擎的唯一入口。一帧（或一张图片）产生一个信封，四类载荷可同时存在，也可全部为空 —— 载荷全空的信封必须照样送入引擎，用于推进 ABSENCE 计时、RATE 窗口过期、DWELL 清零与未处置提级。",
+      "required": ["sourceId", "frameSeq", "capturedAtUs", "provides"],
+      "properties": {
+        "sourceId": { "type": "string", "pattern": "^[A-Za-z0-9_.\\-]{1,64}$" },
+        "frameSeq": {
+          "type": "integer", "minimum": 0,
+          "description": "允许跳号（latest-only 丢帧正常），跳号不构成错误。"
+        },
+        "capturedAtUs": {
+          "$ref": "#/$defs/TimestampUs",
+          "description": "同一 sourceId 必须单调不减；违反时实现必须抛错，不得排序或丢弃。"
+        },
+        "frameWidth": { "type": "integer", "exclusiveMinimum": 0, "description": "仅用于存证与展示换算，不参与判定" },
+        "frameHeight": { "type": "integer", "exclusiveMinimum": 0 },
+        "model": {
+          "type": "object",
+          "properties": {
+            "modelId": { "type": "string", "minLength": 1 },
+            "classNames": { "type": "array", "items": { "type": "string" } }
+          },
+          "required": ["modelId"],
+          "additionalProperties": false
+        },
+        "provides": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Capability" },
+          "uniqueItems": true,
+          "description": "来源的显式能力声明，用于绑定检查。必须与实际载荷一致；不一致时引擎不负责纠正，但应在指标中暴露计数。"
+        },
+        "detections": { "type": "array", "items": { "$ref": "#/$defs/Detection" } },
+        "classifications": { "type": "array", "items": { "$ref": "#/$defs/Classification" } },
+        "masks": { "type": "array", "items": { "$ref": "#/$defs/Mask" } },
+        "scalars": { "type": "array", "items": { "$ref": "#/$defs/Scalar" } },
+        "lostTrackIds": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Za-z0-9_.\\-]{1,64}$" },
+          "uniqueItems": true,
+          "description": "本帧确认丢失的跟踪 id。跟踪丢失是正常的生命周期输入，对应 track: 主体的进行中事件立即 ENDED，不得抛错。"
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "RejectionReason": {
+      "type": "object",
+      "description": "能力不足、主体不支持或算子未实现时的结构化拒绝。必须可在管理页看到并计入指标；被拒绝的规则不参与求值，也不得显示为「已启用」。",
+      "required": ["accepted", "code", "message"],
+      "properties": {
+        "accepted": { "const": false },
+        "code": {
+          "type": "string",
+          "enum": ["CAPABILITY_UNSATISFIED", "SUBJECT_KIND_UNSUPPORTED", "OPERATOR_NOT_IMPLEMENTED", "ROI_REQUIRED", "ROI_GEOMETRY_INVALID", "TARGET_LABELS_REQUIRED"]
+        },
+        "ruleId": { "type": "string" },
+        "sourceId": { "type": "string" },
+        "missing": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Capability" },
+          "uniqueItems": true
+        },
+        "message": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+
+    "Event": {
+      "type": "object",
+      "description": "事件确认时生成的不可变判定证据。不得包含令牌、完整 RTSP 凭据或本机绝对路径。",
+      "required": ["eventId", "ruleId", "ruleVersion", "sourceId", "subjectKey", "operator", "severity", "notifySeverity", "startedAtUs", "state", "suppressedCount", "effectiveThresholds"],
+      "properties": {
+        "eventId": { "type": "string", "minLength": 1 },
+        "ruleId": { "type": "string" },
+        "ruleVersion": { "type": "integer", "minimum": 1 },
+        "sourceId": { "type": "string" },
+        "subjectKey": { "$ref": "#/$defs/SubjectKey" },
+        "operator": { "$ref": "#/$defs/Operator" },
+        "severity": {
+          "$ref": "#/$defs/Severity",
+          "description": "判定时的事实级别。未处置提级时不变。"
+        },
+        "notifySeverity": {
+          "$ref": "#/$defs/Severity",
+          "description": "当前通知级别。未处置提级时变为 escalation.toSeverity。"
+        },
+        "escalatedAtUs": {
+          "oneOf": [{ "$ref": "#/$defs/TimestampUs" }, { "type": "null" }],
+          "description": "提级时刻，未提级为 null。"
+        },
+        "startedAtUs": { "$ref": "#/$defs/TimestampUs" },
+        "confirmedAtUs": { "oneOf": [{ "$ref": "#/$defs/TimestampUs" }, { "type": "null" }] },
+        "endedAtUs": { "oneOf": [{ "$ref": "#/$defs/TimestampUs" }, { "type": "null" }] },
+        "state": { "type": "string", "enum": ["CANDIDATE", "CONFIRMED", "ENDED", "COOLDOWN"] },
+        "suppressedCount": {
+          "type": "integer", "minimum": 0,
+          "description": "冷却窗口内被抑制的重复命中数。必须累计，否则运维看不出「这个点一直在报」。"
+        },
+        "measuredValue": {
+          "type": "number",
+          "description": "触发时的分档量原始值，用于解释为什么落在这一档。"
+        },
+        "effectiveThresholds": {
+          "$ref": "#/$defs/Thresholds",
+          "description": "实际生效值（含来源覆盖后的结果），不是规则的默认值。"
+        },
+        "model": {
+          "type": "object",
+          "properties": { "modelId": { "type": "string" } },
+          "required": ["modelId"],
+          "additionalProperties": false
+        },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "areaSource": {
+          "oneOf": [{ "type": "string", "enum": ["MASK", "BOX_FALLBACK"] }, { "type": "null" }],
+          "description": "仅 AREA_RATIO 使用。按框面积降级估算时必须为 BOX_FALLBACK。"
+        },
+        "evidence": {
+          "type": "object",
+          "description": "MVP 只落截图 + 时间区间。",
+          "properties": {
+            "snapshotUri": { "type": "string" },
+            "startedAtUs": { "$ref": "#/$defs/TimestampUs" },
+            "endedAtUs": { "oneOf": [{ "$ref": "#/$defs/TimestampUs" }, { "type": "null" }] },
+            "clipUri": {
+              "type": "null",
+              "description": "预留未实现：短视频存证恒为 null，解冻条件见 FR-M11-EVIDENCE-DEPTH。"
+            }
+          },
+          "additionalProperties": false
+        },
+        "disposition": {
+          "type": "object",
+          "description": "处置闭环。确认停止未处置提级计时；误报标记额外导出可再训练的数据集条目。",
+          "required": ["status"],
+          "properties": {
+            "status": { "type": "string", "enum": ["OPEN", "ACKNOWLEDGED", "FALSE_POSITIVE", "CLOSED"] },
+            "actor": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+            "actedAtUs": { "oneOf": [{ "$ref": "#/$defs/TimestampUs" }, { "type": "null" }] }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "ConformanceVector": {
+      "type": "object",
+      "description": "双侧共用的金样向量。纯数据，不含语言相关结构；服务端测试套件加载执行，App 侧原样复制到测试资源逐条执行。某一侧失败时按「规格不完整」处理，回到规格与本 Schema 修正后同步两侧，不允许单方面改实现或改向量。",
+      "required": ["vectorId", "description", "specVersion", "rules", "observations"],
+      "properties": {
+        "vectorId": { "type": "string", "pattern": "^[a-z0-9\\-]{1,64}$" },
+        "description": { "type": "string", "minLength": 1 },
+        "specVersion": { "const": "v1" },
+        "rois": { "type": "array", "items": { "$ref": "#/$defs/Roi" } },
+        "rules": { "type": "array", "items": { "$ref": "#/$defs/Rule" } },
+        "observations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Observation" },
+          "minItems": 1
+        },
+        "expectedEvents": {
+          "type": "array",
+          "description": "按 confirmedAtUs 升序，逐字段比对；未列出的字段不比对（允许两侧存储差异）。",
+          "items": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": true
+          }
+        },
+        "expectedRejections": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/RejectionReason" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+
+  "type": "object",
+  "description": "顶层为契约索引，实际校验对象由 $defs 提供：Observation（观测接入）、Rule（规则）、Roi（区域几何）、Event（事件快照）、RejectionReason（显式拒绝）、ConformanceVector（金样向量）。",
+  "properties": {
+    "observation": { "$ref": "#/$defs/Observation" },
+    "rule": { "$ref": "#/$defs/Rule" },
+    "roi": { "$ref": "#/$defs/Roi" },
+    "event": { "$ref": "#/$defs/Event" },
+    "rejection": { "$ref": "#/$defs/RejectionReason" },
+    "conformanceVector": { "$ref": "#/$defs/ConformanceVector" }
+  },
+  "additionalProperties": false
+}

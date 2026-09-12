@@ -1,0 +1,74 @@
+{
+  "vectorId": "op-presence-frame-classification",
+  "description": "PRESENCE：分类型观测按整帧标签参与；frame: 主体 id 取 sourceId；低于 minConfidence 的标签不成立",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "fire-present",
+      "ruleVersion": 1,
+      "name": "火焰出现",
+      "enabled": true,
+      "subjectKind": "frame",
+      "operator": "PRESENCE",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.6,
+        "minConsecutiveFrames": 1
+      },
+      "targetLabels": [
+        "fire"
+      ]
+    },
+    {
+      "ruleId": "smoke-present",
+      "ruleVersion": 1,
+      "name": "烟雾出现",
+      "enabled": true,
+      "subjectKind": "frame",
+      "operator": "PRESENCE",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.6,
+        "minConsecutiveFrames": 1
+      },
+      "targetLabels": [
+        "smoke"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "img-8a3f",
+      "frameSeq": 0,
+      "capturedAtUs": 2000000,
+      "provides": [],
+      "classifications": [
+        {
+          "label": "fire",
+          "confidence": 0.77
+        },
+        {
+          "label": "smoke",
+          "confidence": 0.41
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "fire-present",
+      "sourceId": "img-8a3f",
+      "subjectKey": "frame:img-8a3f",
+      "operator": "PRESENCE",
+      "severity": "MINOR",
+      "notifySeverity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 2000000,
+      "confirmedAtUs": 2000000,
+      "measuredValue": 0.77,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

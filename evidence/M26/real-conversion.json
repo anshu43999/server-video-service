@@ -1,0 +1,93 @@
+{
+  "at": "2026-09-08T09:27:02.158854+00:00",
+  "model_id": "uploaded-02f1f4d17030499281daa395652e2924",
+  "job_id": "c571978fef8b49769da7251d77215e7c",
+  "version": "2026.09.08",
+  "labels": 80,
+  "conversion_seconds": 27.44,
+  "artifacts": [
+    {
+      "id": "server-pt",
+      "bytes": 5613764,
+      "sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1"
+    },
+    {
+      "id": "android-int8",
+      "bytes": 3085717,
+      "sha256": "98bfd388bc7ad1045bbba8fe9183253ef2f3d632c0a75d6f55e58f3cfdc6c807"
+    },
+    {
+      "id": "android-manifest",
+      "bytes": 2299,
+      "sha256": "aa0ad01df44bd8ecaea35449ca4e125d3e8f9092e590f245247bf305f5b2e9da"
+    }
+  ],
+  "stream_inference": {
+    "bound_model": "uploaded-02f1f4d17030499281daa395652e2924",
+    "result": {
+      "stream_id": "m26-verify-e6f03c67bf",
+      "frame_seq": 1,
+      "captured_at": "2026-09-08T17:27:07.704+08:00",
+      "model": "uploaded-02f1f4d17030499281daa395652e2924",
+      "inference_ms": 3927.7,
+      "detections": [
+        {
+          "class_id": 5,
+          "class_name": "bus",
+          "confidence": 0.9402,
+          "box": {
+            "x": 0.004732,
+            "y": 0.212374,
+            "w": 0.978225,
+            "h": 0.462082
+          }
+        },
+        {
+          "class_id": 0,
+          "class_name": "person",
+          "confidence": 0.8882,
+          "box": {
+            "x": 0.828416,
+            "y": 0.365586,
+            "w": 0.171349,
+            "h": 0.448036
+          }
+        },
+        {
+          "class_id": 0,
+          "class_name": "person",
+          "confidence": 0.8783,
+          "box": {
+            "x": 0.058524,
+            "y": 0.369968,
+            "w": 0.236909,
+            "h": 0.46725
+          }
+        },
+        {
+          "class_id": 0,
+          "class_name": "person",
+          "confidence": 0.8558,
+          "box": {
+            "x": 0.275381,
+            "y": 0.378415,
+            "w": 0.149887,
+            "h": 0.418284
+          }
+        },
+        {
+          "class_id": 0,
+          "class_name": "person",
+          "confidence": 0.6219,
+          "box": {
+            "x": 2.7e-05,
+            "y": 0.514878,
+            "w": 0.085017,
+            "h": 0.292862
+          }
+        }
+      ]
+    }
+  },
+  "result": "passed"
+}

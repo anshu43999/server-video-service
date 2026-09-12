@@ -1,0 +1,1374 @@
+{
+  "vectorId": "rate-window-capacity-bound",
+  "description": "RATE 窗口容量上限：60 次命中、间隔 10ms、窗口 100ms，正确实现窗口内最多 11 次（永远到不了 CRITICAL 的 20 次）→ 全程只有一个 MINOR 事件；不做过期回收的实现会在第 20 次命中时因级别升高多放行一个 CRITICAL 事件而失败",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "burst-rate",
+      "ruleVersion": 1,
+      "name": "反复闯入",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "RATE",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "rateWindowMs": 100,
+        "minRateHits": 5,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "intrusion"
+      ],
+      "severityBands": [
+        {
+          "severity": "MINOR",
+          "atLeast": 5
+        },
+        {
+          "severity": "CRITICAL",
+          "atLeast": 20
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 2,
+      "capturedAtUs": 1010000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 3,
+      "capturedAtUs": 1020000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 4,
+      "capturedAtUs": 1030000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 5,
+      "capturedAtUs": 1040000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 6,
+      "capturedAtUs": 1050000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 7,
+      "capturedAtUs": 1060000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 8,
+      "capturedAtUs": 1070000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 9,
+      "capturedAtUs": 1080000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 10,
+      "capturedAtUs": 1090000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 11,
+      "capturedAtUs": 1100000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 12,
+      "capturedAtUs": 1110000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 13,
+      "capturedAtUs": 1120000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 14,
+      "capturedAtUs": 1130000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 15,
+      "capturedAtUs": 1140000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 16,
+      "capturedAtUs": 1150000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 17,
+      "capturedAtUs": 1160000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 18,
+      "capturedAtUs": 1170000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 19,
+      "capturedAtUs": 1180000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 20,
+      "capturedAtUs": 1190000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 21,
+      "capturedAtUs": 1200000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 22,
+      "capturedAtUs": 1210000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 23,
+      "capturedAtUs": 1220000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 24,
+      "capturedAtUs": 1230000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 25,
+      "capturedAtUs": 1240000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 26,
+      "capturedAtUs": 1250000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 27,
+      "capturedAtUs": 1260000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 28,
+      "capturedAtUs": 1270000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 29,
+      "capturedAtUs": 1280000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 30,
+      "capturedAtUs": 1290000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 31,
+      "capturedAtUs": 1300000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 32,
+      "capturedAtUs": 1310000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 33,
+      "capturedAtUs": 1320000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 34,
+      "capturedAtUs": 1330000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 35,
+      "capturedAtUs": 1340000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 36,
+      "capturedAtUs": 1350000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 37,
+      "capturedAtUs": 1360000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 38,
+      "capturedAtUs": 1370000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 39,
+      "capturedAtUs": 1380000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 40,
+      "capturedAtUs": 1390000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 41,
+      "capturedAtUs": 1400000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 42,
+      "capturedAtUs": 1410000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 43,
+      "capturedAtUs": 1420000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 44,
+      "capturedAtUs": 1430000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 45,
+      "capturedAtUs": 1440000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 46,
+      "capturedAtUs": 1450000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 47,
+      "capturedAtUs": 1460000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 48,
+      "capturedAtUs": 1470000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 49,
+      "capturedAtUs": 1480000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 50,
+      "capturedAtUs": 1490000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 51,
+      "capturedAtUs": 1500000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 52,
+      "capturedAtUs": 1510000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 53,
+      "capturedAtUs": 1520000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 54,
+      "capturedAtUs": 1530000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 55,
+      "capturedAtUs": 1540000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 56,
+      "capturedAtUs": 1550000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 57,
+      "capturedAtUs": 1560000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 58,
+      "capturedAtUs": 1570000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 59,
+      "capturedAtUs": 1580000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-06",
+      "frameSeq": 60,
+      "capturedAtUs": 1590000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "intrusion",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "burst-rate",
+      "sourceId": "cam-06",
+      "subjectKey": "track:1",
+      "operator": "RATE",
+      "severity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 1040000,
+      "confirmedAtUs": 1040000,
+      "measuredValue": 5,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

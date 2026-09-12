@@ -1,0 +1,88 @@
+{
+  "vectorId": "baseline-m07-roi-inside-and-outside-unchanged",
+  "description": "M07 基线：整框完全在区域内仍然算在内、完全在区域外仍然算在外 —— §17 第 11 行只把「跨边界」的判定从整框包含改成中心点，没有动这两种明确情形",
+  "specVersion": "v1",
+  "rois": [
+    {
+      "roiId": "zone",
+      "shape": "RECT",
+      "rect": {
+        "x": 0.2,
+        "y": 0.2,
+        "w": 0.4,
+        "h": 0.4
+      }
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "m07-in-zone",
+      "ruleVersion": 1,
+      "name": "M07 基线：区域归属",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "IN_REGION",
+      "requires": [
+        "BOX"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "Person"
+      ],
+      "roiId": "zone",
+      "roiRelation": "INSIDE"
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.3,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "1"
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.8,
+            "y": 0.8,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "2"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "m07-in-zone",
+      "sourceId": "cam-01",
+      "subjectKey": "track:1",
+      "operator": "IN_REGION",
+      "severity": "MINOR",
+      "confirmedAtUs": 1000000,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

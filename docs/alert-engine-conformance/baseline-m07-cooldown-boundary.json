@@ -1,0 +1,133 @@
+{
+  "vectorId": "baseline-m07-cooldown-boundary",
+  "description": "冷却窗口边界取 ≥（§12）：窗口起点是上一次**放行**的 capturedAtUs = 1 s。第二次命中在 2.999 s，间隔 1999 ms < 2000 ms 被抑制且**不刷新窗口起点**；第三次命中在 3.000 s，间隔正好 2000 ms 放行 → 两个事件实例，抑制记在第一个实例上",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "m07-boundary",
+      "ruleVersion": 1,
+      "name": "M07 基线：冷却边界",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "PRESENCE",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "cooldownMs": 2000
+      },
+      "targetLabels": [
+        "Person"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "31"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 2,
+      "capturedAtUs": 1500000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": []
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 3,
+      "capturedAtUs": 2999000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "31"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 4,
+      "capturedAtUs": 2999500,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": []
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 5,
+      "capturedAtUs": 3000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "31"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "m07-boundary",
+      "sourceId": "cam-01",
+      "subjectKey": "track:31",
+      "operator": "PRESENCE",
+      "severity": "MINOR",
+      "confirmedAtUs": 1000000,
+      "suppressedCount": 1
+    },
+    {
+      "ruleId": "m07-boundary",
+      "sourceId": "cam-01",
+      "subjectKey": "track:31",
+      "operator": "PRESENCE",
+      "severity": "MINOR",
+      "confirmedAtUs": 3000000,
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

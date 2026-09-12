@@ -1,0 +1,168 @@
+{
+  "vectorId": "reject-roi-geometry-degenerate",
+  "description": "构造期拒绝退化 ROI（§5.1）：自相交多边形、共线（零面积）多边形、零长度线段一律 ROI_GEOMETRY_INVALID；引用它们的规则全部被拒，因此这一帧里的人不产生任何事件",
+  "specVersion": "v1",
+  "rois": [
+    {
+      "roiId": "bowtie",
+      "shape": "POLYGON",
+      "points": [
+        [
+          0.1,
+          0.1
+        ],
+        [
+          0.9,
+          0.9
+        ],
+        [
+          0.9,
+          0.1
+        ],
+        [
+          0.1,
+          0.9
+        ]
+      ]
+    },
+    {
+      "roiId": "flat",
+      "shape": "POLYGON",
+      "points": [
+        [
+          0.1,
+          0.5
+        ],
+        [
+          0.5,
+          0.5
+        ],
+        [
+          0.9,
+          0.5
+        ]
+      ]
+    },
+    {
+      "roiId": "dot",
+      "shape": "LINE",
+      "points": [
+        [
+          0.5,
+          0.5
+        ],
+        [
+          0.5,
+          0.5
+        ]
+      ],
+      "positiveDirection": "LEFT_TO_RIGHT"
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "in-bowtie",
+      "ruleVersion": 1,
+      "name": "自相交多边形",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "IN_REGION",
+      "requires": [
+        "BOX",
+        "POLYGON_ROI"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1
+      },
+      "targetLabels": [
+        "Person"
+      ],
+      "roiId": "bowtie",
+      "roiRelation": "INSIDE"
+    },
+    {
+      "ruleId": "in-flat",
+      "ruleVersion": 1,
+      "name": "零面积多边形",
+      "enabled": true,
+      "subjectKind": "roi",
+      "operator": "COUNT",
+      "requires": [
+        "BOX"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minCount": 1
+      },
+      "targetLabels": [
+        "Person"
+      ],
+      "roiId": "flat"
+    },
+    {
+      "ruleId": "cross-dot",
+      "ruleVersion": 1,
+      "name": "零长度线段",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "LINE_CROSS",
+      "requires": [
+        "BOX",
+        "TRACK",
+        "LINE_ROI"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1
+      },
+      "targetLabels": [
+        "Person"
+      ],
+      "roiId": "dot"
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.45,
+            "y": 0.45,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "1"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [],
+  "expectedRejections": [
+    {
+      "accepted": false,
+      "ruleId": "in-bowtie",
+      "code": "ROI_GEOMETRY_INVALID"
+    },
+    {
+      "accepted": false,
+      "ruleId": "in-flat",
+      "code": "ROI_GEOMETRY_INVALID"
+    },
+    {
+      "accepted": false,
+      "ruleId": "cross-dot",
+      "code": "ROI_GEOMETRY_INVALID"
+    }
+  ]
+}

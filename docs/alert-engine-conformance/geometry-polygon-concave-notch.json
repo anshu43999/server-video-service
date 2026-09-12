@@ -1,0 +1,105 @@
+{
+  "vectorId": "geometry-polygon-concave-notch",
+  "description": "凹多边形（右侧带 V 形缺口）用射线法 even-odd 判定：缺口内的中心点（0.50,0.70）在区域外，缺口上方的（0.50,0.30）在区域内 —— 用外接矩形或凸包近似的实现会失败",
+  "specVersion": "v1",
+  "rois": [
+    {
+      "roiId": "notch",
+      "shape": "POLYGON",
+      "points": [
+        [
+          0.1,
+          0.1
+        ],
+        [
+          0.9,
+          0.1
+        ],
+        [
+          0.9,
+          0.9
+        ],
+        [
+          0.5,
+          0.5
+        ],
+        [
+          0.1,
+          0.9
+        ]
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "in-notch",
+      "ruleVersion": 1,
+      "name": "缺口区域",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "IN_REGION",
+      "requires": [
+        "BOX",
+        "POLYGON_ROI"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "Person"
+      ],
+      "roiId": "notch",
+      "roiRelation": "INSIDE"
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-08",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.45,
+            "y": 0.25,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "1"
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.45,
+            "y": 0.65,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "2"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "in-notch",
+      "sourceId": "cam-08",
+      "subjectKey": "track:1",
+      "operator": "IN_REGION",
+      "severity": "MINOR",
+      "confirmedAtUs": 1000000,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

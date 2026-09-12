@@ -1,0 +1,156 @@
+{
+  "vectorId": "baseline-m07-confirm-requires-both-thresholds",
+  "description": "M07 基线：连续帧与停留时长是**与**关系。400 ms 一帧，第 3 帧连续帧已满足但停留只有 800 ms 不确认，第 4 帧停留 1200 ms 才确认；停留时长按 (最后一次成立 - 首次成立)/1000 计算",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "m07-dwell",
+      "ruleVersion": 1,
+      "name": "M07 基线：滞留",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "DWELL",
+      "requires": [
+        "BOX",
+        "TRACK"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 3,
+        "minDwellMs": 1000,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "Person"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "31"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 2,
+      "capturedAtUs": 1400000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "31"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 3,
+      "capturedAtUs": 1800000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "31"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 4,
+      "capturedAtUs": 2200000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "31"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 5,
+      "capturedAtUs": 2600000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "31"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "m07-dwell",
+      "sourceId": "cam-01",
+      "subjectKey": "track:31",
+      "operator": "DWELL",
+      "severity": "MINOR",
+      "startedAtUs": 1000000,
+      "confirmedAtUs": 2200000,
+      "measuredValue": 1200,
+      "state": "CONFIRMED",
+      "suppressedCount": 0,
+      "escalatedAtUs": null
+    }
+  ],
+  "expectedRejections": []
+}

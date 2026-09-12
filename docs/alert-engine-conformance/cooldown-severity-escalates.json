@@ -1,0 +1,391 @@
+{
+  "vectorId": "cooldown-severity-escalates",
+  "description": "冷却四元组：首次命中放行（MINOR/3）→ 同级重复被抑制（suppressedCount 累加）→ 级别升高立即放行（MAJOR/7）→ 级别降低仍被抑制，且抑制计到与自己同级的那个实例上",
+  "specVersion": "v1",
+  "rois": [
+    {
+      "roiId": "yard",
+      "shape": "RECT",
+      "rect": {
+        "x": 0,
+        "y": 0,
+        "w": 1,
+        "h": 1
+      }
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "crowd",
+      "ruleVersion": 1,
+      "name": "料场聚集",
+      "enabled": true,
+      "subjectKind": "roi",
+      "operator": "COUNT",
+      "requires": [
+        "BOX"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minCount": 3,
+        "cooldownMs": 60000
+      },
+      "targetLabels": [
+        "Person"
+      ],
+      "roiId": "yard",
+      "severityBands": [
+        {
+          "severity": "MINOR",
+          "atLeast": 3
+        },
+        {
+          "severity": "MAJOR",
+          "atLeast": 6
+        },
+        {
+          "severity": "CRITICAL",
+          "atLeast": 10
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.05,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.14,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.22999999999999998,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 2,
+      "capturedAtUs": 2000000,
+      "provides": [
+        "BOX"
+      ],
+      "detections": []
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 3,
+      "capturedAtUs": 3000000,
+      "provides": [
+        "BOX"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.05,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.14,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.22999999999999998,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 4,
+      "capturedAtUs": 4000000,
+      "provides": [
+        "BOX"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.05,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.14,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.22999999999999998,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.32,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.41,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.49999999999999994,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.5900000000000001,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 5,
+      "capturedAtUs": 5000000,
+      "provides": [
+        "BOX"
+      ],
+      "detections": []
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 6,
+      "capturedAtUs": 6000000,
+      "provides": [
+        "BOX"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.05,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.14,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.22999999999999998,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.32,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.41,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.49999999999999994,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.5900000000000001,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 7,
+      "capturedAtUs": 7000000,
+      "provides": [
+        "BOX"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.05,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.14,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.22999999999999998,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.32,
+            "y": 0.4,
+            "w": 0.05,
+            "h": 0.1
+          }
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "crowd",
+      "sourceId": "cam-01",
+      "subjectKey": "roi:yard",
+      "operator": "COUNT",
+      "severity": "MINOR",
+      "measuredValue": 3,
+      "startedAtUs": 1000000,
+      "confirmedAtUs": 1000000,
+      "state": "COOLDOWN",
+      "suppressedCount": 2
+    },
+    {
+      "ruleId": "crowd",
+      "sourceId": "cam-01",
+      "subjectKey": "roi:yard",
+      "operator": "COUNT",
+      "severity": "MAJOR",
+      "measuredValue": 7,
+      "startedAtUs": 4000000,
+      "confirmedAtUs": 4000000,
+      "state": "COOLDOWN",
+      "suppressedCount": 1
+    }
+  ],
+  "expectedRejections": []
+}

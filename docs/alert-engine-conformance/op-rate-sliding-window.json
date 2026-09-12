@@ -1,0 +1,165 @@
+{
+  "vectorId": "op-rate-sliding-window",
+  "description": "RATE：窗口 [t-5000ms, t] 左闭右闭，第 3 次命中恰好把窗口起点上的第 1 次算进来 → 6000000 确认；过期回收后窗口内只剩 2 次 → 12000000 结束",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "smoking-rate",
+      "ruleVersion": 1,
+      "name": "反复抽烟",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "RATE",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "rateWindowMs": 5000,
+        "minRateHits": 3,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "smoking"
+      ],
+      "severityBands": [
+        {
+          "severity": "MINOR",
+          "atLeast": 3
+        },
+        {
+          "severity": "MAJOR",
+          "atLeast": 6
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-03",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "smoking",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "9"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-03",
+      "frameSeq": 2,
+      "capturedAtUs": 2000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "smoking",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "9"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-03",
+      "frameSeq": 3,
+      "capturedAtUs": 6000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "smoking",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "9"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-03",
+      "frameSeq": 4,
+      "capturedAtUs": 7000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "smoking",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "9"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-03",
+      "frameSeq": 5,
+      "capturedAtUs": 12000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "smoking",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "9"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "smoking-rate",
+      "sourceId": "cam-03",
+      "subjectKey": "track:9",
+      "operator": "RATE",
+      "severity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 6000000,
+      "confirmedAtUs": 6000000,
+      "measuredValue": 3,
+      "state": "ENDED",
+      "endedAtUs": 12000000,
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

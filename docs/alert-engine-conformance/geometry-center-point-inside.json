@@ -1,0 +1,120 @@
+{
+  "vectorId": "geometry-center-point-inside",
+  "description": "ROI 归属只看中心点（§17 第 11 行的行为变更）：跨边界但中心在内的算在内（track:1，M07 的整框包含判为不在内）；完全在内的照旧在内（track:2）；完全在外的照旧在外（track:3）；与区域相交但中心在外的**不算**在内（track:4）",
+  "specVersion": "v1",
+  "rois": [
+    {
+      "roiId": "zone",
+      "shape": "RECT",
+      "rect": {
+        "x": 0.2,
+        "y": 0.2,
+        "w": 0.4,
+        "h": 0.4
+      }
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "in-zone",
+      "ruleVersion": 1,
+      "name": "进入区域",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "IN_REGION",
+      "requires": [
+        "BOX"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "Person"
+      ],
+      "roiId": "zone",
+      "roiRelation": "INSIDE"
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-08",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.15,
+            "y": 0.15,
+            "w": 0.2,
+            "h": 0.2
+          },
+          "trackId": "1"
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.25,
+            "y": 0.25,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "2"
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.7,
+            "y": 0.7,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "3"
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.55,
+            "y": 0.55,
+            "w": 0.2,
+            "h": 0.2
+          },
+          "trackId": "4"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "in-zone",
+      "sourceId": "cam-08",
+      "subjectKey": "track:1",
+      "operator": "IN_REGION",
+      "severity": "MINOR",
+      "confirmedAtUs": 1000000,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    },
+    {
+      "ruleId": "in-zone",
+      "sourceId": "cam-08",
+      "subjectKey": "track:2",
+      "operator": "IN_REGION",
+      "severity": "MINOR",
+      "confirmedAtUs": 1000000,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

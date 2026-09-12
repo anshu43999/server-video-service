@@ -1,0 +1,136 @@
+{
+  "vectorId": "baseline-m07-active-track-keeps-evaluating",
+  "description": "跟踪丢失是正常输入，不是异常（§11.2 的行为变更点，M07 在这里 require(state == ACTIVE) 直接抛错）：track:21 在候选期丢失 → 候选丢弃、不产生事件也不报错；同一帧里的 track:22 照常算到 2000 ms 并确认",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "m07-both-tracks",
+      "ruleVersion": 1,
+      "name": "M07 基线：丢失一条不影响另一条",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "DWELL",
+      "requires": [
+        "BOX",
+        "TRACK"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minDwellMs": 2000,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "Person"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.2,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "21"
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.6,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "22"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 2,
+      "capturedAtUs": 2000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.22,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "21"
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.62,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "22"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 3,
+      "capturedAtUs": 3000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.64,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "22"
+        }
+      ],
+      "lostTrackIds": [
+        "21"
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "m07-both-tracks",
+      "sourceId": "cam-01",
+      "subjectKey": "track:22",
+      "operator": "DWELL",
+      "severity": "MINOR",
+      "startedAtUs": 1000000,
+      "confirmedAtUs": 3000000,
+      "measuredValue": 2000,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

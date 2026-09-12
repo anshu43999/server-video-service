@@ -1,0 +1,127 @@
+{
+  "vectorId": "baseline-m07-same-severity-cooldown",
+  "description": "M07 基线：同级重复命中仍然被冷却抑制 —— 加了 severity 维度不是给同级重复开后门。命中 / 消失 / 命中 / 消失 / 命中，后两次都在 5 s 冷却窗口内 → 只有一个事件实例，`suppressedCount` 累到 2；`endedAtUs` 停在条件消失那一刻，不被抑制改写（§11 第 3 条）",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "m07-presence",
+      "ruleVersion": 1,
+      "name": "M07 基线：同级冷却",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "PRESENCE",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "cooldownMs": 5000
+      },
+      "targetLabels": [
+        "Person"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "31"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 2,
+      "capturedAtUs": 2000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": []
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 3,
+      "capturedAtUs": 3000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "31"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 4,
+      "capturedAtUs": 4000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": []
+    },
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 5,
+      "capturedAtUs": 5000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "31"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "m07-presence",
+      "sourceId": "cam-01",
+      "subjectKey": "track:31",
+      "operator": "PRESENCE",
+      "severity": "MINOR",
+      "confirmedAtUs": 1000000,
+      "endedAtUs": 2000000,
+      "suppressedCount": 2,
+      "state": "COOLDOWN",
+      "escalatedAtUs": null
+    }
+  ],
+  "expectedRejections": []
+}

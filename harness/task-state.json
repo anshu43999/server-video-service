@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "server-video-service",
-  "updatedAt": "2026-09-03T10:26:13+08:00",
+  "updatedAt": "2026-09-12T16:48:34+08:00",
   "majorTasks": [
     {
       "id": "M00",
@@ -331,25 +331,31 @@
         {
           "id": "M04-T03",
           "title": "完成多流并发与容量压测",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M02-T03",
             "M08-T03",
             "M08-T06"
           ],
           "acceptance": "在包含 H.264 编码与推流的完整链路上明确单机并发流数量、资源上限、降级策略和扩容指标；编码开销单独计量，M02-T03 的无编码容量数字不得沿用",
-          "record": "harness/records/M04/M04-T03.md"
+          "record": "harness/records/M04/M04-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:29:00+08:00",
+          "completedAt": "2026-09-04T17:34:24+08:00"
         },
         {
           "id": "M04-T04",
           "title": "完成弱网、重启和故障恢复测试",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M08-T03",
             "M08-T06"
           ],
           "acceptance": "断流、丢包、播放器断开、WHEP 回退 LL-HLS、服务重启和媒体服务器重启后均可按文档恢复，且无会话与推流资源泄漏",
-          "record": "harness/records/M04/M04-T04.md"
+          "record": "harness/records/M04/M04-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:38:02+08:00",
+          "completedAt": "2026-09-04T17:41:17+08:00"
         }
       ],
       "startedAt": "2026-09-02T15:37:12+08:00"
@@ -561,7 +567,7 @@
     {
       "id": "M08",
       "title": "服务端 H.264 编码与 WebRTC 分发实现",
-      "status": "pending",
+      "status": "in_progress",
       "dependsOn": [
         "M07"
       ],
@@ -591,99 +597,127 @@
         {
           "id": "M08-T01",
           "title": "重构推理输出为结构化检测结果",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [],
           "acceptance": "推理返回类别、置信度和归一化坐标的结构化结果，叠加基于该结果实现且可关闭，不再只产出已画框的图像",
-          "record": "harness/records/M08/M08-T01.md"
+          "record": "harness/records/M08/M08-T01.md",
+          "owner": "claude",
+          "startedAt": "2026-09-03T17:40:45+08:00",
+          "completedAt": "2026-09-03T17:59:38+08:00"
         },
         {
           "id": "M08-T02",
           "title": "实现 H.264 编码环节并选定编码器实现",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M08-T01"
           ],
           "acceptance": "PyAV 与 FFmpeg 子进程两种实现按实测选定其一并记录依据，编码参数符合 Baseline/Main、Level ≤ 4.0、bf=0、GOP 1-2 秒、tune=zerolatency，编码 FPS 与耗时可观测",
-          "record": "harness/records/M08/M08-T02.md"
+          "record": "harness/records/M08/M08-T02.md",
+          "owner": "codex-m08-t02",
+          "startedAt": "2026-09-04T16:46:54+08:00",
+          "completedAt": "2026-09-04T16:53:36+08:00"
         },
         {
           "id": "M08-T03",
           "title": "实现到 MediaMTX 的推流、重连与推流状态上报",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M08-T02"
           ],
           "acceptance": "每路流以固定路径推流到媒体服务器，断连自动重连，`publish_state` 与观看者数在状态接口可见",
-          "record": "harness/records/M08/M08-T03.md"
+          "record": "harness/records/M08/M08-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T16:57:52+08:00",
+          "completedAt": "2026-09-04T17:03:56+08:00"
         },
         {
           "id": "M08-T04",
           "title": "实现播放地址接口与协议可用性上报",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M08-T03"
           ],
           "acceptance": "`GET /api/streams/{stream_id}/playback` 按协议 §5.5 返回 WHEP、LL-HLS 和 RTSP 地址及可用性，RTSP 明确标记仅供诊断",
-          "record": "harness/records/M08/M08-T04.md"
+          "record": "harness/records/M08/M08-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:06:10+08:00",
+          "completedAt": "2026-09-04T17:11:22+08:00"
         },
         {
           "id": "M08-T05",
           "title": "实现检测结果 WebSocket 旁路",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M08-T01"
           ],
           "acceptance": "`WS /api/streams/{stream_id}/detections` 按协议 §6.2 下发结构化检测结果，与视频通道相互独立，YOLO 关闭时下发心跳",
-          "record": "harness/records/M08/M08-T05.md"
+          "record": "harness/records/M08/M08-T05.md",
+          "owner": "codex-m08-t05",
+          "startedAt": "2026-09-04T16:46:58+08:00",
+          "completedAt": "2026-09-04T16:53:13+08:00"
         },
         {
           "id": "M08-T06",
           "title": "完成 MediaMTX 部署编排与端口暴露策略",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M08-T03"
           ],
           "acceptance": "媒体服务器可随服务重复启动，端口暴露按 docs/production-security.md 分离控制面与媒体面，进程异常可恢复，配置与证书不入库",
-          "record": "harness/records/M08/M08-T06.md"
+          "record": "harness/records/M08/M08-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:17:10+08:00",
+          "completedAt": "2026-09-04T17:24:45+08:00"
         },
         {
           "id": "M08-T07",
           "title": "适配管理后台的新输出与诊断通道降级",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M08-T04",
             "M08-T05"
           ],
           "acceptance": "管理页面展示播放地址、推流状态和检测结果，MJPEG 与 WebSocket JPEG 预览明确标记为诊断通道",
-          "record": "harness/records/M08/M08-T07.md"
+          "record": "harness/records/M08/M08-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:38:17+08:00",
+          "completedAt": "2026-09-04T17:44:34+08:00"
         },
         {
           "id": "M08-T08",
           "title": "完成 WHEP 与 LL-HLS 播放器兼容性实测",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M08-T04",
             "M08-T06"
           ],
           "acceptance": "浏览器 WHEP、LL-HLS 回退和 RTSP 诊断均有实测记录并含首帧与 P50/P95 延迟；Android 侧记录设备型号、API、WebRTC 库版本，设备不可用时保持冻结且不得伪造结果",
-          "record": "harness/records/M08/M08-T08.md"
+          "record": "harness/records/M08/M08-T08.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:50:13+08:00",
+          "completedAt": "2026-09-04T17:55:13+08:00"
         },
         {
           "id": "M08-T09",
           "title": "实现按流绑定模型替换单一全局活动模型",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M08-T01"
           ],
           "acceptance": "每路流可独立选择已注册模型，切换不影响其他流，注册表保留场景与用途元数据",
-          "record": "harness/records/M08/M08-T09.md"
+          "record": "harness/records/M08/M08-T09.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:50:59+08:00",
+          "completedAt": "2026-09-04T17:55:22+08:00"
         }
-      ]
+      ],
+      "startedAt": "2026-09-03T17:40:45+08:00"
     },
     {
       "id": "M09",
       "title": "场景化模型市场（MVP）",
-      "status": "pending",
+      "status": "in_progress",
       "dependsOn": [
         "M06",
         "M07"
@@ -694,97 +728,130 @@
         "场景模型由服务端单一数据源驱动，服务端与 Android 两种运行时产物成对登记，产物缺失或校验值不符时启动即失败",
         "目录查询与产物下载有鉴权、并发和错误码约束，日志与响应不输出令牌和本机绝对路径",
         "首个业务场景模型（异物入侵五类）在市场上架并可被 App 安装，类别标签来自 Manifest 而非硬编码",
-        "MVP 边界写入验收文档：不含签名发布、灰度和多租户，由 M10 承接"
+        "MVP 边界写入验收文档：不含签名发布、灰度和多租户，由 M10 承接",
+        "第三方开源权重的许可证结论随模型登记落盘：Manifest 记录 license、来源 URL、上游版本与 SHA-256；上架流程对 AGPL-3.0 权重设显式许可证闸门，未取得 Ultralytics Enterprise License 前不得进入对外交付形态"
       ],
       "frozenRisks": [
         {
           "id": "FR-M09-SCENARIO-WEIGHTS",
-          "description": "除异物入侵五类外，烟雾识别、玩手机识别等场景模型没有训练数据与产物，无法在本大任务内上架",
+          "description": "官方 YOLO11 权重只有 COCO 与 ImageNet，工地场景类别全部依赖社区微调；已核实的工地 PPE 权重集中来自同一份 Roboflow 数据集，安全带、摔倒、渣土车未苫盖、焊接火花、裸土积水与吊钩没有可获得权重",
           "解除条件": "提供各场景的训练数据或已授权的业务权重、类别标签和 SHA-256",
-          "影响": "本大任务只保证上架与分发流程可复用一次，不代表模型市场已有多场景内容，也不代表任何场景的识别效果已验证"
+          "影响": "本大任务只保证上架与分发流程可复用一次，不代表模型市场已有多场景内容；借用的第三方权重带有其数据集偏差（国外工地样式与光照），任何识别率结论都必须现场重测"
         }
       ],
       "subtasks": [
         {
           "id": "M09-T01",
           "title": "定义模型市场目录与下载 API 契约",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [],
           "acceptance": "契约文档给出目录列表、模型详情和产物下载三类接口的请求响应字段、错误码与鉴权要求，明确 MVP 不含签名，并与 App 端 M14-T02/M14-T03 的实现契约一致",
-          "record": "harness/records/M09/M09-T01.md"
+          "record": "harness/records/M09/M09-T01.md",
+          "owner": "codex-m09-t01",
+          "startedAt": "2026-09-04T16:47:39+08:00",
+          "completedAt": "2026-09-04T16:53:40+08:00"
         },
         {
           "id": "M09-T02",
           "title": "建立场景模型目录数据源",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M09-T01"
           ],
           "acceptance": "场景模型登记在单一数据源中，含 modelId、版本、场景、运行时、类别标签、产物路径、大小和 SHA-256；服务启动时校验产物存在且校验值匹配，缺失或不符时明确报错而不静默降级",
-          "record": "harness/records/M09/M09-T02.md"
+          "record": "harness/records/M09/M09-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T16:57:36+08:00",
+          "completedAt": "2026-09-04T17:04:12+08:00"
         },
         {
           "id": "M09-T03",
           "title": "实现模型市场目录查询接口",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M09-T02"
           ],
           "acceptance": "提供市场目录列表与模型详情接口，支持按场景过滤，返回字段符合 M09-T01 契约；未授权请求被拒绝，响应与日志不含本机绝对路径",
-          "record": "harness/records/M09/M09-T03.md"
+          "record": "harness/records/M09/M09-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:16:32+08:00",
+          "completedAt": "2026-09-04T17:21:23+08:00"
         },
         {
           "id": "M09-T04",
           "title": "实现模型产物下载与完整性校验",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M09-T02"
           ],
           "acceptance": "提供产物下载接口并给出大小与 SHA-256，客户端下载后可校验一致；超出并发或速率限制返回约定错误码，日志不输出令牌",
-          "record": "harness/records/M09/M09-T04.md"
+          "record": "harness/records/M09/M09-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:29:19+08:00",
+          "completedAt": "2026-09-04T17:32:37+08:00"
         },
         {
           "id": "M09-T05",
           "title": "上架首个业务场景模型（异物入侵五类）",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M09-T03",
-            "M09-T04"
+            "M09-T04",
+            "M09-T08"
           ],
           "acceptance": "异物入侵五类模型的服务端与 Android 产物成对上架，Manifest 给出类别标签与输入尺寸，转换链路复用 M06 成果并记录模型来源、版本与许可证结论",
-          "record": "harness/records/M09/M09-T05.md"
+          "record": "harness/records/M09/M09-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:37:57+08:00",
+          "completedAt": "2026-09-04T17:46:54+08:00"
         },
         {
           "id": "M09-T06",
           "title": "实现管理页模型市场视图与按流绑定展示",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M09-T03",
             "M08-T09"
           ],
           "acceptance": "管理页可查看市场模型列表与每路流当前绑定的模型，绑定变更后取流侧生效；页面不展示令牌与本机绝对路径",
-          "record": "harness/records/M09/M09-T06.md"
+          "record": "harness/records/M09/M09-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T18:00:35+08:00",
+          "completedAt": "2026-09-04T18:08:23+08:00"
         },
         {
           "id": "M09-T07",
           "title": "完成模型市场自动化测试",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M09-T04",
             "M09-T05"
           ],
           "acceptance": "覆盖目录查询、鉴权失败、下载校验值一致、校验值不符和限流的自动化测试全部通过，且测试不依赖真实大体积模型文件",
-          "record": "harness/records/M09/M09-T07.md"
+          "record": "harness/records/M09/M09-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:50:52+08:00",
+          "completedAt": "2026-09-04T17:54:00+08:00"
+        },
+        {
+          "id": "M09-T08",
+          "title": "冻结模型来源与许可证决策（ADR-003）",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "ADR-003 记录：采用路线 A（保留 Ultralytics YOLO 系列并购买 Enterprise License，模型层保持可替换）；官方权重仅 COCO 与 ImageNet；按可获得性把智慧工地场景包收敛为工地合规、烟火、抽烟、物料现场四组，逐条列出被移除的类别与移除原因；标签契约使用权重原始类名，中文显示名在 Manifest 映射层；Manifest 增加 license、来源 URL、上游版本字段；同时记录 Apache-2.0 备选路线的触发条件",
+          "record": "harness/records/M09/M09-T08.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:07:20+08:00",
+          "completedAt": "2026-09-04T17:14:06+08:00"
         }
-      ]
+      ],
+      "startedAt": "2026-09-04T16:47:39+08:00"
     },
     {
       "id": "M10",
-      "title": "模型签名与发布服务（后移，待拆解）",
-      "status": "pending",
-      "dependsOn": [
-        "M09"
-      ],
+      "title": "模型签名与发布服务",
+      "status": "in_progress",
+      "dependsOn": [],
       "acceptanceDocument": "harness/acceptance/M10-model-signing-publish.md",
       "acceptanceCriteria": [
         "模型产物有签名与验签流程，App 端安装前可验证来源与完整性",
@@ -795,14 +862,988 @@
         {
           "id": "M10-T01",
           "title": "拆解模型签名与发布服务任务",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M09-T05"
           ],
           "acceptance": "在模型市场 MVP 可用后，输出签名算法与密钥保管方案、发布与灰度流程、App 端对接契约，并把本大任务拆成可执行小任务；拆解完成前不实现任何签名逻辑",
-          "record": "harness/records/M10/M10-T01.md"
+          "record": "harness/records/M10/M10-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-08T17:44:44+08:00",
+          "completedAt": "2026-09-08T17:45:06+08:00"
+        },
+        {
+          "id": "M10-T02",
+          "title": "实现 Ed25519 Manifest 签名与下载契约",
+          "status": "completed",
+          "dependsOn": [
+            "M10-T01"
+          ],
+          "acceptance": "服务端按 App schemaVersion=1 的固定规范载荷生成 Ed25519 签名 Manifest；私钥仅从受控配置加载，目录 API 暴露 Android Manifest 与 TFLite 产物；缺失、无效或不受信任配置不得伪造可安装状态；单元和接口测试通过",
+          "record": "harness/records/M10/M10-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-09-08T17:47:54+08:00",
+          "completedAt": "2026-09-08T18:00:01+08:00"
+        },
+        {
+          "id": "M10-T03",
+          "title": "实现签名密钥轮换与发布门禁",
+          "status": "pending",
+          "dependsOn": [
+            "M10-T02"
+          ],
+          "acceptance": "签名配置支持稳定 keyId 与新旧公钥并存窗口；撤销密钥和未签名模型不能发布为 releaseEligible；后台诊断不泄露私钥，发布、下线与失败恢复测试通过",
+          "record": "harness/records/M10/M10-T03.md"
         }
-      ]
+      ],
+      "startedAt": "2026-09-08T17:44:44+08:00"
+    },
+    {
+      "id": "M11",
+      "title": "公共告警引擎（规格冻结与服务端实现）",
+      "status": "in_progress",
+      "dependsOn": [
+        "M07"
+      ],
+      "acceptanceDocument": "harness/acceptance/M11-alert-engine.md",
+      "acceptanceCriteria": [
+        "告警引擎规格与 JSON Schema 冻结：subjectKey 五类、算子集、三档严重级别、多边形与线段 ROI、七类阈值有唯一定义，服务端与 App 按同一份规格实现，不各自解释",
+        "一致性金样向量由服务端与 App 两侧测试套件共同运行并全部通过；向量失败按“规格不完整”处理，回到规格修正，不允许两侧各自改实现对齐",
+        "求值器是纯函数，时间只来自观测，引擎内部不读系统时钟；规则声明所需能力，能力不满足时显式拒绝而不是静默不触发",
+        "三档严重级别（一般/重要/严重）支持阈值分档与未处置提级；冷却只抑制同级重复，级别提升与未处置提级必然放行",
+        "事件投递覆盖管理页实时弹出、App 内通知与邮件/短信/企业 IM 适配器；明确不做面向上游系统的 Webhook 回调",
+        "处置闭环支持确认、误报标记与误报回流训练集，误报样本可导出且不含令牌与本机绝对路径",
+        "告警规则、阈值与 ROI 可运行时修改且不重启进程，生效阈值随事件快照落库，事后可复现判定依据"
+      ],
+      "frozenRisks": [
+        {
+          "id": "FR-M11-ALERT-CHANNELS",
+          "description": "邮件、短信与企业 IM 的服务商、消息模板与凭据未提供，国内短信还需模板报备，本大任务只能交付适配器接口与本地假实现",
+          "解除条件": "提供各外部通道的服务商、模板报备结论与可用凭据",
+          "影响": "不代表告警已能真正送达外部通道，端到端送达率与延迟未验证"
+        },
+        {
+          "id": "FR-M11-EVIDENCE-DEPTH",
+          "description": "事件存证深度（截图还是短视频）、保留天数与磁盘上限未定，MVP 只落截图与时间区间，短视频与环形缓冲仅在 Schema 与接口上预留",
+          "解除条件": "确定存证深度、保留天数与磁盘配额",
+          "影响": "不代表事件存证满足取证或审计要求，磁盘容量规划缺口未量化"
+        },
+        {
+          "id": "FR-M11-FIRE-DATA",
+          "description": "烟火与抽烟等行为场景的权重来源与授权结论待 M09 的许可证决策落定，火警与违规吸烟规则模板只能靠配置与金样向量验证",
+          "解除条件": "M09 完成模型来源与许可证结论，并提供可用的烟火与抽烟权重",
+          "影响": "规则链路可用不等于识别效果可用；任何火警识别准确率结论都不得引用本大任务的验收"
+        }
+      ],
+      "subtasks": [
+        {
+          "id": "M11-T01",
+          "title": "冻结公共告警引擎规格与 JSON Schema",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "产出 docs/alert-engine-spec.md 与 docs/alert-engine.schema.json，唯一定义五层结构、subjectKey 五类（track/roi/metric/source/frame）、算子集与各自所需能力、三档严重级别、矩形与多边形与线段 ROI 几何、七类阈值及其运行时可改要求；明确求值器为纯函数且时间只来自观测；Schema 预留 RELATION、METRIC_THRESHOLD、COMPOSITE 与短视频存证并标注未实现；App 侧 M15 全部小任务以本契约为准",
+          "record": "harness/records/M11/M11-T01.md",
+          "owner": "claude",
+          "startedAt": "2026-09-03T14:36:28+08:00",
+          "completedAt": "2026-09-03T15:18:06+08:00"
+        },
+        {
+          "id": "M11-T02",
+          "title": "建立双侧共用的一致性金样向量",
+          "status": "completed",
+          "dependsOn": [
+            "M11-T01"
+          ],
+          "acceptance": "产出 docs/alert-engine-conformance/ 下的“观测序列 → 期望事件”JSON 向量，覆盖每个已实现算子、三档分档、未处置提级、同级冷却抑制与级别提升放行、能力不满足显式拒绝；其中一组向量从 App M07 既有行为反推，用于锁定不得改变的语义；向量由服务端测试套件加载执行，且可被 App 原样复制运行",
+          "record": "harness/records/M11/M11-T02.md",
+          "owner": "claude",
+          "startedAt": "2026-09-03T15:19:57+08:00",
+          "completedAt": "2026-09-03T16:45:33+08:00"
+        },
+        {
+          "id": "M11-T03",
+          "title": "实现观测接入与观测信封",
+          "status": "completed",
+          "dependsOn": [
+            "M11-T01",
+            "M08-T01"
+          ],
+          "acceptance": "引擎入口接受统一观测信封（检测框、分类结果、分割掩膜、标量读数）与来源标识、帧序号和时间戳；不带框的分类型观测不得进入需要框的算子，而是被显式拒绝；latest-only 丢帧不破坏时间单调性断言",
+          "record": "harness/records/M11/M11-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T18:01:37+08:00",
+          "completedAt": "2026-09-04T18:07:10+08:00"
+        },
+        {
+          "id": "M11-T04",
+          "title": "实现多边形与线段 ROI 几何",
+          "status": "completed",
+          "dependsOn": [
+            "M11-T01"
+          ],
+          "acceptance": "ROI 支持矩形、多边形与线段三种形态：多边形提供点在多边形内与框和多边形相交判定，线段提供跨越方向判定；退化输入（少于三点、自相交、零长线段）在构造时被拒绝；几何为纯函数并有金样向量覆盖",
+          "record": "harness/records/M11/M11-T04.md",
+          "owner": "claude",
+          "startedAt": "2026-09-03T16:52:16+08:00",
+          "completedAt": "2026-09-03T17:16:59+08:00"
+        },
+        {
+          "id": "M11-T05",
+          "title": "实现算子求值集",
+          "status": "completed",
+          "dependsOn": [
+            "M11-T02",
+            "M11-T03",
+            "M11-T04"
+          ],
+          "acceptance": "实现 PRESENCE、IN_REGION、LINE_CROSS、DWELL、COUNT、AREA_RATIO、RATE、ABSENCE 八个算子；RATE 的滑动窗口内存有界且过期数据被回收；每个算子在金样向量上的输出与期望事件一致",
+          "record": "harness/records/M11/M11-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T18:10:25+08:00",
+          "completedAt": "2026-09-04T18:46:32+08:00"
+        },
+        {
+          "id": "M11-T06",
+          "title": "实现事件生命周期与三档严重级别",
+          "status": "completed",
+          "dependsOn": [
+            "M11-T05"
+          ],
+          "acceptance": "事件状态机支持候选、确认、结束与冷却；严重级别按阈值分档在同一时刻的事实上判定，未处置超时提级只提升通知级别不改写原始事实；冷却只抑制同级重复，级别提升与未处置提级必然放行；事件快照记录生效阈值、规则版本与 subjectKey",
+          "record": "harness/records/M11/M11-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T18:50:57+08:00",
+          "completedAt": "2026-09-04T18:57:08+08:00"
+        },
+        {
+          "id": "M11-T07",
+          "title": "实现规则管理、能力声明与不兼容拒绝",
+          "status": "completed",
+          "dependsOn": [
+            "M11-T05"
+          ],
+          "acceptance": "规则声明所需能力（框、掩膜、跟踪、标量、多边形），绑定到不满足能力的来源或模型时返回显式拒绝并可在管理页看到原因，不允许静默不触发；规则、阈值与 ROI 可运行时新增修改删除且不重启进程，变更有审计记录",
+          "record": "harness/records/M11/M11-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T18:50:57+08:00",
+          "completedAt": "2026-09-04T18:58:28+08:00"
+        },
+        {
+          "id": "M11-T08",
+          "title": "实现告警投递通道",
+          "status": "completed",
+          "dependsOn": [
+            "M11-T06"
+          ],
+          "acceptance": "投递覆盖管理页实时推送、App 内通知下发与邮件/短信/企业 IM 三类外部通道适配器；外部通道以接口加本地假实现交付并留出凭据注入点，凭据不进日志与仓库；不实现面向上游系统的 Webhook 回调；投递失败有重试上限且不阻塞事件生成",
+          "record": "harness/records/M11/M11-T08.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T19:08:51+08:00",
+          "completedAt": "2026-09-04T19:19:00+08:00"
+        },
+        {
+          "id": "M11-T09",
+          "title": "实现处置闭环与误报回流",
+          "status": "completed",
+          "dependsOn": [
+            "M11-T06"
+          ],
+          "acceptance": "事件支持确认与误报标记，两种动作记录操作人与时间戳；误报样本连同截图、生效阈值与检测结果导出为可再训练的数据集条目，导出内容不含令牌与本机绝对路径；确认与误报标记的权限与只读查看权限分离",
+          "record": "harness/records/M11/M11-T09.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T19:08:52+08:00",
+          "completedAt": "2026-09-04T19:17:26+08:00"
+        },
+        {
+          "id": "M11-T10",
+          "title": "完成告警引擎自动化测试与金样一致性验证",
+          "status": "pending",
+          "dependsOn": [
+            "M11-T05",
+            "M11-T06",
+            "M11-T07",
+            "M11-T08",
+            "M11-T09"
+          ],
+          "acceptance": "服务端自动化测试覆盖八个算子、三档分档、冷却与提级、能力拒绝、运行时改配与处置闭环；M11-T02 的全部金样向量在服务端通过；测试不依赖真实模型权重与外部通道凭据",
+          "record": "harness/records/M11/M11-T10.md"
+        },
+        {
+          "id": "M11-T11",
+          "title": "实现模型参数档案与后台管理页",
+          "status": "completed",
+          "dependsOn": [
+            "M11-T07"
+          ],
+          "acceptance": "按模型ID、模型版本与平台持久化可调整的检测参数和标签告警初始参数；提供查询、保存、重置API，执行范围、标签一致性和跨字段校验并保留修订与审计；管理后台模型资产页使用真实API完成平台切换、编辑、保存和重置；自动化测试覆盖存储、权限、接口和页面契约；本任务不修改Android同步且不宣称告警投递链路已接通",
+          "record": "harness/records/M11/M11-T11.md",
+          "owner": "codex",
+          "startedAt": "2026-09-10T15:10:17+08:00",
+          "completedAt": "2026-09-10T16:33:59+08:00"
+        },
+        {
+          "id": "M11-T12",
+          "title": "为模型参数术语增加可访问解释提示",
+          "status": "completed",
+          "dependsOn": [
+            "M11-T11"
+          ],
+          "acceptance": "模型参数弹窗中的识别置信度、IoU去重阈值和单帧最大结果数显示统一帮助图标；鼠标悬停、键盘聚焦和触屏点击均可读取中文解释；提示不遮挡输入控件并适配窄屏；页面契约测试和浏览器交互验证通过",
+          "record": "harness/records/M11/M11-T12.md",
+          "owner": "codex",
+          "startedAt": "2026-09-10T16:46:44+08:00",
+          "completedAt": "2026-09-10T17:52:18+08:00"
+        },
+        {
+          "id": "M11-T13",
+          "title": "为类别告警参数表头增加术语解释",
+          "status": "completed",
+          "dependsOn": [
+            "M11-T12"
+          ],
+          "acceptance": "类别告警初始参数表头的启用、类别、业务名称、事件编码、置信度、连续帧、停留时间、冷却时间和级别显示统一帮助图标；鼠标悬停、键盘聚焦和触屏点击均可读取中文解释，支持Esc与空白关闭且不改变现有编辑交互；页面契约测试、后台回归测试、Harness单元测试、validate和render通过",
+          "record": "harness/records/M11/M11-T13.md",
+          "owner": "codex",
+          "startedAt": "2026-09-10T18:44:07+08:00",
+          "completedAt": "2026-09-10T18:53:05+08:00"
+        },
+        {
+          "id": "M11-T14",
+          "title": "完善模型参数范围与默认值提示",
+          "status": "completed",
+          "dependsOn": [
+            "M11-T13"
+          ],
+          "acceptance": "模型参数页对识别置信度、IoU去重阈值、单帧最大结果数及类别告警阈值明确展示最小值、最大值、步进和默认值；输入控件具备浏览器端范围约束，提示包含中文解释和取值范围；服务端校验与页面契约、后台回归、Harness门禁通过",
+          "record": "harness/records/M11/M11-T14.md",
+          "owner": "codex",
+          "startedAt": "2026-09-11T09:28:24+08:00",
+          "completedAt": "2026-09-11T09:36:08+08:00"
+        }
+      ],
+      "startedAt": "2026-09-03T14:36:28+08:00"
+    },
+    {
+      "id": "M12",
+      "title": "运维管理后台界面原型",
+      "status": "completed",
+      "dependsOn": [],
+      "acceptanceDocument": "harness/acceptance/M12-admin-prototype.md",
+      "acceptanceCriteria": [
+        "管理后台形成总览、视频流、告警、规则、模型与系统诊断的统一信息架构",
+        "页面默认使用内置 Mock 数据即可完整展示，不依赖真实流、模型权重或告警接口",
+        "关键列表、筛选、导航、弹窗和详情面板具备原型级交互，明确标识演示数据",
+        "既有 FastAPI /admin 挂载和服务端测试不回归，真实业务逻辑留给后续任务实现"
+      ],
+      "subtasks": [
+        {
+          "id": "M12-T01",
+          "title": "搭建管理后台产品原型与 Mock 数据视图",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "重构 /admin 为带侧边导航的工业巡检管理台，覆盖总览、视频流、告警中心、规则配置、模型资产与系统诊断；内置 Mock 数据和原型交互可独立运行；不要求接通真实 API，但保留后续接入边界并通过静态页面与服务端回归测试",
+          "record": "harness/records/M12/M12-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-03T15:14:23+08:00",
+          "completedAt": "2026-09-03T15:28:41+08:00"
+        },
+        {
+          "id": "M12-T02",
+          "title": "优化管理后台为成熟 B 端视觉规范",
+          "status": "completed",
+          "dependsOn": [
+            "M12-T01"
+          ],
+          "acceptance": "在不改变页面信息架构和 Mock 交互的前提下，降低装饰性渐变、霓虹色和过大标题等 AI 生成感；统一灰阶、间距、表格、状态标签、卡片和响应式规范，使侧栏固定、内容独立滚动且桌面端更接近成熟企业运维后台",
+          "record": "harness/records/M12/M12-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-09-03T15:58:39+08:00",
+          "completedAt": "2026-09-03T15:59:22+08:00"
+        },
+        {
+          "id": "M12-T03",
+          "title": "统一告警中心筛选按钮样式",
+          "status": "completed",
+          "dependsOn": [
+            "M12-T02"
+          ],
+          "acceptance": "告警中心全部、严重、重要、一般筛选按钮不再继承旧深色主题，默认、悬停与选中状态符合新版浅色 B 端规范，告警列表行按钮边框和背景保持一致",
+          "record": "harness/records/M12/M12-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-09-03T16:03:53+08:00",
+          "completedAt": "2026-09-03T16:05:05+08:00"
+        },
+        {
+          "id": "M12-T04",
+          "title": "调整总览需要关注列表文字层级",
+          "status": "completed",
+          "dependsOn": [
+            "M12-T03"
+          ],
+          "acceptance": "总览页需要关注列表中的事件标题、来源时间和严重级别在白色卡片上具有清晰对比度，文字层级与新版 B 端配色一致",
+          "record": "harness/records/M12/M12-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-09-03T16:07:43+08:00",
+          "completedAt": "2026-09-03T16:08:39+08:00"
+        },
+        {
+          "id": "M12-T05",
+          "title": "补全管理后台静态演示流程",
+          "status": "completed",
+          "dependsOn": [
+            "M12-T04"
+          ],
+          "acceptance": "流详情、告警详情处置、规则编辑、模型市场安装状态和协议诊断均具备可点击 Mock 交互，不改变真实 API",
+          "record": "harness/records/M12/M12-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T09:00:00+08:00",
+          "completedAt": "2026-09-04T09:40:17+08:00"
+        }
+      ],
+      "startedAt": "2026-09-03T15:14:23+08:00",
+      "completedAt": "2026-09-04T09:40:30+08:00"
+    },
+    {
+      "id": "M13",
+      "title": "管理后台事件证据图片接入",
+      "status": "completed",
+      "dependsOn": [
+        "M12"
+      ],
+      "acceptanceDocument": "harness/acceptance/M13-event-evidence-images.md",
+      "acceptanceCriteria": [
+        "告警详情弹窗展示与事件类型对应的本地证据图片",
+        "Mock 告警数据通过稳定证据资源名映射图片，不使用本机绝对路径",
+        "四类核心事件均有可查看证据，图片加载失败时有明确占位状态",
+        "管理后台静态资源语法检查和服务端 API 回归通过"
+      ],
+      "subtasks": [
+        {
+          "id": "M13-T01",
+          "title": "映射证据图片并接入告警详情弹窗",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "将证据图片复制到管理后台静态资源目录，Mock 告警绑定 evidence 字段，告警详情弹窗展示图片和降级占位",
+          "record": "harness/records/M13/M13-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T11:41:24+08:00",
+          "completedAt": "2026-09-04T12:04:17+08:00"
+        }
+      ],
+      "startedAt": "2026-09-04T11:41:24+08:00",
+      "completedAt": "2026-09-04T12:04:30+08:00"
+    },
+    {
+      "id": "M14",
+      "title": "管理后台数据看板",
+      "status": "completed",
+      "dependsOn": [
+        "M13"
+      ],
+      "acceptanceDocument": "harness/acceptance/M14-admin-dashboard.md",
+      "acceptanceCriteria": [
+        "管理后台新增独立数据看板导航与页面，不破坏现有总览、视频流、告警、规则、模型和诊断页面",
+        "看板基于现有 Mock 数据展示告警、检测事件、视频流、模型和处置效率等运营指标",
+        "页面具备时间范围切换、趋势可视化、类别排行和流状态分布等可演示交互",
+        "静态页面语法检查和服务端回归测试通过"
+      ],
+      "subtasks": [
+        {
+          "id": "M14-T01",
+          "title": "新增管理后台数据看板视图",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "在 /admin 中增加数据看板导航、指标摘要、趋势图、类别排行和流状态视图，使用现有 Mock 数据并支持基础筛选交互",
+          "record": "harness/records/M14/M14-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T14:58:23+08:00",
+          "completedAt": "2026-09-04T15:05:02+08:00"
+        }
+      ],
+      "startedAt": "2026-09-04T14:58:23+08:00",
+      "completedAt": "2026-09-04T15:05:03+08:00"
+    },
+    {
+      "id": "M15",
+      "title": "管理后台数据看板大屏模式",
+      "status": "completed",
+      "dependsOn": [
+        "M14"
+      ],
+      "acceptanceDocument": "harness/acceptance/M15-dashboard-focus-mode.md",
+      "acceptanceCriteria": [
+        "数据看板提供进入和退出大屏模式的按钮",
+        "大屏模式隐藏管理后台侧边栏、顶部栏和页脚，只显示数据看板内容",
+        "优先调用浏览器原生 Fullscreen API，API 不可用时保留 CSS 大屏布局",
+        "离开数据看板或退出浏览器全屏时自动恢复普通管理页面布局",
+        "桌面和移动窄屏布局均可用，现有看板时间范围交互不回归"
+      ],
+      "subtasks": [
+        {
+          "id": "M15-T01",
+          "title": "增加数据看板全屏展示模式",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "看板按钮可切换 CSS 大屏状态并请求浏览器原生全屏；大屏状态只保留看板内容，退出时恢复系统导航与头部；原生全屏退出可同步页面状态",
+          "record": "harness/records/M15/M15-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T15:14:30+08:00",
+          "completedAt": "2026-09-04T15:16:03+08:00"
+        }
+      ],
+      "startedAt": "2026-09-04T15:14:30+08:00",
+      "completedAt": "2026-09-04T15:16:14+08:00"
+    },
+    {
+      "id": "M16",
+      "title": "数据看板大屏铺满与四路视频墙",
+      "status": "completed",
+      "dependsOn": [
+        "M15"
+      ],
+      "acceptanceDocument": "harness/acceptance/M16-dashboard-stream-wall.md",
+      "acceptanceCriteria": [
+        "全屏看板使用完整可用宽高，桌面端不保留不必要的最大宽度留白",
+        "数据看板展示四路视频流 Mock 画面，并标识流名称、来源、在线状态、FPS 与分析状态",
+        "视频流墙在桌面端四列、窄屏端自适应为两列或单列",
+        "原有指标、趋势、类别排行、处置效率和时间范围切换不回归"
+      ],
+      "subtasks": [
+        {
+          "id": "M16-T01",
+          "title": "铺满大屏并新增四路视频流墙",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "大屏看板填满可用画布，新增四路带状态信息的 Mock 视频流卡片，桌面四列且移动端响应式排列",
+          "record": "harness/records/M16/M16-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T15:23:02+08:00",
+          "completedAt": "2026-09-04T15:25:30+08:00"
+        }
+      ],
+      "startedAt": "2026-09-04T15:23:02+08:00",
+      "completedAt": "2026-09-04T15:25:31+08:00"
+    },
+    {
+      "id": "M17",
+      "title": "数据看板田字型中心视频布局",
+      "status": "completed",
+      "dependsOn": [
+        "M16"
+      ],
+      "acceptanceDocument": "harness/acceptance/M17-dashboard-center-video-layout.md",
+      "acceptanceCriteria": [
+        "桌面全屏看板在单一视口内完成布局，不出现页面滚动条",
+        "四路视频位于看板中心并以 2×2 结构展示",
+        "指标、流健康、趋势、类别排行和处置效率围绕中心视频形成田字型监控布局",
+        "窄屏设备回退为可读的响应式布局，原有时间范围筛选和大屏退出行为不回归"
+      ],
+      "subtasks": [
+        {
+          "id": "M17-T01",
+          "title": "重排大屏为中心视频田字布局",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "大屏桌面端使用固定视口网格，四路 Mock 视频在中心 2×2 展示，周围放置指标、趋势、健康、类别和处置面板，页面不产生滚动条",
+          "record": "harness/records/M17/M17-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T15:30:57+08:00",
+          "completedAt": "2026-09-04T15:47:17+08:00"
+        }
+      ],
+      "startedAt": "2026-09-04T15:30:57+08:00",
+      "completedAt": "2026-09-04T15:47:17+08:00"
+    },
+    {
+      "id": "M18",
+      "title": "数据看板信息密度优化",
+      "status": "completed",
+      "dependsOn": [
+        "M17"
+      ],
+      "acceptanceDocument": "harness/acceptance/M18-dashboard-density.md",
+      "acceptanceCriteria": [
+        "大屏保持单视口布局，同时提升外围监控信息密度",
+        "增加实时告警动态和视频流健康明细",
+        "中心四路视频仍为主要视觉区域，周边信息不喧宾夺主",
+        "原有指标、趋势、类别排行、处置效率、全屏退出和响应式行为不回归"
+      ],
+      "subtasks": [
+        {
+          "id": "M18-T01",
+          "title": "补充大屏实时动态与运行摘要",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "在看板外围增加实时告警动态、流健康明细和运行摘要，桌面大屏无滚动且保持中心视频突出",
+          "record": "harness/records/M18/M18-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T15:53:04+08:00",
+          "completedAt": "2026-09-04T15:55:00+08:00"
+        }
+      ],
+      "startedAt": "2026-09-04T15:53:04+08:00",
+      "completedAt": "2026-09-04T15:55:01+08:00"
+    },
+    {
+      "id": "M19",
+      "title": "数据看板服务器状态统计",
+      "status": "completed",
+      "dependsOn": [
+        "M18"
+      ],
+      "acceptanceDocument": "harness/acceptance/M19-dashboard-server-status.md",
+      "acceptanceCriteria": [
+        "数据看板展示 CPU、内存、GPU/NPU 和磁盘状态统计",
+        "服务器状态统计与视频流健康信息同区展示，提升大屏信息密度",
+        "桌面全屏布局保持单一视口，不产生滚动条",
+        "原有四路视频、指标、趋势、类别排行、处置效率和响应式行为不回归"
+      ],
+      "subtasks": [
+        {
+          "id": "M19-T01",
+          "title": "增加服务器资源状态统计",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "右侧流健康面板下方展示 CPU、内存、GPU/NPU、磁盘四项资源及进度条，适配单屏大屏布局",
+          "record": "harness/records/M19/M19-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T15:56:59+08:00",
+          "completedAt": "2026-09-04T15:58:57+08:00"
+        }
+      ],
+      "startedAt": "2026-09-04T15:56:59+08:00",
+      "completedAt": "2026-09-04T15:58:57+08:00"
+    },
+    {
+      "id": "M20",
+      "title": "视频流管理静态画面统一",
+      "status": "completed",
+      "dependsOn": [
+        "M19"
+      ],
+      "acceptanceDocument": "harness/acceptance/M20-stream-preview-images.md",
+      "acceptanceCriteria": [
+        "视频流管理页面的预览画面使用本地 Mock 图片而非纯 CSS 占位",
+        "不同流会话显示对应现场图片，并保留状态、扫描线和输出信息",
+        "图片加载失败时有明确的降级占位，不影响其他流管理原型交互",
+        "大屏四路视频墙和服务端测试不回归"
+      ],
+      "subtasks": [
+        {
+          "id": "M20-T01",
+          "title": "将流管理预览替换为图片画面",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "选择流会话后，LIVE INSPECTOR 使用对应本地现场图片展示预览，加载失败时显示降级提示",
+          "record": "harness/records/M20/M20-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T16:03:10+08:00",
+          "completedAt": "2026-09-04T16:05:42+08:00"
+        }
+      ],
+      "startedAt": "2026-09-04T16:03:10+08:00",
+      "completedAt": "2026-09-04T16:05:42+08:00"
+    },
+    {
+      "id": "M21",
+      "title": "管理后台 Mock 数据扩展",
+      "status": "completed",
+      "dependsOn": [
+        "M20"
+      ],
+      "acceptanceDocument": "harness/acceptance/M21-admin-mock-data-expansion.md",
+      "acceptanceCriteria": [
+        "管理后台告警中心新增 10 条具有不同来源、严重级别和处置状态的 Mock 告警",
+        "新增告警可在告警中心列表中展示并支持现有详情交互",
+        "总览和数据看板继续正常渲染，原有视频流、规则和模型 Mock 数据不回归"
+      ],
+      "subtasks": [
+        {
+          "id": "M21-T01",
+          "title": "扩展管理后台告警 Mock 数据",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "在 app/static/app.js 的 MOCK.alerts 中新增 10 条记录，字段结构与现有数据一致",
+          "record": "harness/records/M21/M21-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T16:15:29+08:00",
+          "completedAt": "2026-09-04T16:26:01+08:00"
+        }
+      ],
+      "startedAt": "2026-09-04T16:15:29+08:00",
+      "completedAt": "2026-09-04T16:26:01+08:00"
+    },
+    {
+      "id": "M22",
+      "title": "管理后台模型 Mock 数据扩展",
+      "status": "completed",
+      "dependsOn": [
+        "M21"
+      ],
+      "acceptanceDocument": "harness/acceptance/M22-admin-model-mock-data.md",
+      "acceptanceCriteria": [
+        "模型资产页新增 4 个具有不同格式、类别和部署状态的 Mock 模型",
+        "新增模型可在模型资产页展示并支持现有查看安装演示",
+        "原有模型激活和其他管理后台页面不回归"
+      ],
+      "subtasks": [
+        {
+          "id": "M22-T01",
+          "title": "扩展管理后台模型 Mock 数据",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "在 app/static/app.js 的 MOCK.models 中新增 4 条记录，保持字段结构一致",
+          "record": "harness/records/M22/M22-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T16:37:26+08:00",
+          "completedAt": "2026-09-04T16:39:01+08:00"
+        }
+      ],
+      "startedAt": "2026-09-04T16:37:26+08:00",
+      "completedAt": "2026-09-04T16:39:01+08:00"
+    },
+    {
+      "id": "M23",
+      "title": "报警推送管理与告警通知原型",
+      "status": "completed",
+      "dependsOn": [
+        "M22"
+      ],
+      "acceptanceDocument": "harness/acceptance/M23-alert-push.md",
+      "acceptanceCriteria": [
+        "管理后台新增报警推送导航和配置表格，包含名称、推送方式、地址、状态、操作字段",
+        "支持新增、启用/停用和测试推送的 Mock 交互",
+        "打开告警详情时，对启用的推送配置模拟发送当前告警摘要，并明确真实发送的后续接入边界"
+      ],
+      "subtasks": [
+        {
+          "id": "M23-T01",
+          "title": "搭建报警推送管理页与 Mock 发送流程",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "新增报警推送页面、Mock 配置数据、启停/测试/新增交互和告警触发模拟",
+          "record": "harness/records/M23/M23-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T17:58:32+08:00",
+          "completedAt": "2026-09-04T18:02:22+08:00"
+        }
+      ],
+      "startedAt": "2026-09-04T17:58:32+08:00",
+      "completedAt": "2026-09-04T18:02:22+08:00"
+    },
+    {
+      "id": "M24",
+      "title": "管理后台弹窗关闭行为修复",
+      "status": "completed",
+      "dependsOn": [
+        "M23"
+      ],
+      "acceptanceDocument": "harness/acceptance/M24-dialog-close-fix.md",
+      "acceptanceCriteria": [
+        "新建视频流、登记模型、新建规则、新增报警推送和告警详情弹窗均可通过右上角关闭按钮关闭",
+        "取消按钮不触发保存或新增逻辑，确认按钮仍保持原有提交行为",
+        "弹窗关闭后页面导航和 Mock 数据列表状态不回归"
+      ],
+      "subtasks": [
+        {
+          "id": "M24-T01",
+          "title": "统一管理后台 dialog 取消与关闭处理",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "关闭按钮显式关闭 dialog，表单只处理 submitter 为确认按钮的提交",
+          "record": "harness/records/M24/M24-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-04T18:22:08+08:00",
+          "completedAt": "2026-09-04T18:31:33+08:00"
+        }
+      ],
+      "startedAt": "2026-09-04T18:22:08+08:00",
+      "completedAt": "2026-09-04T18:31:33+08:00"
+    },
+    {
+      "id": "M25",
+      "title": "服务端多模态复核需求冻结与管理后台原型",
+      "status": "in_progress",
+      "dependsOn": [
+        "M12",
+        "M23"
+      ],
+      "acceptanceDocument": "harness/acceptance/M25-verification-console-prototype.md",
+      "acceptanceCriteria": [
+        "需求基线：PRODUCT_REQUIREMENTS.md 增补服务端多模态复核功能需求与验收标准；docs/multimodal-verification.md 冻结触发条件、单事件只复核一次、每日调用上限、失败一律 fail-open 保留原告警、结论只标注不删除、图像出站默认关闭且需显式授权，以及端侧复核与服务端复核的职责边界",
+        "管理后台新增「智能复核」导航，覆盖复核配置、复核结论与复核用量三块内容，全部使用 Mock 数据，保留 DEMO MODE 徽章与切换 Live API 的既有语义",
+        "复核配置页支持总开关、供应商预设、接口地址、模型 ID、密钥掩码输入、每日上限、超时与图像出站授权确认，并提供连接测试的成功、鉴权失败、超时和额度不足四种 Mock 反馈",
+        "告警列表与告警详情呈现复核结论（复核确认、疑似误报、无法判定、未复核、复核失败）、理由、模型 ID、提示词版本、耗时与来源标记（模型复核或人工复核），并显式说明只标注不删除的口径",
+        "数据看板新增复核用量区块：今日调用次数与每日上限、结论分布、失败原因分布和复核前后误报率对比，时间范围切换与既有看板保持一致",
+        "不接入真实模型服务、不写入真实密钥、不改动检测与告警后端逻辑；index.html、app.js 与 Mock 数据中不出现任何明文密钥",
+        "既有总览、数据看板、视频流、告警中心、报警推送、模型资产和系统诊断演示不回归",
+        "node --check app/static/app.js 通过；新增的管理后台复核测试与既有 tests/test_admin_*.py 一并通过；harness validate 与 render 通过"
+      ],
+      "subtasks": [
+        {
+          "id": "M25-T01",
+          "title": "冻结服务端多模态复核需求与职责边界",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "在 PRODUCT_REQUIREMENTS.md 新增多模态复核功能需求与对应验收标准，并新增 docs/multimodal-verification.md：写明复核目的、触发条件与单事件去重、每日调用上限、超时与失败一律 fail-open 保留原告警、结论只标注不删除、图像出站默认关闭且需显式授权、密钥保管要求，以及端侧复核与服务端复核的分工和真实接入的前置条件；文档明确本大任务只交付静态演示原型，不实现真实模型调用；harness validate 通过",
+          "record": "harness/records/M25/M25-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-05T14:44:12+08:00",
+          "completedAt": "2026-09-05T14:45:41+08:00"
+        },
+        {
+          "id": "M25-T02",
+          "title": "搭建管理后台智能复核配置页原型",
+          "status": "completed",
+          "dependsOn": [
+            "M25-T01"
+          ],
+          "acceptance": "侧边导航新增智能复核入口与独立视图；配置页包含复核总开关、供应商预设（OpenAI、DeepSeek、通义千问、自建中转）、接口地址、模型 ID、密钥掩码输入、每日上限、超时秒数和图像出站授权二次确认；连接测试给出成功、鉴权失败、超时、额度不足四种 Mock 反馈且文案指向要检查的字段；未开启或未授权时页面明确提示不会发送任何图像；密钥仅以掩码呈现，页面、脚本与 Mock 数据中不出现明文密钥；node --check app/static/app.js 通过",
+          "record": "harness/records/M25/M25-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-09-05T14:47:33+08:00",
+          "completedAt": "2026-09-05T14:56:08+08:00"
+        },
+        {
+          "id": "M25-T03",
+          "title": "在告警列表与详情呈现复核结论",
+          "status": "completed",
+          "dependsOn": [
+            "M25-T01"
+          ],
+          "acceptance": "告警列表新增复核结论标记；告警详情新增复核区块展示结论、理由、模型 ID、提示词版本、耗时与来源标记（模型复核或人工复核），未复核、复核失败与已由人工确认三种状态有区分文案；区块内显式说明复核结论只标注不删除告警；提供人工确认误报的 Mock 操作并写入该告警的复核来源；既有告警处置、证据图片与报警推送演示不回归",
+          "record": "harness/records/M25/M25-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-09-05T14:47:33+08:00",
+          "completedAt": "2026-09-05T14:58:08+08:00"
+        },
+        {
+          "id": "M25-T04",
+          "title": "搭建复核用量与效果看板原型",
+          "status": "completed",
+          "dependsOn": [
+            "M25-T02",
+            "M25-T03"
+          ],
+          "acceptance": "数据看板新增复核用量区块：今日调用次数与每日上限、结论分布（确认、疑似误报、无法判定）、失败原因分布（鉴权、限流、超时、额度不足）以及复核前后误报率对比；数值来自统一 Mock 数据源，今日与近 7 天、近 30 天切换后保持自洽，且与配置页的每日上限一致；新增 tests/test_admin_verification.py 覆盖导航、配置字段、结论展示与用量区块，与既有 tests/test_admin_*.py 一并通过",
+          "record": "harness/records/M25/M25-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-09-05T15:00:16+08:00",
+          "completedAt": "2026-09-05T15:05:48+08:00"
+        },
+        {
+          "id": "M25-T05",
+          "title": "修复 M25 引入的智能复核与数据看板样式回归",
+          "status": "completed",
+          "dependsOn": [
+            "M25-T04"
+          ],
+          "acceptance": "修复智能复核配置页、告警中心复核按钮与数据看板大屏一屏布局；覆盖桌面多分辨率与移动端；node --check app/static/app.js、管理后台回归测试、harness validate 和 render 通过",
+          "record": "harness/records/M25/M25-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-09-05T15:42:07+08:00",
+          "completedAt": "2026-09-05T15:45:05+08:00"
+        },
+        {
+          "id": "M25-T06",
+          "title": "补齐智能复核控件与告警中心按钮布局",
+          "status": "completed",
+          "dependsOn": [
+            "M25-T05"
+          ],
+          "acceptance": "补齐智能复核全部表单控件、开关、状态提示和按钮样式；修复告警详情确认告警/标记误报按钮位置、间距和响应式布局；覆盖桌面与移动端；node --check app/static/app.js、管理后台回归测试、harness validate 和 render 通过",
+          "record": "harness/records/M25/M25-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-09-05T15:49:07+08:00",
+          "completedAt": "2026-09-05T15:58:53+08:00"
+        },
+        {
+          "id": "M25-T07",
+          "title": "修复告警中心列表复核操作列对齐",
+          "status": "completed",
+          "dependsOn": [
+            "M25-T06"
+          ],
+          "acceptance": "告警中心桌面与移动端列表中，复核状态和箭头固定在统一操作列；表头、行内容和响应式布局列数一致；浏览器实测不出现换行错位；node --check、管理后台回归测试、Harness validate/render 通过",
+          "record": "harness/records/M25/M25-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-09-05T16:18:33+08:00",
+          "completedAt": "2026-09-05T16:25:24+08:00"
+        },
+        {
+          "id": "M25-T08",
+          "title": "接入告警主动发起 AI 复核接口与后台入口",
+          "status": "completed",
+          "dependsOn": [
+            "M25-T07"
+          ],
+          "acceptance": "新增 POST/GET /api/alerts/{event_id}/verification；手动触发受管理员权限、智能复核开关、图像出站授权、每日额度和单事件去重约束；未配置供应商时返回可诊断失败但保留原始告警；PC 告警列表和详情提供发起智能复核按钮并展示 PENDING/FAILED/已复核状态；不覆盖告警处置状态；接口、前端脚本与管理后台回归测试通过",
+          "record": "harness/records/M25/M25-T08.md",
+          "owner": "codex",
+          "startedAt": "2026-09-05T16:43:28+08:00",
+          "completedAt": "2026-09-05T16:52:46+08:00"
+        }
+      ],
+      "startedAt": "2026-09-05T14:44:12+08:00"
+    },
+    {
+      "id": "M26",
+      "title": "本机模型上传与异步 WSL 转换",
+      "status": "completed",
+      "dependsOn": [
+        "M06"
+      ],
+      "acceptance": "后台配置并检测本机转换环境，上传受支持 PT 后独立验证服务端与移动端产物，任务持久化与重试可用，真实 COCO 转换有证据；App 下载接线单独跟进。",
+      "acceptanceDocument": "harness/acceptance/M26-local-model-conversion.md",
+      "subtasks": [
+        {
+          "id": "M26-T01",
+          "title": "实现转换配置与隔离执行器",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "本机 WSL/Python 配置持久化，环境检测与固定脚本调用使用参数数组，串行持久化任务覆盖超时、失败、重试和重启中断；自动化测试通过。",
+          "record": "harness/records/M26/M26-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-08T16:51:47+08:00",
+          "completedAt": "2026-09-08T17:01:41+08:00"
+        },
+        {
+          "id": "M26-T02",
+          "title": "接通 PT 上传校验与双端产物登记",
+          "status": "completed",
+          "dependsOn": [
+            "M26-T01"
+          ],
+          "acceptance": "管理员上传 PT 后真实试推理再登记服务端产物；独立转换 TFLite、校验张量并登记 Android 产物；保留原始标签与版本，移动端失败不影响服务端可用状态；接口与异常测试通过。",
+          "record": "harness/records/M26/M26-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-09-08T17:01:42+08:00",
+          "completedAt": "2026-09-08T17:12:42+08:00"
+        },
+        {
+          "id": "M26-T03",
+          "title": "接通后台转换配置与任务交互",
+          "status": "completed",
+          "dependsOn": [
+            "M26-T02"
+          ],
+          "acceptance": "后台模型页提供真实环境配置、环境检测、上传进度、转换任务状态和重试，Live 操作不使用 Mock 数据，文档明确 COCO 测试定位与 App 接线边界；脚本与页面验证通过。",
+          "record": "harness/records/M26/M26-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-09-08T17:12:42+08:00",
+          "completedAt": "2026-09-08T17:20:01+08:00"
+        },
+        {
+          "id": "M26-T04",
+          "title": "完成本机真实转换与功能回归",
+          "status": "completed",
+          "dependsOn": [
+            "M26-T03"
+          ],
+          "acceptance": "复用已安装 WSL 虚拟环境，以 COCO 执行真实上传、PT 试推理、TFLite 转换与验证、目录下载哈希核对及服务端绑定；记录实际结果与限制，不宣称自定义业务精度或 App 安装通过。",
+          "record": "harness/records/M26/M26-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-09-08T17:20:02+08:00",
+          "completedAt": "2026-09-08T17:32:35+08:00"
+        }
+      ],
+      "startedAt": "2026-09-08T16:51:47+08:00",
+      "completedAt": "2026-09-08T17:32:35+08:00"
+    },
+    {
+      "id": "M27",
+      "title": "远程模型转换服务适配",
+      "status": "completed",
+      "dependsOn": [
+        "M26"
+      ],
+      "acceptanceDocument": "harness/acceptance/M27-remote-model-conversion.md",
+      "acceptanceCriteria": [
+        "转换配置支持 remote 模式且与 local、WSL 模式互斥，远程地址和令牌经过校验并不会出现在日志或任务快照中",
+        "服务端可幂等提交 PT、轮询远程任务并下载 Android TFLite 与转换元数据，超时、取消、重试和进程重启行为明确",
+        "远端产物回到本机后重新执行大小、SHA-256 与 TFLite 张量契约校验，校验失败不登记 Android 产物",
+        "管理后台可配置和检测远程转换服务，原有 WSL/local 转换保持可用"
+      ],
+      "subtasks": [
+        {
+          "id": "M27-T01",
+          "title": "冻结远程转换 HTTP 协议与安全配置",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "定义提交、查询、取消与产物下载协议，冻结幂等键、Bearer 鉴权、HTTPS 门禁、超时和错误映射；配置序列化不持久化明文令牌",
+          "record": "harness/records/M27/M27-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-08T18:29:26+08:00",
+          "completedAt": "2026-09-08T18:34:35+08:00"
+        },
+        {
+          "id": "M27-T02",
+          "title": "实现远程转换执行器与本地复验",
+          "status": "completed",
+          "dependsOn": [
+            "M27-T01"
+          ],
+          "acceptance": "remote 执行器完成 PT 上传、状态轮询、取消和产物下载；支持超时、重试与重启恢复；产物经本地哈希和 TFLite 契约复验后才允许登记，自动化测试覆盖异常分支",
+          "record": "harness/records/M27/M27-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-09-08T18:35:49+08:00",
+          "completedAt": "2026-09-08T18:45:25+08:00"
+        },
+        {
+          "id": "M27-T03",
+          "title": "接通后台远程配置与回归测试",
+          "status": "completed",
+          "dependsOn": [
+            "M27-T02"
+          ],
+          "acceptance": "后台可选择 remote、配置 endpoint 与令牌环境变量名并检测连通性；不会回显凭据；local/WSL/remote 回归测试和运维文档通过",
+          "record": "harness/records/M27/M27-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-09-08T18:46:04+08:00",
+          "completedAt": "2026-09-08T18:51:34+08:00"
+        }
+      ],
+      "startedAt": "2026-09-08T18:29:26+08:00",
+      "completedAt": "2026-09-08T18:52:00+08:00"
+    },
+    {
+      "id": "M28",
+      "title": "管理后台模型资产去 Mock 化",
+      "status": "in_progress",
+      "dependsOn": [
+        "M27"
+      ],
+      "acceptanceDocument": "harness/acceptance/M28-real-model-assets.md",
+      "acceptanceCriteria": [
+        "模型资产视图只展示服务端模型目录 API 返回的真实模型，不因页面演示模式生成或回退到静态模型卡片",
+        "模型目录加载、刷新、空目录、鉴权失败和服务不可用均有明确状态，真实上传、转换、登记、激活和参数配置入口不回归",
+        "模型列表和按流绑定选项不包含历史 MOCK.models 数据；脚本语法检查、模型 API 和管理后台回归测试通过"
+      ],
+      "subtasks": [
+        {
+          "id": "M28-T01",
+          "title": "将模型资产视图固定接入真实目录",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "移除模型资产视图对 MOCK.models 的展示回退；进入模型资产页和刷新按钮读取 /api/models，空目录和失败状态可见，其他演示视图保持不变",
+          "record": "harness/records/M28/M28-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-12T15:33:28+08:00",
+          "completedAt": "2026-09-12T16:32:23+08:00"
+        },
+        {
+          "id": "M28-T02",
+          "title": "移除模型资产页旧的手机配置读取入口",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "模型资产页不再显示连接并读取配置按钮；模型目录仍自动读取真实 API，转换配置与真实上传转换流程不受影响；脚本检查和管理后台模型回归测试通过。",
+          "record": "harness/records/M28/M28-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-09-12T16:43:08+08:00",
+          "completedAt": "2026-09-12T16:48:34+08:00"
+        }
+      ],
+      "startedAt": "2026-09-12T15:33:28+08:00"
     }
   ]
 }

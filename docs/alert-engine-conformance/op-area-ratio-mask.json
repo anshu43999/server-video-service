@@ -1,0 +1,75 @@
+{
+  "vectorId": "op-area-ratio-mask",
+  "description": "AREA_RATIO：frame: 主体分母恒为 1，掩膜只有 areaRatio 时按第 2 条取和（0.14），置信度不足的掩膜不计入",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "smoke-area",
+      "ruleVersion": 1,
+      "name": "烟雾面积",
+      "enabled": true,
+      "subjectKind": "frame",
+      "operator": "AREA_RATIO",
+      "requires": [
+        "MASK"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minAreaRatio": 0.1
+      },
+      "targetLabels": [
+        "smoke"
+      ],
+      "severityBands": [
+        {
+          "severity": "MINOR",
+          "atLeast": 0.1
+        },
+        {
+          "severity": "MAJOR",
+          "atLeast": 0.3
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "img-smoke-01",
+      "frameSeq": 0,
+      "capturedAtUs": 2000000,
+      "provides": [
+        "MASK"
+      ],
+      "masks": [
+        {
+          "label": "smoke",
+          "confidence": 0.71,
+          "areaRatio": 0.14
+        },
+        {
+          "label": "smoke",
+          "confidence": 0.3,
+          "areaRatio": 0.5
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "smoke-area",
+      "sourceId": "img-smoke-01",
+      "subjectKey": "frame:img-smoke-01",
+      "operator": "AREA_RATIO",
+      "severity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 2000000,
+      "confirmedAtUs": 2000000,
+      "measuredValue": 0.14,
+      "areaSource": "MASK",
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

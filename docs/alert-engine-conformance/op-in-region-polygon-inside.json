@@ -1,0 +1,170 @@
+{
+  "vectorId": "op-in-region-polygon-inside",
+  "description": "IN_REGION：多边形 ROI 用中心点判定；区域外的主体不产生事件",
+  "specVersion": "v1",
+  "rois": [
+    {
+      "roiId": "pit-north",
+      "shape": "POLYGON",
+      "points": [
+        [
+          0.1,
+          0.2
+        ],
+        [
+          0.55,
+          0.18
+        ],
+        [
+          0.6,
+          0.72
+        ],
+        [
+          0.12,
+          0.7
+        ]
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "no-hardhat-pit",
+      "ruleVersion": 1,
+      "name": "基坑内未戴安全帽",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "IN_REGION",
+      "requires": [
+        "BOX",
+        "POLYGON_ROI"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 2,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "NO-Hardhat"
+      ],
+      "roiId": "pit-north",
+      "roiRelation": "INSIDE"
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-07",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.83,
+          "box": {
+            "x": 0.3,
+            "y": 0.35,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "12"
+        },
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.91,
+          "box": {
+            "x": 0.8,
+            "y": 0.8,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "13"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-07",
+      "frameSeq": 2,
+      "capturedAtUs": 1100000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.83,
+          "box": {
+            "x": 0.3,
+            "y": 0.35,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "12"
+        },
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.91,
+          "box": {
+            "x": 0.8,
+            "y": 0.8,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "13"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-07",
+      "frameSeq": 3,
+      "capturedAtUs": 1200000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.83,
+          "box": {
+            "x": 0.3,
+            "y": 0.35,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "12"
+        },
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.91,
+          "box": {
+            "x": 0.8,
+            "y": 0.8,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "13"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "no-hardhat-pit",
+      "sourceId": "cam-07",
+      "subjectKey": "track:12",
+      "operator": "IN_REGION",
+      "severity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 1000000,
+      "confirmedAtUs": 1100000,
+      "measuredValue": 0.83,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

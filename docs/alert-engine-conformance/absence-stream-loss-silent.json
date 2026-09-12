@@ -1,0 +1,83 @@
+{
+  "vectorId": "absence-stream-loss-silent",
+  "description": "ABSENCE 的对照向量：断流（观测在缺失刚开始时就停止）不得产生任何事件 —— 引擎没有内部时钟，expectedEvents 为空数组是强断言（§15.1 第 7 条）",
+  "specVersion": "v1",
+  "rois": [
+    {
+      "roiId": "post",
+      "shape": "RECT",
+      "rect": {
+        "x": 0.3,
+        "y": 0.3,
+        "w": 0.4,
+        "h": 0.4
+      }
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "guard-absence",
+      "ruleVersion": 1,
+      "name": "值守岗位无人",
+      "enabled": true,
+      "subjectKind": "roi",
+      "operator": "ABSENCE",
+      "requires": [
+        "BOX"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minDwellMs": 3000,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "Person"
+      ],
+      "roiId": "post",
+      "severityBands": [
+        {
+          "severity": "MINOR",
+          "atLeast": 3000
+        },
+        {
+          "severity": "MAJOR",
+          "atLeast": 10000
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-09",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.45,
+            "y": 0.45,
+            "w": 0.1,
+            "h": 0.1
+          }
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-09",
+      "frameSeq": 2,
+      "capturedAtUs": 2000000,
+      "provides": [
+        "BOX"
+      ],
+      "detections": []
+    }
+  ],
+  "expectedEvents": [],
+  "expectedRejections": []
+}

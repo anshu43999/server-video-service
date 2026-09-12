@@ -8,3 +8,12 @@ models/*.pt
 models/*.onnx
 models/*.tflite
 models/converted/
+models/local-conversion/
+models/parameter-profiles.json
+
+# MediaMTX runtime configuration and TLS material are deployment secrets.
+deploy/mediamtx/*.yml
+deploy/mediamtx/*.yaml
+deploy/mediamtx/*.crt
+deploy/mediamtx/*.key
+!deploy/mediamtx/*.example

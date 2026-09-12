@@ -1,0 +1,157 @@
+{
+  "vectorId": "escalation-unattended",
+  "description": "未处置提级：计时起点是 confirmedAtUs（2000000）而不是 startedAtUs（1000000）—— 301000000 时距确认 299000ms 不提级，302000000 时恰好 300000ms 提级；severity 不变、只改 notifySeverity，且只提一次",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "unattended",
+      "ruleVersion": 1,
+      "name": "长时间未处置",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "PRESENCE",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 2,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "Person"
+      ],
+      "escalation": {
+        "escalateAfterMs": 300000,
+        "toSeverity": "CRITICAL"
+      }
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-11",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "3"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-11",
+      "frameSeq": 2,
+      "capturedAtUs": 2000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "3"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-11",
+      "frameSeq": 3,
+      "capturedAtUs": 301000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "3"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-11",
+      "frameSeq": 4,
+      "capturedAtUs": 302000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "3"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-11",
+      "frameSeq": 5,
+      "capturedAtUs": 400000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "3"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "unattended",
+      "sourceId": "cam-11",
+      "subjectKey": "track:3",
+      "operator": "PRESENCE",
+      "severity": "MINOR",
+      "notifySeverity": "CRITICAL",
+      "escalatedAtUs": 302000000,
+      "startedAtUs": 1000000,
+      "confirmedAtUs": 2000000,
+      "measuredValue": 0.9,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

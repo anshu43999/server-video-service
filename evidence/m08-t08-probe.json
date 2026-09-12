@@ -1,0 +1,18 @@
+{
+  "tool": "player_compatibility_probe",
+  "version": 1,
+  "generated_at_epoch_ms": 1788515684197,
+  "whep": {
+    "status": "blocked",
+    "reason": "no WHEP URL supplied"
+  },
+  "llhls": {
+    "status": "blocked",
+    "reason": "no LL-HLS URL supplied"
+  },
+  "rtsp": {
+    "status": "blocked",
+    "reason": "no RTSP URL supplied"
+  },
+  "frozen": true
+}

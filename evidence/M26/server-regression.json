@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-08T09:30:42.986091+00:00",
+  "suite": "tests",
+  "tests": 301,
+  "failures": [
+    "test_admin_page_does_not_render_registry_paths_or_tokens (test_admin_model_market.AdminModelMarketViewTests.test_admin_page_does_not_render_registry_paths_or_tokens)",
+    "test_compose_runs_pinned_mediamtx_with_restart_and_healthcheck (test_mediamtx_deployment.MediaMTXDeploymentTests.test_compose_runs_pinned_mediamtx_with_restart_and_healthcheck)"
+  ],
+  "errors": [],
+  "skipped": [],
+  "passed": false
+}

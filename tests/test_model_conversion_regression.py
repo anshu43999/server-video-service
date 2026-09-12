@@ -20,9 +20,10 @@ class ModelConversionRegressionTests(unittest.TestCase):
     def test_admin_can_register_conversion_manifest(self):
         html = (ROOT / "app" / "static" / "index.html").read_text(encoding="utf-8")
         javascript = (ROOT / "app" / "static" / "app.js").read_text(encoding="utf-8")
+        conversion_javascript = (ROOT / "app" / "static" / "conversion.js").read_text(encoding="utf-8")
         self.assertIn("register-model-btn", html)
         self.assertIn("/api/models/register", javascript)
-        self.assertIn("MOBILE ONLY", javascript)
+        self.assertIn("移动端产物", conversion_javascript)
 
 
 if __name__ == "__main__":

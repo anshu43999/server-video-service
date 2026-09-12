@@ -1,0 +1,122 @@
+{
+  "vectorId": "geometry-polygon-boundary-point",
+  "description": "多边形边界：中心点落在边上（0.50,0.20）和落在顶点上（0.20,0.20）都算在内；边外一格（0.50,0.19）不算",
+  "specVersion": "v1",
+  "rois": [
+    {
+      "roiId": "square",
+      "shape": "POLYGON",
+      "points": [
+        [
+          0.2,
+          0.2
+        ],
+        [
+          0.8,
+          0.2
+        ],
+        [
+          0.8,
+          0.8
+        ],
+        [
+          0.2,
+          0.8
+        ]
+      ]
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "in-square",
+      "ruleVersion": 1,
+      "name": "进入区域",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "IN_REGION",
+      "requires": [
+        "BOX",
+        "POLYGON_ROI"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "Person"
+      ],
+      "roiId": "square",
+      "roiRelation": "INSIDE"
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-08",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.45,
+            "y": 0.15,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "1"
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.15,
+            "y": 0.15,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "2"
+        },
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.45,
+            "y": 0.14,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "3"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "in-square",
+      "sourceId": "cam-08",
+      "subjectKey": "track:1",
+      "operator": "IN_REGION",
+      "severity": "MINOR",
+      "confirmedAtUs": 1000000,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    },
+    {
+      "ruleId": "in-square",
+      "sourceId": "cam-08",
+      "subjectKey": "track:2",
+      "operator": "IN_REGION",
+      "severity": "MINOR",
+      "confirmedAtUs": 1000000,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

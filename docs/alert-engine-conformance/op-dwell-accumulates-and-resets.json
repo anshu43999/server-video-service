@@ -1,0 +1,242 @@
+{
+  "vectorId": "op-dwell-accumulates-and-resets",
+  "description": "DWELL：空信封中断后计时清零，重新成立时 startedAtUs 取新起点（§11.1），第 5 次连续观测累计 2000ms 确认",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "pit-dwell",
+      "ruleVersion": 1,
+      "name": "基坑内滞留",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "DWELL",
+      "requires": [
+        "BOX",
+        "TRACK"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minDwellMs": 2000,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "NO-Hardhat"
+      ],
+      "severityBands": [
+        {
+          "severity": "MINOR",
+          "atLeast": 2000
+        },
+        {
+          "severity": "MAJOR",
+          "atLeast": 8000
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-07",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.3,
+            "y": 0.35,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "12"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-07",
+      "frameSeq": 2,
+      "capturedAtUs": 1500000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.3,
+            "y": 0.35,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "12"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-07",
+      "frameSeq": 3,
+      "capturedAtUs": 2000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.3,
+            "y": 0.35,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "12"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-07",
+      "frameSeq": 4,
+      "capturedAtUs": 2500000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": []
+    },
+    {
+      "sourceId": "cam-07",
+      "frameSeq": 5,
+      "capturedAtUs": 3000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.3,
+            "y": 0.35,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "12"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-07",
+      "frameSeq": 6,
+      "capturedAtUs": 3500000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.3,
+            "y": 0.35,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "12"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-07",
+      "frameSeq": 7,
+      "capturedAtUs": 4000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.3,
+            "y": 0.35,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "12"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-07",
+      "frameSeq": 8,
+      "capturedAtUs": 4500000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.3,
+            "y": 0.35,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "12"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-07",
+      "frameSeq": 9,
+      "capturedAtUs": 5000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "NO-Hardhat",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.3,
+            "y": 0.35,
+            "w": 0.1,
+            "h": 0.1
+          },
+          "trackId": "12"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "pit-dwell",
+      "sourceId": "cam-07",
+      "subjectKey": "track:12",
+      "operator": "DWELL",
+      "severity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 3000000,
+      "confirmedAtUs": 5000000,
+      "measuredValue": 2000,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

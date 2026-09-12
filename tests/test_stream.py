@@ -4,6 +4,7 @@ import unittest
 import cv2
 import numpy as np
 
+from app.detection import InferenceResult
 from app.stream import StreamSession
 from app.protocol import InputRateLimitError
 
@@ -76,7 +77,9 @@ class StreamSessionTests(unittest.TestCase):
         async def scenario():
             session = StreamSession("test")
             session.yolo_enabled = True
-            session.detector.annotate = lambda frame: frame
+            session.detector.infer = lambda frame: InferenceResult(
+                frame_width=frame.shape[1], frame_height=frame.shape[0], provides=("BOX",)
+            )
             session._last_input = 0
             await session.ingest_jpeg(make_jpeg())
             session._last_input = 0

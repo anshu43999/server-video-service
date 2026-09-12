@@ -1,6 +1,6 @@
 # 输出流播放器兼容性验证
 
-状态：按 [ADR-002](adr-002-production-transport.md) 更新目标协议；WHEP/LL-HLS 行尚无任何实测证据
+状态：按 [ADR-002](adr-002-production-transport.md) 更新目标协议；本机兼容性实测冻结（缺少 MediaMTX、浏览器和 ffprobe），不以 HTTP 探针结果替代首帧/端到端播放证据。
 
 ## 目标协议（ADR-002）
 
@@ -22,6 +22,22 @@
 | 浏览器（生产） | WHEP 播放 | 无 | 未验证 |
 | 浏览器（诊断） | 管理页面内 `<img>` 加载 MJPEG | `tests/test_api.py` 验证页面与 `/mjpeg` 路由存在 | 自动化契约通过，浏览器实播待现场确认 |
 | VLC / ffprobe（诊断） | 打开 RTSP 地址；或直接打开 MJPEG URL | `tools/probe_output.py` + VLC 命令见下方 | RTSP 待编码推流落地后执行；MJPEG 待在有 VLC 的联调机执行 |
+
+## 可重复探针与证据规则
+
+`tools/player_compatibility_probe.py` 只做可重复的信令/清单/诊断探测：WHEP 可在提供浏览器生成的 SDP offer 文件时测量 POST 信令耗时，LL-HLS 检查 `#EXTM3U` 清单，RTSP 使用 `ffprobe` 检查编码流。输出 JSON 中 `status=blocked` 或 `frozen=true` 时，不得填写首帧、P50/P95 端到端延迟，也不得宣称播放成功。
+
+```powershell
+.venv\Scripts\python.exe tools\player_compatibility_probe.py `
+  --whep-url http://127.0.0.1:8889/inspection-001/whep `
+  --llhls-url http://127.0.0.1:8888/inspection-001/index.m3u8 `
+  --rtsp-url rtsp://127.0.0.1:8554/inspection-001 `
+  --output evidence\m08-t08-probe.json
+```
+
+浏览器实测必须在真实浏览器中创建 `RTCPeerConnection`、POST WHEP SDP、将远端轨道绑定到 `<video>`，并记录 `playing` 事件的 `performance.now()` 作为首帧时间。至少采集 20 次后计算 P50/P95；端到端延迟须使用带源帧时间戳的测试源或现场钟同步，不能用 HTTP 响应时间代替。WHEP 失败时记录失败原因、回退次数，并在同一会话加载 LL-HLS 验证回退可见。
+
+Android 记录必须包含设备型号、Android API、libwebrtc/播放器库版本、ABI、首帧样本和 P50/P95。没有设备或无法取得上述原始日志时，保持 `frozen`，不填写推测值。
 
 ## VLC 手工验证（诊断通道）
 

@@ -71,6 +71,38 @@ class ValidateStateTest(unittest.TestCase):
 
         self.assertTrue(any("missing dependency" in error for error in errors))
 
+    def test_add_subtask_appends_pending_task_and_renders(self) -> None:
+        state = fixture_state()
+        args = argparse.Namespace(
+            task_id="M00-T02",
+            parent="M00",
+            title="Follow-up task",
+            acceptance="Follow-up acceptance",
+            depends_on=["M00-T01"],
+            record=None,
+        )
+        with mock.patch.object(harness, "save_state"), mock.patch.object(
+            harness, "render_board"
+        ):
+            harness.command_add(state, args)
+        task = state["majorTasks"][0]["subtasks"][-1]
+        self.assertEqual("pending", task["status"])
+        self.assertEqual(["M00-T01"], task["dependsOn"])
+        self.assertEqual("harness/records/M00/M00-T02.md", task["record"])
+
+    def test_add_subtask_rejects_duplicate_id(self) -> None:
+        state = fixture_state()
+        args = argparse.Namespace(
+            task_id="M00-T01",
+            parent="M00",
+            title="Duplicate",
+            acceptance="Nope",
+            depends_on=[],
+            record=None,
+        )
+        with self.assertRaises(harness.HarnessError):
+            harness.command_add(state, args)
+
     def test_dependency_cycle_is_reported(self) -> None:
         state = fixture_state()
         first = state["majorTasks"][0]["subtasks"][0]

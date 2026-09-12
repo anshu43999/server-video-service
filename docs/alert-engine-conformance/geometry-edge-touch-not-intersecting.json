@@ -1,0 +1,106 @@
+{
+  "vectorId": "geometry-edge-touch-not-intersecting",
+  "description": "仅边线接触算不相交：三个框里，完全在内的贡献 0.04，跨边界的只贡献交叠部分 0.02，左边紧贴区域右边线（x=0.50）的贡献 0 → 分子 0.06、占比 0.24；把「相交的框」按整框面积累加的实现会算成 0.48",
+  "specVersion": "v1",
+  "rois": [
+    {
+      "roiId": "yard",
+      "shape": "RECT",
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 0.5,
+        "h": 0.5
+      }
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "edge-area",
+      "ruleVersion": 1,
+      "name": "边界面积",
+      "enabled": true,
+      "subjectKind": "roi",
+      "operator": "AREA_RATIO",
+      "requires": [
+        "BOX"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minAreaRatio": 0.2
+      },
+      "targetLabels": [
+        "material"
+      ],
+      "roiId": "yard",
+      "severityBands": [
+        {
+          "severity": "MINOR",
+          "atLeast": 0.2
+        },
+        {
+          "severity": "MAJOR",
+          "atLeast": 0.35
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-04",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX"
+      ],
+      "detections": [
+        {
+          "label": "material",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.1,
+            "y": 0.1,
+            "w": 0.2,
+            "h": 0.2
+          }
+        },
+        {
+          "label": "material",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.5,
+            "y": 0.1,
+            "w": 0.2,
+            "h": 0.2
+          }
+        },
+        {
+          "label": "material",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.4,
+            "y": 0.3,
+            "w": 0.2,
+            "h": 0.2
+          }
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "edge-area",
+      "sourceId": "cam-04",
+      "subjectKey": "roi:yard",
+      "operator": "AREA_RATIO",
+      "severity": "MINOR",
+      "confirmedAtUs": 1000000,
+      "measuredValue": 0.24,
+      "areaSource": "BOX_FALLBACK",
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

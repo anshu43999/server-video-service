@@ -1,0 +1,98 @@
+{
+  "vectorId": "op-area-ratio-box-fallback",
+  "description": "AREA_RATIO：来源只给框时降级为 BOX_FALLBACK，两个重叠框的面积求并（0.07）而不是求和（0.08），分母取区域面积 0.25 → 0.28",
+  "specVersion": "v1",
+  "rois": [
+    {
+      "roiId": "yard",
+      "shape": "RECT",
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "w": 0.5,
+        "h": 0.5
+      }
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "pile-area",
+      "ruleVersion": 1,
+      "name": "料堆占用",
+      "enabled": true,
+      "subjectKind": "roi",
+      "operator": "AREA_RATIO",
+      "requires": [
+        "BOX"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minAreaRatio": 0.25
+      },
+      "targetLabels": [
+        "material"
+      ],
+      "roiId": "yard",
+      "severityBands": [
+        {
+          "severity": "MINOR",
+          "atLeast": 0.25
+        },
+        {
+          "severity": "MAJOR",
+          "atLeast": 0.5
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-04",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX"
+      ],
+      "detections": [
+        {
+          "label": "material",
+          "confidence": 0.8,
+          "box": {
+            "x": 0.1,
+            "y": 0.1,
+            "w": 0.2,
+            "h": 0.2
+          }
+        },
+        {
+          "label": "material",
+          "confidence": 0.75,
+          "box": {
+            "x": 0.2,
+            "y": 0.2,
+            "w": 0.2,
+            "h": 0.2
+          }
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "pile-area",
+      "sourceId": "cam-04",
+      "subjectKey": "roi:yard",
+      "operator": "AREA_RATIO",
+      "severity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 1000000,
+      "confirmedAtUs": 1000000,
+      "measuredValue": 0.28,
+      "areaSource": "BOX_FALLBACK",
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

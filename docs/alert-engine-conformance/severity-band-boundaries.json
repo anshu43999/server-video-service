@@ -1,0 +1,198 @@
+{
+  "vectorId": "severity-band-boundaries",
+  "description": "分档边界：atLeast 是「大于等于」；六张独立图片各自一个 frame: 主体，覆盖三档的上下边界，并锁定分档量低于最低档时取最低档",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "fire-band",
+      "ruleVersion": 1,
+      "name": "火焰分档",
+      "enabled": true,
+      "subjectKind": "frame",
+      "operator": "PRESENCE",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.05,
+        "minConsecutiveFrames": 1
+      },
+      "targetLabels": [
+        "fire"
+      ],
+      "severityBands": [
+        {
+          "severity": "MINOR",
+          "atLeast": 0.1
+        },
+        {
+          "severity": "MAJOR",
+          "atLeast": 0.25
+        },
+        {
+          "severity": "CRITICAL",
+          "atLeast": 0.5
+        }
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "img-a",
+      "frameSeq": 0,
+      "capturedAtUs": 1000000,
+      "provides": [],
+      "classifications": [
+        {
+          "label": "fire",
+          "confidence": 0.09
+        }
+      ]
+    },
+    {
+      "sourceId": "img-b",
+      "frameSeq": 0,
+      "capturedAtUs": 2000000,
+      "provides": [],
+      "classifications": [
+        {
+          "label": "fire",
+          "confidence": 0.1
+        }
+      ]
+    },
+    {
+      "sourceId": "img-c",
+      "frameSeq": 0,
+      "capturedAtUs": 3000000,
+      "provides": [],
+      "classifications": [
+        {
+          "label": "fire",
+          "confidence": 0.24
+        }
+      ]
+    },
+    {
+      "sourceId": "img-d",
+      "frameSeq": 0,
+      "capturedAtUs": 4000000,
+      "provides": [],
+      "classifications": [
+        {
+          "label": "fire",
+          "confidence": 0.25
+        }
+      ]
+    },
+    {
+      "sourceId": "img-e",
+      "frameSeq": 0,
+      "capturedAtUs": 5000000,
+      "provides": [],
+      "classifications": [
+        {
+          "label": "fire",
+          "confidence": 0.49
+        }
+      ]
+    },
+    {
+      "sourceId": "img-f",
+      "frameSeq": 0,
+      "capturedAtUs": 6000000,
+      "provides": [],
+      "classifications": [
+        {
+          "label": "fire",
+          "confidence": 0.5
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "fire-band",
+      "sourceId": "img-a",
+      "subjectKey": "frame:img-a",
+      "operator": "PRESENCE",
+      "severity": "MINOR",
+      "notifySeverity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 1000000,
+      "confirmedAtUs": 1000000,
+      "measuredValue": 0.09,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    },
+    {
+      "ruleId": "fire-band",
+      "sourceId": "img-b",
+      "subjectKey": "frame:img-b",
+      "operator": "PRESENCE",
+      "severity": "MINOR",
+      "notifySeverity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 2000000,
+      "confirmedAtUs": 2000000,
+      "measuredValue": 0.1,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    },
+    {
+      "ruleId": "fire-band",
+      "sourceId": "img-c",
+      "subjectKey": "frame:img-c",
+      "operator": "PRESENCE",
+      "severity": "MINOR",
+      "notifySeverity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 3000000,
+      "confirmedAtUs": 3000000,
+      "measuredValue": 0.24,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    },
+    {
+      "ruleId": "fire-band",
+      "sourceId": "img-d",
+      "subjectKey": "frame:img-d",
+      "operator": "PRESENCE",
+      "severity": "MAJOR",
+      "notifySeverity": "MAJOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 4000000,
+      "confirmedAtUs": 4000000,
+      "measuredValue": 0.25,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    },
+    {
+      "ruleId": "fire-band",
+      "sourceId": "img-e",
+      "subjectKey": "frame:img-e",
+      "operator": "PRESENCE",
+      "severity": "MAJOR",
+      "notifySeverity": "MAJOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 5000000,
+      "confirmedAtUs": 5000000,
+      "measuredValue": 0.49,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    },
+    {
+      "ruleId": "fire-band",
+      "sourceId": "img-f",
+      "subjectKey": "frame:img-f",
+      "operator": "PRESENCE",
+      "severity": "CRITICAL",
+      "notifySeverity": "CRITICAL",
+      "escalatedAtUs": null,
+      "startedAtUs": 6000000,
+      "confirmedAtUs": 6000000,
+      "measuredValue": 0.5,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

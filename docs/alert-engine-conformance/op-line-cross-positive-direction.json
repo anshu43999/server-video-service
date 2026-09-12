@@ -1,0 +1,152 @@
+{
+  "vectorId": "op-line-cross-positive-direction",
+  "description": "LINE_CROSS：中心点自左向右跨越线段命中一次（measuredValue 为跨越次数）；反向跨回不再命中",
+  "specVersion": "v1",
+  "rois": [
+    {
+      "roiId": "gate",
+      "shape": "LINE",
+      "points": [
+        [
+          0.5,
+          0.1
+        ],
+        [
+          0.5,
+          0.9
+        ]
+      ],
+      "positiveDirection": "LEFT_TO_RIGHT"
+    }
+  ],
+  "rules": [
+    {
+      "ruleId": "gate-cross",
+      "ruleVersion": 1,
+      "name": "闸口越线",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "LINE_CROSS",
+      "requires": [
+        "BOX",
+        "TRACK",
+        "LINE_ROI"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "cooldownMs": 0
+      },
+      "targetLabels": [
+        "Person"
+      ],
+      "roiId": "gate"
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-02",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.25,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "7"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-02",
+      "frameSeq": 2,
+      "capturedAtUs": 2000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.4,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "7"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-02",
+      "frameSeq": 3,
+      "capturedAtUs": 3000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.5499999999999999,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "7"
+        }
+      ]
+    },
+    {
+      "sourceId": "cam-02",
+      "frameSeq": 4,
+      "capturedAtUs": 4000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.35000000000000003,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "7"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "gate-cross",
+      "sourceId": "cam-02",
+      "subjectKey": "track:7",
+      "operator": "LINE_CROSS",
+      "severity": "MINOR",
+      "notifySeverity": "MINOR",
+      "escalatedAtUs": null,
+      "startedAtUs": 3000000,
+      "confirmedAtUs": 3000000,
+      "measuredValue": 1,
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": []
+}

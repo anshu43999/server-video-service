@@ -1,0 +1,108 @@
+{
+  "vectorId": "reject-roi-required-and-labels",
+  "description": "绑定期显式拒绝（第 4、5 步）：需要 ROI 的算子没给 roiId → ROI_REQUIRED；要求标签的算子没给 targetLabels → TARGET_LABELS_REQUIRED",
+  "specVersion": "v1",
+  "rules": [
+    {
+      "ruleId": "count-no-roi",
+      "ruleVersion": 1,
+      "name": "缺少 ROI 的计数规则",
+      "enabled": true,
+      "subjectKind": "roi",
+      "operator": "COUNT",
+      "requires": [
+        "BOX"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minCount": 2
+      },
+      "targetLabels": [
+        "Person"
+      ]
+    },
+    {
+      "ruleId": "dwell-no-labels",
+      "ruleVersion": 1,
+      "name": "缺少标签的滞留规则",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "DWELL",
+      "requires": [
+        "BOX",
+        "TRACK"
+      ],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1,
+        "minDwellMs": 1000
+      }
+    },
+    {
+      "ruleId": "person-present",
+      "ruleVersion": 1,
+      "name": "出现人员",
+      "enabled": true,
+      "subjectKind": "track",
+      "operator": "PRESENCE",
+      "requires": [],
+      "thresholds": {
+        "minConfidence": 0.5,
+        "minConsecutiveFrames": 1
+      },
+      "targetLabels": [
+        "Person"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "sourceId": "cam-01",
+      "frameSeq": 1,
+      "capturedAtUs": 1000000,
+      "provides": [
+        "BOX",
+        "TRACK"
+      ],
+      "detections": [
+        {
+          "label": "Person",
+          "confidence": 0.9,
+          "box": {
+            "x": 0.3,
+            "y": 0.4,
+            "w": 0.1,
+            "h": 0.2
+          },
+          "trackId": "1"
+        }
+      ]
+    }
+  ],
+  "expectedEvents": [
+    {
+      "ruleId": "person-present",
+      "sourceId": "cam-01",
+      "subjectKey": "track:1",
+      "operator": "PRESENCE",
+      "severity": "MINOR",
+      "confirmedAtUs": 1000000,
+      "measuredValue": 0.9,
+      "state": "CONFIRMED",
+      "suppressedCount": 0
+    }
+  ],
+  "expectedRejections": [
+    {
+      "accepted": false,
+      "ruleId": "count-no-roi",
+      "code": "ROI_REQUIRED"
+    },
+    {
+      "accepted": false,
+      "ruleId": "dwell-no-labels",
+      "code": "TARGET_LABELS_REQUIRED"
+    }
+  ]
+}
