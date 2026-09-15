@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     mediamtx_enabled: bool = False
     mediamtx_api_url: str | None = None
     mediamtx_ffmpeg_path: str | None = None
+    mediamtx_video_encoder: str = "auto"
     mediamtx_reconnect_delay: float = 1.0
     mediamtx_max_reconnect_attempts: int = 3
     # Model marketplace download guardrails.  These limits protect the service

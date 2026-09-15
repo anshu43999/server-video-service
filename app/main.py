@@ -857,7 +857,7 @@ async def update_stream_config(stream_id: str, request: StreamConfigRequest):
     if request.confidence is not None:
         stream.detector.confidence = request.confidence
     if request.max_fps is not None:
-        stream.max_fps = request.max_fps
+        await stream.set_max_fps(request.max_fps)
     if request.yolo_enabled is not None:
         await stream.set_yolo(request.yolo_enabled)
     if request.overlay_enabled is not None:

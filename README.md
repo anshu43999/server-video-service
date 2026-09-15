@@ -24,9 +24,24 @@ PowerShell 高级用法：
 .\start-server.ps1 -InstallYolo    # 同时安装 ultralytics YOLO 依赖
 .\start-server.ps1 -Reload         # 开发模式，代码变更自动重载
 .\start-server.ps1 -NoInstall      # 不安装依赖，仅使用已有虚拟环境
+.\start-server.ps1 -WithMediaMtx   # 同时启动本机 H.264/WHEP/LL-HLS 分发
 ```
 
 首次运行需要联网下载依赖；之后脚本通过 `.venv/.server-video-service-deps` 标记避免重复安装。未配置 `YOLO_MODEL_PATH` 时服务仍可启动并提供原始视频流，开启 YOLO 会显示模型未就绪提示。
+
+使用工作区内的 RTSP 视频发送端进行完整本机联调：
+
+```powershell
+# 终端 1：启动文件循环 RTSP 源，默认地址 rtsp://127.0.0.1:18554/file-test
+cd E:\aiyolo
+.\tools\rtsp\start_rtsp_video.ps1 -NoAdbReverse
+
+# 终端 2：启动后台及独立的输出 MediaMTX
+cd E:\aiyolo\server-video-service
+.\start-server.ps1 -WithMediaMtx
+```
+
+随后打开 `http://127.0.0.1:8080/admin/`，在“视频流管理”中新建流，填写唯一流 ID，并将服务端拉流地址设为 `rtsp://127.0.0.1:18554/file-test`。脚本默认把后台输出 MediaMTX 绑定到 RTSP `19554`、LL-HLS `18888`、WHEP `18889`、WebRTC UDP `18189` 和 API `19997`；所有端口均可用对应的 `-Media*Port` 参数覆盖。按 `Ctrl+C` 停止后台时，脚本会同时停止它启动的 MediaMTX。
 
 ## 开发任务 Harness
 
@@ -57,7 +72,7 @@ python harness/harness.py next
   - MJPEG：`GET /api/streams/{stream_id}/mjpeg`，用于管理页预览和自动化测试。
   - WebSocket JPEG：`/api/streams/{stream_id}/ws`，用于联调探针。
 
-当前代码库已实现输入、YOLO 开关、MJPEG/WebSocket JPEG 输出和模型管理；H.264 编码、MediaMTX 推流、WHEP/LL-HLS 播放和检测结果旁路是 ADR-002 之后的实现任务，尚未落地。
+当前代码库已实现输入、YOLO 开关、MJPEG/WebSocket JPEG 诊断输出、H.264 编码、MediaMTX 推流、WHEP/LL-HLS 播放、检测结果旁路和模型管理。
 
 ## 快速开始
 

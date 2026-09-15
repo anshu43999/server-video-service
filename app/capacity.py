@@ -81,9 +81,8 @@ async def run_capacity_benchmark(
             # Measure encoder time separately from queue/write/reconnect time.
             # MediaMTXPublisher exposes the encoder metrics internally; test
             # doubles may expose ``encode_ms`` directly.
-            encoder = getattr(publisher, "_encoder", None)
-            encoder_metrics = getattr(encoder, "metrics", None)
-            encode_ms = getattr(encoder_metrics, "last_encode_ms", None)
+            metrics = publisher.metrics() if hasattr(publisher, "metrics") else {}
+            encode_ms = (metrics or {}).get("encoder_last_ms")
             if encode_ms is None:
                 encode_ms = getattr(publisher, "encode_ms", None)
             if encode_ms is not None:

@@ -29,7 +29,7 @@ class _Pipe:
         if self.failures:
             self.failures -= 1
             raise BrokenPipeError("injected packet loss / media restart")
-        return len(payload)
+        return payload.nbytes if hasattr(payload, "nbytes") else len(payload)
 
     def flush(self):
         return None
@@ -73,9 +73,7 @@ class FaultRecoveryTests(unittest.TestCase):
             )
             first = _Process(_Pipe(failures=1))
             second = _Process(_Pipe(failures=0))
-            with patch("app.publisher.subprocess.Popen", side_effect=[first, second]), \
-                 patch.object(publisher, "_ensure_encoder") as ensure:
-                ensure.return_value.encode.return_value = b"\x00\x00\x00\x01\x65"
+            with patch("app.publisher.subprocess.Popen", side_effect=[first, second]):
                 ok = await publisher.publish(np.zeros((4, 4, 3), dtype=np.uint8))
             self.assertTrue(ok)
             self.assertEqual(publisher.publish_state, "connected")
@@ -91,9 +89,7 @@ class FaultRecoveryTests(unittest.TestCase):
             publisher = MediaMTXPublisher(
                 "media-restart", PublisherConfig(enabled=True, reconnect_delay=0, max_reconnect_attempts=1)
             )
-            with patch("app.publisher.subprocess.Popen", side_effect=[_Process(_Pipe(9)), _Process(_Pipe(9))]), \
-                 patch.object(publisher, "_ensure_encoder") as ensure:
-                ensure.return_value.encode.return_value = b"\x00\x00\x00\x01\x65"
+            with patch("app.publisher.subprocess.Popen", side_effect=[_Process(_Pipe(9)), _Process(_Pipe(9))]):
                 self.assertFalse(await publisher.publish(np.zeros((4, 4, 3), dtype=np.uint8)))
             self.assertEqual(publisher.publish_state, "failed")
             await publisher.close()

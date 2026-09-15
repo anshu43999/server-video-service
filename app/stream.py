@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -13,6 +14,32 @@ from .detector import YoloDetector, decode_image
 from .overlay import draw_overlay
 from .publisher import MediaMTXPublisher, PublisherConfig
 from .protocol import InputRateLimitError, MAX_FRAME_BYTES, MAX_FRAME_HEIGHT, MAX_FRAME_WIDTH, StreamState
+
+
+class _FrameRateLimiter:
+    """Token bucket that caps average FPS while tolerating network jitter."""
+
+    def __init__(self, burst: float = 8.0) -> None:
+        self._burst = burst
+        self._tokens = burst
+        self._updated_at: float | None = None
+        self._fps: float | None = None
+
+    def allow(self, now: float, fps: float) -> bool:
+        fps = max(fps, 1.0)
+        if self._updated_at is None or self._fps != fps:
+            self._updated_at = now
+            self._fps = fps
+        else:
+            self._tokens = min(
+                self._burst,
+                self._tokens + max(0.0, now - self._updated_at) * fps,
+            )
+            self._updated_at = now
+        if self._tokens + 1e-9 < 1.0:
+            return False
+        self._tokens = max(0.0, self._tokens - 1.0)
+        return True
 
 
 @dataclass
@@ -56,6 +83,8 @@ class StreamSession:
     _active_subscribers: int = field(default=0, init=False)
     _pending_frame: object | None = field(default=None, init=False)
     _processing_task: asyncio.Task | None = field(default=None, init=False)
+    _pending_preview_frame: object | None = field(default=None, init=False)
+    _preview_task: asyncio.Task | None = field(default=None, init=False)
     _received_times: list[float] = field(default_factory=list, init=False)
     _processed_times: list[float] = field(default_factory=list, init=False)
     _output_times: list[float] = field(default_factory=list, init=False)
@@ -81,6 +110,8 @@ class StreamSession:
                 whep_base_url=settings.mediamtx_whep_url,
                 llhls_base_url=settings.mediamtx_llhls_url,
                 http_scheme=settings.mediamtx_http_scheme,
+                fps=self.max_fps,
+                encoder=settings.mediamtx_video_encoder,
             ),
         )
 
@@ -107,6 +138,10 @@ class StreamSession:
             self._processing_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._processing_task
+        if self._preview_task:
+            self._preview_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._preview_task
         await self.publisher.close()
         async with self._condition:
             self._condition.notify_all()
@@ -154,28 +189,60 @@ class StreamSession:
                          "scenario": self.model_scenario, "purpose": self.model_purpose})
         return metadata
 
-    async def _publish_frame(self, frame) -> None:
-        now = time.monotonic()
-        min_interval = 1.0 / max(self.max_fps, 1.0)
-        if now - self._last_emit < min_interval:
-            return
-        self._last_emit = now
-        ok, encoded = cv2.imencode(
-            ".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), max(10, min(settings.jpeg_quality, 100))]
-        )
-        if not ok:
-            raise ValueError("failed to encode processed frame")
+    async def _publish_frame(self, frame, *, pace_output: bool = True) -> None:
+        if pace_output:
+            await self._wait_for_emit_slot()
         await self.publisher.publish(frame)
         await self.publisher.refresh_viewers()
         async with self._condition:
-            self.latest_jpeg = encoded.tobytes()
             self.last_error = None
             self._state = StreamState.OUTPUTTING
             emitted_at = time.monotonic()
             self._output_times.append(emitted_at)
             self._output_times = self._output_times[-60:]
             self.output_fps = self._window_fps(self._output_times)
+        if self.latest_jpeg is None:
+            # Preserve the existing ingest contract: the first frame is ready
+            # when ingest_frame returns, even before a preview client connects.
+            await self._encode_preview(frame)
+        elif self.active_subscribers:
+            self._pending_preview_frame = frame
+            if self._preview_task is None or self._preview_task.done():
+                self._preview_task = asyncio.create_task(self._preview_worker())
+
+    async def _encode_preview(self, frame) -> None:
+        ok, encoded = await asyncio.to_thread(
+            cv2.imencode,
+            ".jpg",
+            frame,
+            [int(cv2.IMWRITE_JPEG_QUALITY), max(10, min(settings.jpeg_quality, 100))],
+        )
+        if not ok:
+            raise ValueError("failed to encode processed frame")
+        async with self._condition:
+            self.latest_jpeg = encoded.tobytes()
             self._condition.notify_all()
+
+    async def _preview_worker(self) -> None:
+        """Encode only the newest browser-preview frame off the RTSP path."""
+        while self._pending_preview_frame is not None and not self._closed:
+            frame = self._pending_preview_frame
+            self._pending_preview_frame = None
+            await self._encode_preview(frame)
+
+    async def _wait_for_emit_slot(self) -> None:
+        """Pace output while the RTSP reader keeps only its latest frame."""
+        now = time.monotonic()
+        interval = 1.0 / max(self.max_fps, 1.0)
+        if not self._last_emit:
+            self._last_emit = now
+            return
+        target = self._last_emit + interval
+        if target > now:
+            await asyncio.sleep(target - now)
+            self._last_emit = target
+        else:
+            self._last_emit = now
 
     @staticmethod
     def _window_fps(timestamps: list[float]) -> float:
@@ -261,12 +328,23 @@ class StreamSession:
     async def ingest_jpeg(self, payload: bytes):
         if len(payload) > MAX_FRAME_BYTES:
             raise ValueError(f"frame exceeds {MAX_FRAME_BYTES} bytes")
+        await self.ingest_frame(decode_image(payload))
+
+    async def ingest_frame(
+        self,
+        frame,
+        *,
+        enforce_rate_limit: bool = True,
+        pace_output: bool = True,
+    ) -> None:
+        """Ingest an already decoded BGR frame without a lossy JPEG round trip."""
         now = time.monotonic()
         min_input_interval = 1.0 / max(settings.max_input_fps, 1.0)
-        if self._last_input and now - self._last_input < min_input_interval:
+        if enforce_rate_limit and self._last_input and now - self._last_input < min_input_interval:
             raise InputRateLimitError("input frame rate exceeds configured limit")
         self._last_input = now
-        frame = decode_image(payload)
+        if frame is None or not hasattr(frame, "shape") or len(frame.shape) != 3 or frame.shape[2] != 3:
+            raise ValueError("frame must be a HxWx3 BGR image")
         height, width = frame.shape[:2]
         if width > MAX_FRAME_WIDTH or height > MAX_FRAME_HEIGHT:
             raise ValueError(f"frame exceeds {MAX_FRAME_WIDTH}x{MAX_FRAME_HEIGHT}")
@@ -286,7 +364,12 @@ class StreamSession:
             if self._processing_task is None or self._processing_task.done():
                 self._processing_task = asyncio.create_task(self._yolo_worker())
             return
-        await self._publish_frame(frame)
+        await self._publish_frame(frame, pace_output=pace_output)
+
+    async def set_max_fps(self, fps: float) -> None:
+        self.max_fps = fps
+        self._last_emit = 0.0
+        await self.publisher.set_fps(fps)
 
     async def wait_frame(self, previous: bytes | None = None) -> bytes | None:
         async with self._condition:
@@ -333,23 +416,72 @@ class StreamSession:
 
     async def _pull_loop(self):
         while not self._closed:
-            capture = cv2.VideoCapture(self.source_url)
+            loop = asyncio.get_running_loop()
+            # OpenCV can release several buffered RTSP frames in one burst.
+            # Eight frames absorb that jitter while retaining a hard bound.
+            frames: asyncio.Queue = asyncio.Queue(maxsize=8)
+            stop_reader = threading.Event()
+
+            def offer(ok: bool, frame, error: str | None = None, dropped: int = 0) -> None:
+                self.frames_dropped += dropped
+                if frames.full():
+                    with contextlib.suppress(asyncio.QueueEmpty):
+                        frames.get_nowait()
+                    self.frames_dropped += 1
+                frames.put_nowait((ok, frame, error))
+
+            def read_source() -> None:
+                capture = cv2.VideoCapture(self.source_url)
+                limiter = _FrameRateLimiter()
+                pending_drops = 0
+                try:
+                    if not capture.isOpened():
+                        loop.call_soon_threadsafe(
+                            offer, False, None, f"cannot open source: {self.source_url}"
+                        )
+                        return
+                    while not stop_reader.is_set():
+                        ok, frame = capture.read()
+                        if not ok:
+                            loop.call_soon_threadsafe(
+                                offer, False, None, "source read failed", pending_drops
+                            )
+                            return
+                        now = time.monotonic()
+                        current_fps = self.max_fps
+                        if not limiter.allow(now, current_fps):
+                            pending_drops += 1
+                            continue
+                        loop.call_soon_threadsafe(offer, True, frame, None, pending_drops)
+                        pending_drops = 0
+                except Exception as exc:
+                    loop.call_soon_threadsafe(offer, False, None, str(exc))
+                finally:
+                    capture.release()
+
+            reader_task = asyncio.create_task(asyncio.to_thread(read_source))
             try:
-                if not capture.isOpened():
-                    raise RuntimeError(f"cannot open source: {self.source_url}")
                 while not self._closed:
-                    ok, frame = await asyncio.to_thread(capture.read)
+                    ok, frame, error = await frames.get()
                     if not ok:
-                        break
-                    ok, encoded = cv2.imencode(".jpg", frame)
-                    if ok:
-                        await self.ingest_jpeg(encoded.tobytes())
+                        raise RuntimeError(error or f"cannot read source: {self.source_url}")
+                    # Network cameras have normal arrival jitter. The public
+                    # upload endpoint rejects bursts, but an internal RTSP pull
+                    # must not tear down and reconnect because two frames arrive
+                    # a few milliseconds closer than their nominal cadence.
+                    await self.ingest_frame(
+                        frame,
+                        enforce_rate_limit=False,
+                        pace_output=False,
+                    )
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 self.last_error = str(exc)
                 self._state = StreamState.ERROR
             finally:
-                capture.release()
+                stop_reader.set()
+                with contextlib.suppress(asyncio.CancelledError, asyncio.TimeoutError, Exception):
+                    await asyncio.wait_for(asyncio.shield(reader_task), timeout=2.0)
             if not self._closed:
                 await asyncio.sleep(1)
