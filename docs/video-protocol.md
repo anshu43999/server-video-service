@@ -105,10 +105,12 @@ YOLO 模式独立于会话状态：`off` 或 `on`。模型不可用时，开启�
 请求：
 
 ```json
-{"stream_id":"inspection-001","source_url":null}
+{"stream_id":"inspection-001","display_name":"North Gate","source_type":"rtsp","source_url":null,"enabled":true}
 ```
 
-`stream_id` 必须为 1–128 个 ASCII 字母、数字、点、下划线或连字符，且以字母或数字开头。`source_url=null` 表示等待移动端 WebSocket 推帧；提供 URL 时服务端主动拉流。
+`stream_id` 必须为 1–128 个 ASCII 字母、数字、点、下划线或连字符，且以字母或数字开头。`display_name`、`source_type` 和 `enabled` 可省略；`source_url=null` 表示等待移动端 WebSocket 推帧，提供 URL 时服务端主动拉流。
+
+创建成功后，控制面配置写入 `stream_configs`，包括来源、模型绑定、YOLO 参数、启用状态和创建/更新时间。视频帧、WebSocket 队列与实时指标不写入业务数据库。若同一配置已经存在但当前没有运行时会话，完全一致的创建请求按幂等恢复处理；运行时会话仍存在或关键字段不一致时返回冲突。
 
 成功 `201`：
 
@@ -120,7 +122,7 @@ YOLO 模式独立于会话状态：`off` 或 `on`。模型不可用时，开启�
 
 `GET /api/streams`
 
-返回数组。每项至少包含 `stream_id`、`state`、`yolo_enabled`、`frames_received`、`frames_processed`、`confidence`、`max_fps`、`last_error`，以及输出面字段 `publish_state`（`idle`/`connected`/`reconnecting`/`failed`）和 `viewers`。
+返回数组。每项至少包含 `stream_id`、`display_name`、`source_type`、脱敏后的 `source_url`、`enabled`、`state`、`yolo_enabled`、`frames_received`、`frames_processed`、`confidence`、`max_fps`、`last_error`，以及输出面字段 `publish_state`（`idle`/`connected`/`reconnecting`/`failed`）和 `viewers`。RTSP 用户名、密码和查询参数不会出现在普通 API 响应或拉流错误中。
 
 ### 5.3 YOLO 开关
 
@@ -135,10 +137,10 @@ YOLO 模式独立于会话状态：`off` 或 `on`。模型不可用时，开启�
 可选字段：
 
 ```json
-{"confidence":0.4,"max_fps":15,"yolo_enabled":true}
+{"confidence":0.4,"max_fps":15,"yolo_enabled":true,"overlay_enabled":true,"display_name":"North Gate","enabled":true}
 ```
 
-`confidence` 范围 `0.01–0.99`，`max_fps` 范围 `1–60`。未提供的字段保持原值。
+`confidence` 范围 `0.01–0.99`，`max_fps` 范围 `1–60`。`enabled=false` 会持久化停用并关闭当前会话，之后可用 `enabled=true` 重新建立会话。未提供的字段保持原值。服务进程启动时会读取 `enabled=true` 的配置并恢复会话；单路来源连接失败只让该流进入可重试错误状态，不阻塞其他流和服务启动。`enabled=false` 的配置仍由列表返回，但标记为 `configuration_state=disabled`、`runtime_available=false`，不会自动恢复。
 
 ### 5.5 播放地址
 

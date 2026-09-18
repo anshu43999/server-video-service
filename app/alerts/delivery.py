@@ -21,6 +21,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Mapping, Protocol, Sequence
 
+from ..database import AlertDeliveryReceiptRecord, DatabaseManager
+
 
 Event = Mapping[str, Any]
 CredentialProvider = Callable[[], Mapping[str, Any] | Awaitable[Mapping[str, Any]]]
@@ -190,6 +192,7 @@ class AlertDeliveryService:
         max_attempts: int = 3,
         retry_delay_seconds: float = 0.05,
         channels: Mapping[str, DeliveryChannel] | None = None,
+        database_manager: DatabaseManager | None = None,
     ) -> None:
         self.max_attempts = max(1, int(max_attempts))
         self.retry_delay_seconds = max(0.0, float(retry_delay_seconds))
@@ -205,6 +208,36 @@ class AlertDeliveryService:
         self.channels = builtins
         self._pending: set[asyncio.Task[DeliveryReceipt]] = set()
         self.last_receipts: list[DeliveryReceipt] = []
+        self._database = database_manager
+
+    @property
+    def database_manager(self) -> DatabaseManager | None:
+        return self._database
+
+    def configure_database(self, database_manager: DatabaseManager | None) -> None:
+        self._database = database_manager
+
+    def _persist_receipt(self, receipt: DeliveryReceipt, event: Mapping[str, Any]) -> None:
+        if self._database is None:
+            return
+        from .disposition import sanitise_training_entry
+        payload = sanitise_training_entry(dict(event))
+        event_id = str(event.get("eventId") or event.get("event_id") or "") or None
+        with self._database.session() as session:
+            row = session.get(AlertDeliveryReceiptRecord, receipt.delivery_id)
+            values = {
+                "event_id": event_id,
+                "channel": receipt.channel,
+                "status": receipt.status,
+                "attempts": receipt.attempts,
+                "error_code": receipt.error_code,
+                "payload": payload,
+            }
+            if row is None:
+                session.add(AlertDeliveryReceiptRecord(delivery_id=receipt.delivery_id, **values))
+            else:
+                for key, value in values.items():
+                    setattr(row, key, value)
 
     def dispatch(
         self,
@@ -256,6 +289,7 @@ class AlertDeliveryService:
                 await channel.send(event)
                 receipt = DeliveryReceipt(delivery_id, channel.name, "delivered", attempts)
                 self.last_receipts.append(receipt)
+                self._persist_receipt(receipt, event)
                 return receipt
             except asyncio.CancelledError:
                 raise
@@ -267,7 +301,23 @@ class AlertDeliveryService:
                     await asyncio.sleep(self.retry_delay_seconds * (2 ** (attempts - 1)))
         receipt = DeliveryReceipt(delivery_id, channel.name, "failed", attempts, error_code)
         self.last_receipts.append(receipt)
+        self._persist_receipt(receipt, event)
         return receipt
+
+    def recent_receipts(self, limit: int = 50) -> list[dict[str, Any]]:
+        limit = max(1, min(int(limit), 200))
+        if self._database is None:
+            return [receipt.__dict__.copy() for receipt in self.last_receipts[-limit:]]
+        from sqlalchemy import select
+        with self._database.session() as session:
+            rows = session.scalars(select(AlertDeliveryReceiptRecord).order_by(
+                AlertDeliveryReceiptRecord.created_at.desc()
+            ).limit(limit)).all()
+            return [{
+                "delivery_id": row.delivery_id, "event_id": row.event_id,
+                "channel": row.channel, "status": row.status,
+                "attempts": row.attempts, "error_code": row.error_code,
+            } for row in rows]
 
     def _on_done(self, task: asyncio.Task[DeliveryReceipt]) -> None:
         self._pending.discard(task)

@@ -1,5 +1,0 @@
-bottle
-bag
-box
-tool
-person

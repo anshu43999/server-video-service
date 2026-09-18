@@ -6,10 +6,9 @@
   const panel = document.createElement('section');
   panel.className = 'conversion-panel';
   panel.innerHTML = `
-    <div class="conversion-heading"><div><span class="eyebrow">MODEL WORKSPACE</span><h3>上传与模型处理</h3><p>PT 验证后用于服务端检测；移动端产物单独转换，互不影响。</p></div><span class="conversion-mode-label" id="conversion-mode-label">尚未连接管理服务 · 操作未启用</span></div>
-    <details><summary>管理服务认证（可选）</summary><label class="field">管理员令牌（仅当前页面内存）<input id="conversion-token" type="password" autocomplete="off" placeholder="未开启鉴权时可留空"></label><small>页面加载时会自动读取配置；填写令牌后会自动重试。</small></details>
-    <div class="conversion-grid"><div>
-      <details id="conversion-settings"><summary>转换环境配置</summary>
+    <div class="conversion-heading"><div><span class="eyebrow">UPLOAD WORKSPACE</span><h3>上传训练模型</h3><p>选择 .pt 文件，确认名称后即可验证。转换环境和令牌只在需要时展开。</p></div><span class="conversion-mode-label" id="conversion-mode-label">尚未连接管理服务 · 操作未启用</span></div>
+    <p class="conversion-auth-note">已使用当前管理员登录会话访问管理服务，页面不再单独填写访问令牌。</p>
+    <details id="conversion-settings"><summary>转换环境配置</summary>
       <form id="conversion-config-form">
         <div class="conversion-fields"><label class="field">执行方式<select id="conversion-mode"><option value="wsl">本机 WSL</option><option value="local">本机 Python</option><option value="remote">远程转换服务</option></select></label><label class="field" id="conversion-distribution-field">WSL 发行版<input id="conversion-distribution" value="Ubuntu" required></label></div>
         <label class="field">虚拟环境 Python 路径 <span id="conversion-python-purpose">用于转换与复验</span><input id="conversion-python" required placeholder="/home/用户名/转换环境/bin/python"></label>
@@ -25,29 +24,33 @@
         <label class="conversion-check"><input id="conversion-auto" type="checkbox">PT 验证成功后自动生成移动端产物</label>
         <div class="conversion-actions"><button class="primary-btn" type="submit">保存配置</button><button class="ghost-btn" id="conversion-check" type="button">检测已保存环境</button></div>
         <p id="conversion-workspace"></p><p>串行执行 1 个任务；local、WSL 与 remote 共用同一持久化任务队列。</p>
-      </form></details>
-      <form id="conversion-upload-form">
-        <label class="field">训练模型<input id="conversion-file" type="file" accept=".pt" required></label>
-        <div class="conversion-fields"><label class="field">模型名称<input id="conversion-name" maxlength="100" required placeholder="例如：COCO 功能测试"></label><label class="field">版本<input id="conversion-version" maxlength="50" value="1.0.0" required></label></div>
+      </form>
+    </details>
+    <div class="conversion-grid"><form id="conversion-upload-form">
+        <label class="conversion-drop" id="conversion-drop"><input id="conversion-file" type="file" accept=".pt" required><b>把 .pt 文件拖到这里，或点击选择</b><small id="conversion-file-name">尚未选择文件</small></label>
+        <div class="conversion-fields"><label class="field">模型名称<input id="conversion-name" maxlength="100" required placeholder="例如：工地安全帽检测"></label><label class="field">版本<input id="conversion-version" maxlength="50" value="1.0.0" required></label></div>
         <div class="conversion-fields"><label class="field">场景<input id="conversion-scenario" maxlength="100" value="general-detection" required></label><label class="field">用途<select id="conversion-purpose"><option value="development">功能测试</option><option value="business">业务候选</option></select></label></div>
-        <p class="conversion-note">COCO 仅用于用户功能测试。上传不自动替换正在运行的视频流模型。</p>
+        <p class="conversion-note">上传不会替换正在运行的视频流。COCO 仅用于功能测试。</p>
         <button class="primary-btn" id="conversion-upload" type="submit">上传并验证 PT</button>
         <progress class="conversion-upload-progress" id="conversion-progress" max="100" value="0" aria-label="模型上传进度"></progress>
-      </form></div>
-      <div><div class="conversion-heading"><div><h3>处理任务</h3><p>关闭页面后继续执行，失败或中断可重试。</p></div><button class="ghost-btn" id="conversion-refresh" type="button">刷新</button></div><div id="conversion-jobs" class="conversion-jobs"><p>连接管理服务后查看真实任务。</p></div></div>
+      </form>
+      <div><div class="conversion-heading"><div><h3>处理任务</h3><p>关闭页面后继续执行，失败可重试。</p></div><button class="ghost-btn" id="conversion-refresh" type="button">刷新</button></div><div id="conversion-jobs" class="conversion-jobs"><p>连接管理服务后查看真实任务。</p></div></div>
     </div><div id="conversion-feedback" class="conversion-feedback" role="status" aria-live="polite"></div>`;
   const workspace = host.querySelector('#model-conversion-workspace');
   if (workspace) workspace.append(panel); else host.querySelector('.section-intro').after(panel);
   const byId = id => document.getElementById(id);
   const safe = value => String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  const message = (value, error = false) => {
-    const el = byId('conversion-feedback'); el.textContent = value;
-    el.classList.toggle('conversion-error', error);
+  const message = (value, error = false, surface = 'auto') => {
+    const el = byId('conversion-feedback');
+    if (el) { el.textContent = value; el.classList.toggle('conversion-error', error); }
+    const banner = byId('model-operation');
+    if (!banner) return;
+    const showBanner = Boolean(value) && surface !== 'panel' && (error || surface === 'banner' || state.modelPane !== 'upload');
+    banner.classList.toggle('hidden', !showBanner);
+    banner.classList.toggle('conversion-error', error);
+    banner.innerHTML = showBanner ? `<b>${error ? '操作失败' : '操作完成'}</b><span>${safe(value)}</span>` : '';
   };
-  const headers = () => {
-    const token = byId('conversion-token').value.trim() || window.ADMIN_TOKEN || '';
-    return token ? {'X-Admin-Token': token} : {};
-  };
+  const headers = () => ({});
   async function api(path, options = {}) {
     const response = await fetch(path, {...options, headers: {...headers(), ...options.headers}});
     const content = await response.text();
@@ -73,6 +76,25 @@
   }
   byId('conversion-mode').addEventListener('change', renderModeFields);
   byId('conversion-remote-verifier').addEventListener('change', renderModeFields);
+  function applySelectedFile(file) {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pt')) { message('请选择 .pt 权重文件', true); return; }
+    const picker = byId('conversion-file');
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    picker.files = transfer.files;
+    byId('conversion-file-name').textContent = file.name;
+    if (!byId('conversion-name').value.trim()) byId('conversion-name').value = file.name.replace(/\.pt$/i, '');
+  }
+  byId('conversion-file').addEventListener('change', () => {
+    const file = byId('conversion-file').files[0];
+    byId('conversion-file-name').textContent = file ? file.name : '尚未选择文件';
+    if (file && !byId('conversion-name').value.trim()) byId('conversion-name').value = file.name.replace(/\.pt$/i, '');
+  });
+  const drop = byId('conversion-drop');
+  ['dragenter', 'dragover'].forEach(type => drop.addEventListener(type, event => { event.preventDefault(); drop.classList.add('is-over'); }));
+  ['dragleave', 'drop'].forEach(type => drop.addEventListener(type, event => { event.preventDefault(); drop.classList.remove('is-over'); }));
+  drop.addEventListener('drop', event => applySelectedFile(event.dataTransfer.files[0]));
   function liveControls() {
     const live = !state.demo && connected;
     byId('conversion-mode-label').textContent = state.demo ? '演示模式 · 操作未启用' : connected ? '已连接 · 真实模型处理' : '尚未连接管理服务';
@@ -129,12 +151,9 @@
       byId('mode-toggle').innerHTML = '返回 Demo 模式 <span>→</span>';
       liveControls();
       await Promise.all([refresh(), refreshLiveModels(), refreshLiveStreams()]);
-      message('已连接。上传、配置和任务操作将使用真实服务。');
+      message('已连接。上传、配置和任务操作将使用真实服务。', false, 'panel');
     } catch (error) { connected = false; liveControls(); message(`连接失败：${error.message}`, true); }
   }
-  byId('conversion-token').addEventListener('change', () => {
-    if (!connected) connect();
-  });
   byId('conversion-config-form').addEventListener('submit', async event => {
     event.preventDefault(); if (state.demo || !connected) return;
     const config = {mode:byId('conversion-mode').value, distribution:byId('conversion-distribution').value,
@@ -204,7 +223,8 @@
       button.textContent = model.placeholder ? '占位模型不可使用' : server ? '设为新流默认' : '移动端产物'; button.disabled = !server;
       const badge = button.closest('.model-card')?.querySelector('.pill');
       if (badge && model.placeholder) badge.textContent = '开发占位';
-      button.onclick = async () => {
+      button.onclick = async event => {
+        event.stopPropagation();
         try { await api(`/api/models/${encodeURIComponent(model.modelId)}/activate`, {method:'POST'}); await refreshLiveModels(); message('已设置新流默认模型，已有视频流的绑定保持不变。'); }
         catch (error) { message(error.message, true); }
       };
@@ -242,8 +262,6 @@
   liveControls();
   renderModeFields();
   byId('refresh-models-btn')?.addEventListener('click', () => refreshLiveModels());
-  // Populate the model asset view and conversion state on first load. Authentication
-  // failures remain visible until an optional token is entered above.
-  refreshLiveModels();
-  connect();
+  // The login gate dispatches this event after the account session is ready.
+  window.addEventListener('aiyolo-authenticated', connect, {once:true});
 })();

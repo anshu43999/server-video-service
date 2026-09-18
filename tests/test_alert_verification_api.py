@@ -10,6 +10,8 @@ from app.main import app
 
 class AlertVerificationApiTests(unittest.TestCase):
     def setUp(self):
+        self.old_database = alert_disposition_store.database_manager
+        alert_disposition_store.configure_database(None)
         self.old_admin, self.old_mobile = settings.admin_token, settings.mobile_token
         settings.admin_token, settings.mobile_token = "admin-secret", "mobile-secret"
         alert_disposition_store.reset()
@@ -27,6 +29,7 @@ class AlertVerificationApiTests(unittest.TestCase):
     def tearDown(self):
         settings.admin_token, settings.mobile_token = self.old_admin, self.old_mobile
         alert_disposition_store.reset()
+        alert_disposition_store.configure_database(self.old_database)
         alert_verification_store.reset()
 
     def test_manual_request_is_deduplicated_and_keeps_disposition(self):

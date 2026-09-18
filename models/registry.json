@@ -1,79 +1,9 @@
 {
   "schemaVersion": 1,
   "registryType": "server-video-service-models",
-  "updatedAt": "2026-09-02",
-  "activeServerModel": "source.pt",
+  "updatedAt": "2026-09-17",
+  "activeServerModel": "uploaded-7051800b60ad4c7080d6693367d9c0a9",
   "models": [
-    {
-      "modelId": "site-intrusion-v1",
-      "name": "异物入侵五类（开发占位）",
-      "version": "0.1.0-dev-placeholder",
-      "scenario": "intrusion",
-      "runtime": "paired-server-onnx-android-tflite",
-      "labels": [
-        "bottle",
-        "bag",
-        "box",
-        "tool",
-        "person"
-      ],
-      "labelDisplayNames": {
-        "bottle": "瓶类容器",
-        "bag": "袋类物体",
-        "box": "箱体/包裹",
-        "tool": "便携工具",
-        "person": "人员"
-      },
-      "compatibleDevices": [
-        "API 27+",
-        "arm64-v8a",
-        "armeabi-v7a"
-      ],
-      "artifacts": [
-        {
-          "artifactId": "server-onnx-placeholder",
-          "format": "onnx",
-          "platform": "server",
-          "path": "models/placeholders/site-intrusion-v1-server.onnx",
-          "sizeBytes": 187,
-          "sha256": "E54FF447AF7FBEC1463BC51B6AC3751687E02F186BECFA94A38EE52FDF9CE943",
-          "contentType": "application/octet-stream",
-          "placeholder": true
-        },
-        {
-          "artifactId": "android-tflite-placeholder",
-          "format": "tflite",
-          "platform": "android",
-          "path": "models/placeholders/site-intrusion-v1-android.tflite",
-          "sizeBytes": 188,
-          "sha256": "C33D7828FA8D13C6D7B08396A142E79F8B09743619E14B030BFF6AE6DBDD5533",
-          "contentType": "application/octet-stream",
-          "placeholder": true,
-          "androidPackagePath": "local-models/android-assets/models/site-intrusion-v1-android.tflite"
-        }
-      ],
-      "purpose": "business",
-      "format": "onnx",
-      "path": "models/placeholders/site-intrusion-v1-server.onnx",
-      "sizeBytes": 187,
-      "sha256": "E54FF447AF7FBEC1463BC51B6AC3751687E02F186BECFA94A38EE52FDF9CE943",
-      "inputSize": 640,
-      "classCount": 5,
-      "labelsPath": "models/placeholders/site-intrusion-v1-labels.txt",
-      "manifestPath": "models/site-intrusion-v1-manifest.json",
-      "source": "pending-authorized-business-training-source",
-      "sourceUrl": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo11n.pt",
-      "upstreamVersion": "ultralytics==8.4.123",
-      "releaseEligible": false,
-      "businessAccuracyValidated": false,
-      "placeholder": true,
-      "licenseStatus": "blocked-pending-authorized-five-class-weights",
-      "license": {
-        "spdx": "LicenseRef-Ultralytics-Enterprise",
-        "status": "blocked-pending-authorized-five-class-weights",
-        "sourceUrl": "https://www.ultralytics.com/license"
-      }
-    },
     {
       "modelId": "ultralytics-yolo11n-coco-dev-pt",
       "name": "YOLO11n COCO development PT",

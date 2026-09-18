@@ -11,6 +11,7 @@ class AdminModelParameterViewTests(unittest.TestCase):
         self.js = (ROOT / "app" / "static" / "app.js").read_text(encoding="utf-8")
         self.conversion_js = (ROOT / "app" / "static" / "conversion.js").read_text(encoding="utf-8")
         self.css = (ROOT / "app" / "static" / "styles.css").read_text(encoding="utf-8")
+        self.parameters_py = (ROOT / "app" / "model_parameters.py").read_text(encoding="utf-8")
 
     def test_parameter_editor_has_platform_detection_alert_and_audit_sections(self):
         for marker in (
@@ -30,8 +31,8 @@ class AdminModelParameterViewTests(unittest.TestCase):
             self.assertIn(marker, self.js)
 
     def test_head_semantics_and_delivery_boundary_are_explicit(self):
-        self.assertIn("PPE_NO_HELMET", self.js)
-        self.assertIn("未佩戴安全帽", self.js)
+        self.assertIn('"head": "PPE_NO_HELMET"', self.parameters_py)
+        self.assertIn('"head": "未佩戴安全帽"', self.parameters_py)
         self.assertIn("Android 参数同步和识别事件自动告警投递尚未接通", self.html)
 
     def test_parameter_and_activation_actions_are_independent(self):
@@ -40,7 +41,7 @@ class AdminModelParameterViewTests(unittest.TestCase):
         self.assertIn("querySelectorAll('[data-model-activate]')", self.conversion_js)
         self.assertNotIn("querySelectorAll('[data-model-id]')", self.conversion_js)
         self.assertIn("if(!state.demo)await refreshLiveModels()", self.html)
-        self.assertIn("conversion.js?v=20260912-model-room", self.html)
+        self.assertIn("conversion.js?v=20260914-param-cards", self.html)
 
     def test_detection_terms_have_accessible_explanations(self):
         for marker in (

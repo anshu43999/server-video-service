@@ -2,38 +2,77 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import threading
 import time
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from .stream import StreamSession
 from .protocol import ERROR_CODES, InputRateLimitError, StreamState
-from .auth import require_admin, require_catalog_access, require_mobile
+from .auth import (
+    ROLE_ADMIN,
+    ROLE_OPERATOR,
+    authenticate,
+    authenticate_websocket,
+    authentication_error,
+    create_auth_router,
+    require_admin,
+    require_catalog_access,
+    require_mobile,
+)
 from .config import settings
+from .database import database
+from .stream_config import (
+    StreamConfiguration,
+    StreamConfigConflict,
+    StreamConfigNotFound,
+    StreamConfigStore,
+    infer_source_type,
+    redact_source_url,
+)
 from .metrics import system_metrics
+from .dashboard import DashboardStatsService
 from .model_catalog import ModelCatalog
 from .model_parameters import ModelParameterConflict, ModelParameterError, ModelParameterStore
 from .conversion import ConversionService
 from .conversion_api import create_conversion_router
 from .alerts.rules import RuleValidationError, rule_registry
 from .alerts.disposition import alert_disposition_store
-from .alerts.verification import alert_verification_store
+from .alerts.verification import AlertVerificationStore, alert_verification_store
 from .alerts.delivery import AlertDeliveryService
+from .alerts.runtime import ServerAlertRuntime
 
 streams: dict[str, StreamSession] = {}
+stream_config_store = StreamConfigStore(database if database.enabled else None)
+stream_restore_errors: dict[str, str] = {}
 model_catalog = ModelCatalog()
-model_parameter_store = ModelParameterStore()
-conversion_service = ConversionService(model_catalog.project_root / "models" / "local-conversion")
-alert_delivery = AlertDeliveryService()
+model_parameter_store = ModelParameterStore(database_manager=database if database.enabled else None)
+conversion_service = ConversionService(
+    model_catalog.project_root / "models" / "local-conversion",
+    database_manager=database if database.enabled else None,
+)
+alert_verification_store.configure_database(database if database.enabled else None)
+alert_delivery = AlertDeliveryService(database_manager=database if database.enabled else None)
+server_alert_runtime = ServerAlertRuntime(
+    model_provider=model_catalog.get,
+    parameter_store=model_parameter_store,
+    event_store=alert_disposition_store,
+    delivery_service=alert_delivery,
+    evidence_root=model_catalog.project_root / "evidence" / "server-alerts",
+)
+dashboard_stats = DashboardStatsService(
+    database if database.enabled else None,
+    alert_disposition_store,
+)
 
 # Download guardrails are process-local by design.  A deployment with multiple
 # workers should enforce the same limits at its ingress/proxy as well; these
@@ -86,6 +125,9 @@ class CreateStreamRequest(BaseModel):
     )
     source_url: str | int | None = None
     model_id: str | None = Field(default=None, min_length=1, max_length=128)
+    display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    source_type: str | None = Field(default=None, min_length=1, max_length=32, pattern=r"^[a-z][a-z0-9_-]{0,31}$")
+    enabled: bool = True
 
 
 class YoloRequest(BaseModel):
@@ -98,6 +140,8 @@ class StreamConfigRequest(BaseModel):
     yolo_enabled: bool | None = None
     overlay_enabled: bool | None = None
     model_id: str | None = Field(default=None, min_length=1, max_length=128)
+    display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    enabled: bool | None = None
 
 
 class StreamModelRequest(BaseModel):
@@ -191,6 +235,37 @@ class AlertDispositionRequest(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
 
 
+class MobileAlertDispositionRequest(BaseModel):
+    """A local App action carried with the event ingest request."""
+
+    status: Literal["ACKNOWLEDGED", "FALSE_POSITIVE"]
+    actor: str = Field(min_length=1, max_length=128)
+    actedAtUs: int = Field(ge=0)
+    screenshot: str | None = Field(default=None, max_length=8_000_000)
+    note: str | None = Field(default=None, max_length=1000)
+
+
+class MobileAlertIngestRequest(BaseModel):
+    """Portable event envelope produced by the Android local alert pipeline."""
+
+    eventId: str = Field(min_length=1, max_length=256, pattern=r"[A-Za-z0-9][A-Za-z0-9._:-]{0,255}")
+    ruleId: str = Field(min_length=1, max_length=128)
+    sourceId: str = Field(min_length=1, max_length=128)
+    origin: Literal["MOBILE_CAMERA", "MOBILE_IMAGE"] | None = None
+    subjectKey: str = Field(min_length=1, max_length=256)
+    label: str = Field(min_length=1, max_length=256)
+    state: str = Field(min_length=1, max_length=32)
+    severity: str = Field(default="MINOR", min_length=1, max_length=32)
+    notifySeverity: str = Field(default="MINOR", min_length=1, max_length=32)
+    startedAtUs: int = Field(ge=0)
+    confirmedAtUs: int | None = Field(default=None, ge=0)
+    lastSeenAtUs: int = Field(ge=0)
+    effectiveThresholds: dict[str, Any] = Field(default_factory=dict)
+    detectionResults: list | dict[str, Any] = Field(default_factory=list)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    disposition: MobileAlertDispositionRequest | None = None
+
+
 class AlertVerificationRequest(BaseModel):
     image: str | None = Field(default=None, max_length=2048)
     note: str | None = Field(default=None, max_length=1000)
@@ -235,16 +310,21 @@ async def lifespan(_: FastAPI):
     # The registry is the single source of truth for model assets. Refuse to
     # start when an artifact is missing or changed; never silently fall back.
     model_catalog.validate_startup()
-    conversion_service.start()
+    await asyncio.to_thread(database.verify_schema)
     try:
+        conversion_service.start()
+        await restore_stream_sessions()
         yield
     finally:
         await asyncio.to_thread(conversion_service.close)
+        await asyncio.to_thread(database.close)
         await alert_delivery.close()
         await asyncio.gather(*(stream.close() for stream in streams.values()), return_exceptions=True)
+        streams.clear()
 
 
 app = FastAPI(title="Server Video Service", version="0.1.0", lifespan=lifespan)
+app.include_router(create_auth_router())
 app.include_router(create_conversion_router(conversion_service, model_catalog))
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/admin", StaticFiles(directory=STATIC_DIR, html=True), name="admin")
@@ -262,14 +342,177 @@ def get_stream(stream_id: str) -> StreamSession:
     return stream
 
 
+def _storage_error(_exc: Exception) -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail={"code": "stream_config_unavailable", "message": "stream configuration storage is unavailable"},
+    )
+
+
+def _stream_configuration(
+    stream: StreamSession,
+    *,
+    display_name: str | None = None,
+    source_type: str | None = None,
+    enabled: bool = True,
+) -> StreamConfiguration:
+    source = str(stream.source_url) if stream.source_url is not None else None
+    return StreamConfiguration(
+        stream_id=stream.stream_id,
+        display_name=display_name or stream.stream_id,
+        source_type=source_type or infer_source_type(stream.source_url),
+        source_url=source,
+        model_id=stream.model_catalog_id,
+        yolo_enabled=stream.yolo_enabled,
+        confidence=float(stream.detector.confidence),
+        max_fps=float(stream.max_fps),
+        overlay_enabled=stream.overlay_enabled,
+        enabled=enabled,
+    )
+
+
+def _bind_registered_model(stream: StreamSession, model_id: str) -> dict[str, Any]:
+    try:
+        item, path = model_catalog.resolve_server_model(model_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail={"code": "model_not_found", "message": "model not found"})
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": "model_not_available", "message": str(exc)})
+    return stream.bind_model(
+        model_id=model_id,
+        model_path=str(path),
+        scenario=item.get("scenario"),
+        purpose=item.get("purpose"),
+        labels=item.get("labels"),
+        imgsz=item.get("inputSize"),
+    )
+
+
+async def _session_from_configuration(configuration: StreamConfiguration) -> StreamSession:
+    stream = StreamSession(
+        configuration.stream_id,
+        configuration.runtime_source(),
+        alert_runtime=server_alert_runtime,
+    )
+    stream.detector.confidence = configuration.confidence
+    stream.overlay_enabled = configuration.overlay_enabled
+    await stream.set_max_fps(configuration.max_fps)
+    if configuration.model_id:
+        _bind_registered_model(stream, configuration.model_id)
+    await stream.set_yolo(configuration.yolo_enabled)
+    if configuration.enabled:
+        await stream.start()
+    return stream
+
+
+async def restore_stream_sessions() -> None:
+    """Restore enabled control-plane records without making one bad source fatal."""
+    configurations = await asyncio.to_thread(stream_config_store.list)
+    stream_restore_errors.clear()
+    for configuration in configurations:
+        if not configuration.enabled or configuration.stream_id in streams:
+            continue
+        try:
+            streams[configuration.stream_id] = await _session_from_configuration(configuration)
+        except Exception:
+            # Do not expose model paths, source credentials, or driver errors.
+            stream_restore_errors[configuration.stream_id] = "persisted stream could not be restored"
+
+
+def _configured_model(model_id: str | None) -> dict[str, Any]:
+    if not model_id:
+        return {"modelId": None, "catalog_model_id": None, "name": "unbound"}
+    try:
+        item = model_catalog.get(model_id)
+    except KeyError:
+        return {"modelId": model_id, "catalog_model_id": model_id, "name": model_id, "available": False}
+    return {
+        "modelId": model_id,
+        "catalog_model_id": model_id,
+        "name": item.get("name") or model_id,
+        "scenario": item.get("scenario"),
+        "purpose": item.get("purpose"),
+        "available": True,
+    }
+
+
+def _stream_payload(configuration: StreamConfiguration, stream: StreamSession | None) -> dict[str, Any]:
+    if stream is None:
+        runtime_state = "not_started" if configuration.enabled else "disabled"
+        restore_error = stream_restore_errors.get(configuration.stream_id)
+        if restore_error:
+            runtime_state = "error"
+        return {
+            **configuration.public(),
+            "state": runtime_state,
+            "runtime_state": runtime_state,
+            "runtime_available": False,
+            "configuration_state": "enabled" if configuration.enabled else "disabled",
+            "frames_received": 0,
+            "frames_processed": 0,
+            "frames_dropped": 0,
+            "frames_fallback": 0,
+            "received_fps": 0.0,
+            "processed_fps": 0.0,
+            "output_fps": 0.0,
+            "last_latency_ms": None,
+            "p95_latency_ms": None,
+            "active_subscribers": 0,
+            "detections_last": 0,
+            "alert_error": None,
+            "publish_state": "idle",
+            "viewers": 0,
+            "last_error": restore_error,
+            "model": _configured_model(configuration.model_id),
+        }
+    return {
+        "stream_id": stream.stream_id,
+        "state": stream.state,
+        "runtime_state": stream.state,
+        "runtime_available": not stream.closed,
+        "configuration_state": "enabled" if configuration.enabled else "disabled",
+        "yolo_enabled": stream.yolo_enabled,
+        **stream.metrics(),
+        "last_error": stream.last_error,
+        "confidence": stream.detector.confidence,
+        "max_fps": stream.max_fps,
+        "overlay_enabled": stream.overlay_enabled,
+        "model": stream.model_metadata(),
+        **configuration.public(),
+    }
+
+
 @app.get("/healthz")
 async def healthz():
-    return {"status": "ok", "streams": len(streams)}
+    database_state = await asyncio.to_thread(database.health)
+    payload = {
+        "status": "ok" if database_state["status"] in {"ok", "fallback"} else "degraded",
+        "streams": len(streams),
+        "database": database_state,
+    }
+    if database_state["status"] == "unavailable":
+        return JSONResponse(payload, status_code=503)
+    return payload
 
 
 @app.get("/api/metrics")
-async def metrics():
+async def metrics(_: None = Depends(require_admin)):
     return {"system": system_metrics(), "streams": {stream_id: stream.metrics() for stream_id, stream in streams.items()}}
+
+
+@app.get("/api/dashboard/stats")
+async def dashboard_statistics(
+    range: Literal["today", "7d", "30d"] = Query(default="today"),
+    _: None = Depends(require_admin),
+):
+    """Return persisted dashboard statistics plus current stream telemetry."""
+    try:
+        return await asyncio.to_thread(dashboard_stats.build, range, streams, system_metrics())
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "dashboard_stats_unavailable", "message": "dashboard statistics are unavailable"},
+        ) from exc
 
 
 @app.get("/api/models")
@@ -293,6 +536,45 @@ async def model_detail(model_id: str, _: None = Depends(require_catalog_access))
             detail={"code": "model_not_found", "message": "model not found"},
         )
     return model
+
+
+@app.delete("/api/models/{model_id}")
+async def uninstall_model(model_id: str, _: None = Depends(require_admin)):
+    runtime_bindings = {
+        stream_id
+        for stream_id, stream in streams.items()
+        if stream.model_catalog_id == model_id
+    }
+    try:
+        persisted_bindings = {
+            item.stream_id
+            for item in await asyncio.to_thread(stream_config_store.list)
+            if item.model_id == model_id
+        }
+    except Exception as exc:
+        raise _storage_error(exc) from exc
+    bound_streams = sorted(runtime_bindings | persisted_bindings)
+    if bound_streams:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "model_in_use",
+                "message": "model is bound to one or more video streams",
+                "streamIds": bound_streams,
+            },
+        )
+    try:
+        return model_catalog.uninstall(model_id)
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "model_not_found", "message": "model not found"},
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "model_in_use", "message": str(exc)},
+        )
 
 
 def _parameter_model(model_id: str) -> dict:
@@ -556,7 +838,7 @@ async def alert_delivery_status(_: None = Depends(require_admin)):
             for name, channel in alert_delivery.channels.items()
         },
         "pending": len(alert_delivery._pending),
-        "recent": [receipt.__dict__ for receipt in alert_delivery.last_receipts[-50:]],
+        "recent": alert_delivery.recent_receipts(50),
     }
 
 
@@ -575,11 +857,11 @@ async def test_alert_delivery(request: AlertDeliveryRequest, _: None = Depends(r
     return {"accepted": True, "deliveryIds": delivery_ids}
 
 
-async def _alert_websocket(websocket: WebSocket, channel_name: str, expected_token: str | None, header_name: str) -> None:
+async def _alert_websocket(websocket: WebSocket, channel_name: str, required_role: str) -> None:
     """Serve one alert subscription with explicit scope authentication."""
     await websocket.accept()
-    if expected_token and websocket.headers.get(header_name) != expected_token:
-        await websocket.close(code=4401, reason="alert channel token required")
+    if authenticate_websocket(websocket, required_role) is None:
+        await websocket.close(code=4401, reason="account session required")
         return
     channel = alert_delivery.channels[channel_name]
     queue = await channel.subscribe()
@@ -596,53 +878,40 @@ async def _alert_websocket(websocket: WebSocket, channel_name: str, expected_tok
 @app.websocket("/api/alerts/ws")
 async def management_alerts_ws(websocket: WebSocket):
     """Management page real-time alert push channel."""
-    await _alert_websocket(websocket, "management", settings.admin_token, "x-admin-token")
+    await _alert_websocket(websocket, "management", ROLE_ADMIN)
 
 
 @app.websocket("/api/alerts/events")
 async def management_alerts_events_ws(websocket: WebSocket):
     """Compatibility alias for clients naming the management stream events."""
-    await _alert_websocket(websocket, "management", settings.admin_token, "x-admin-token")
+    await _alert_websocket(websocket, "management", ROLE_ADMIN)
 
 
 @app.websocket("/api/alerts/notifications")
 async def app_alert_notifications_ws(websocket: WebSocket):
     """App in-product notifications, independent from detection metadata WS."""
-    await _alert_websocket(websocket, "app", settings.mobile_token, "x-video-service-token")
+    await _alert_websocket(websocket, "app", ROLE_OPERATOR)
 
 
 @app.websocket("/api/alerts/app")
 async def app_alert_notifications_alias_ws(websocket: WebSocket):
     """Compatibility alias for App notification clients."""
-    await _alert_websocket(websocket, "app", settings.mobile_token, "x-video-service-token")
+    await _alert_websocket(websocket, "app", ROLE_OPERATOR)
 
 
 # --- Alert disposition and false-positive feedback (M11-T09) --------------
 async def require_alert_view(request: Request) -> None:
     """Read-only alert access accepts either admin or mobile credentials."""
-    if not settings.admin_token and not settings.mobile_token:
-        return
-    admin = request.headers.get("x-admin-token")
-    mobile = request.headers.get("x-video-service-token")
-    if (settings.admin_token and admin == settings.admin_token) or (settings.mobile_token and mobile == settings.mobile_token):
-        return
-    raise HTTPException(status_code=401, detail={"code": "authentication_required", "message": "alert read token required"})
+    if authenticate(request) is None:
+        raise authentication_error("alert session")
 
 
 async def require_alert_action(request: Request) -> str:
     """Mutating disposition actions are deliberately admin-only."""
-    admin = request.headers.get("x-admin-token")
-    # A mobile token must never become a write credential.  In a deployment
-    # with mobile auth enabled but no admin credential configured, fail closed.
-    if settings.admin_token:
-        allowed = admin == settings.admin_token
-    elif settings.mobile_token:
-        allowed = False
-    else:
-        allowed = True  # local development with authentication disabled
-    if not allowed:
+    user = authenticate(request, ROLE_ADMIN)
+    if user is None:
         raise HTTPException(status_code=403, detail={"code": "disposition_forbidden", "message": "admin permission required"})
-    actor = request.headers.get("x-operator-id") or request.headers.get("x-actor") or "admin"
+    actor = request.headers.get("x-operator-id") or request.headers.get("x-actor") or user.username
     if not actor.strip():
         raise HTTPException(status_code=400, detail={"code": "operator_required", "message": "X-Operator-Id is required"})
     return actor.strip()
@@ -663,6 +932,104 @@ async def export_false_positives(_: None = Depends(require_alert_view)):
     )
 
 
+@app.post("/api/alerts/mobile-ingest", status_code=202)
+async def ingest_mobile_alert(request: MobileAlertIngestRequest, _: None = Depends(require_mobile)):
+    """Create or update a local App event using the device-scoped write token."""
+    if request.confirmedAtUs is not None and request.confirmedAtUs < request.startedAtUs:
+        raise HTTPException(status_code=422, detail={
+            "code": "invalid_event_timestamps", "message": "confirmedAtUs must not be before startedAtUs",
+        })
+    if request.lastSeenAtUs < request.startedAtUs:
+        raise HTTPException(status_code=422, detail={
+            "code": "invalid_event_timestamps", "message": "lastSeenAtUs must not be before startedAtUs",
+        })
+
+    evidence = dict(request.evidence)
+    snapshot_data_url = evidence.pop("snapshotDataUrl", None)
+    if snapshot_data_url is not None:
+        if not isinstance(snapshot_data_url, str) or not re.match(
+            r"^data:image/(?:png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=\r\n]+$",
+            snapshot_data_url,
+            re.IGNORECASE,
+        ):
+            raise HTTPException(status_code=422, detail={
+                "code": "invalid_evidence", "message": "snapshotDataUrl must be an image data URL",
+            })
+        if len(snapshot_data_url) > 8_000_000:
+            raise HTTPException(status_code=413, detail={
+                "code": "evidence_too_large", "message": "snapshotDataUrl exceeds the 8 MB limit",
+            })
+        # A data URL is portable and does not expose the App's private filesystem.
+        evidence["snapshotUri"] = snapshot_data_url
+    evidence.pop("localPath", None)
+    mobile_origin = request.origin or (
+        "MOBILE_IMAGE"
+        if request.sourceId == "camera:back:photo" or request.sourceId.startswith("image:")
+        else "MOBILE_CAMERA"
+    )
+    incoming = {
+        "eventId": request.eventId,
+        "origin": mobile_origin,
+        "ruleId": request.ruleId,
+        "sourceId": request.sourceId,
+        "subjectKey": request.subjectKey,
+        "label": request.label,
+        "state": request.state,
+        "severity": request.severity,
+        "notifySeverity": request.notifySeverity,
+        "startedAtUs": request.startedAtUs,
+        "confirmedAtUs": request.confirmedAtUs,
+        "lastSeenAtUs": request.lastSeenAtUs,
+        "effectiveThresholds": dict(request.effectiveThresholds),
+        "detectionResults": request.detectionResults,
+        "evidence": evidence,
+    }
+    try:
+        current = alert_disposition_store.get(request.eventId)
+    except KeyError:
+        current = None
+    if current is not None:
+        merged = dict(current)
+        merged.update({key: value for key, value in incoming.items() if value is not None})
+        merged_evidence = dict(current.get("evidence") or {})
+        merged_evidence.update(evidence)
+        merged["evidence"] = merged_evidence
+        incoming = merged
+    registered = alert_disposition_store.register(incoming)
+
+    action = request.disposition
+    if action is not None:
+        existing_disposition = registered.get("disposition") or {}
+        is_same_retry = (
+            existing_disposition.get("status") == action.status
+            and existing_disposition.get("actor") == action.actor.strip()
+            and existing_disposition.get("actedAtUs") == action.actedAtUs
+        )
+        if not is_same_retry:
+            try:
+                registered = alert_disposition_store.dispose(
+                    request.eventId,
+                    action.status,
+                    action.actor,
+                    acted_at_us=action.actedAtUs,
+                    screenshot=action.screenshot or evidence.get("snapshotUri"),
+                    evidence=evidence,
+                    effective_thresholds=request.effectiveThresholds,
+                    detection_results=request.detectionResults,
+                    note=action.note,
+                )
+            except (KeyError, ValueError) as exc:
+                raise HTTPException(status_code=422, detail={"code": "invalid_mobile_disposition", "message": str(exc)})
+
+    if current is None:
+        try:
+            alert_delivery.dispatch(registered, channels=["management"])
+        except ValueError:
+            # Delivery is advisory; the event itself has already been accepted.
+            pass
+    return {"accepted": True, "created": current is None, "event": registered}
+
+
 @app.get("/api/alerts/export/false-positives")
 async def export_false_positives_alias(_: None = Depends(require_alert_view)):
     from fastapi.responses import Response
@@ -679,6 +1046,14 @@ async def get_alert(event_id: str, _: None = Depends(require_alert_view)):
         return alert_disposition_store.get(event_id)
     except KeyError:
         raise HTTPException(status_code=404, detail={"code": "event_not_found", "message": "alert event not found"})
+
+
+@app.get("/api/alerts/{event_id}/evidence")
+async def get_server_alert_evidence(event_id: str, _: None = Depends(require_alert_view)):
+    path = server_alert_runtime.evidence_path(event_id)
+    if path is None:
+        raise HTTPException(status_code=404, detail={"code": "evidence_not_found", "message": "alert evidence not found"})
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @app.get("/api/alerts/{event_id}/verification")
@@ -701,18 +1076,18 @@ async def update_verification_config(
     request: VerificationConfigRequest,
     _: str = Depends(require_alert_action),
 ):
-    alert_verification_store.enabled = request.enabled
-    alert_verification_store.image_egress_authorized = request.imageEgressAuthorized
-    alert_verification_store.daily_limit = request.dailyLimit
-    alert_verification_store.model_id = request.modelId.strip()
-    alert_verification_store.provider_configured = request.providerConfigured
-    return {
-        "enabled": alert_verification_store.enabled,
-        "imageEgressAuthorized": alert_verification_store.image_egress_authorized,
-        "dailyLimit": alert_verification_store.daily_limit,
-        "modelId": alert_verification_store.model_id,
-        "providerConfigured": alert_verification_store.provider_configured,
-    }
+    return alert_verification_store.configure(
+        enabled=request.enabled,
+        image_egress_authorized=request.imageEgressAuthorized,
+        daily_limit=request.dailyLimit,
+        model_id=request.modelId,
+        provider_configured=request.providerConfigured,
+    )
+
+
+@app.get("/api/verification/config")
+async def get_verification_config(_: None = Depends(require_alert_view)):
+    return alert_verification_store.config()
 
 
 @app.post("/api/alerts/{event_id}/verification", status_code=202)
@@ -783,7 +1158,7 @@ async def create_stream(request: CreateStreamRequest):
     source = request.source_url
     if isinstance(source, str) and source.isdigit():
         source = int(source)
-    stream = StreamSession(request.stream_id, source)
+    stream = StreamSession(request.stream_id, source, alert_runtime=server_alert_runtime)
     target_id = request.model_id
     if target_id is None:
         # Existing global activation remains only the default for new sessions.
@@ -794,53 +1169,126 @@ async def create_stream(request: CreateStreamRequest):
                     target_id = entry.get("modelId")
                     break
     if target_id:
+        _bind_registered_model(stream, target_id)
+    configuration = _stream_configuration(
+        stream,
+        display_name=request.display_name,
+        source_type=request.source_type,
+        enabled=request.enabled,
+    )
+    created_new_config = True
+    try:
+        stored = await asyncio.to_thread(stream_config_store.create, configuration)
+    except StreamConfigConflict:
+        created_new_config = False
         try:
-            item, path = model_catalog.resolve_server_model(target_id)
-        except KeyError:
-            raise HTTPException(status_code=404, detail={"code": "model_not_found", "message": "model not found"})
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail={"code": "model_not_available", "message": str(exc)})
-        stream.bind_model(model_id=target_id, model_path=str(path), scenario=item.get("scenario"),
-                          purpose=item.get("purpose"), labels=item.get("labels"), imgsz=item.get("inputSize"))
+            stored = await asyncio.to_thread(stream_config_store.get, request.stream_id)
+        except Exception as exc:
+            raise _storage_error(exc) from exc
+        requested_source = str(source) if source is not None else None
+        matches = bool(
+            stored
+            and stored.source_url == requested_source
+            and (request.display_name is None or stored.display_name == request.display_name)
+            and (request.source_type is None or stored.source_type == request.source_type)
+            and (request.model_id is None or stored.model_id == request.model_id)
+            and stored.enabled == request.enabled
+        )
+        if not matches:
+            raise HTTPException(status_code=ERROR_CODES["stream_already_exists"][0], detail="stream already exists")
+        try:
+            stream = await _session_from_configuration(stored)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "stream_start_failed", "message": "persisted stream could not be started"},
+            ) from exc
+    except Exception as exc:
+        raise _storage_error(exc) from exc
     streams[request.stream_id] = stream
-    await stream.start()
+    if created_new_config:
+        try:
+            if request.enabled:
+                await stream.start()
+        except Exception:
+            streams.pop(request.stream_id, None)
+            await asyncio.to_thread(stream_config_store.delete, request.stream_id)
+            await stream.close()
+            raise
     return {
         "stream_id": stream.stream_id,
         "state": stream.state,
         "yolo_enabled": stream.yolo_enabled,
         "model": stream.model_metadata(),
+        **stored.public(),
     }
 
 
 @app.get("/api/streams")
-async def list_streams():
-    return [
-        {
-            "stream_id": s.stream_id,
-            "state": s.state,
-            "yolo_enabled": s.yolo_enabled,
-            **s.metrics(),
-            "last_error": s.last_error,
-            "confidence": s.detector.confidence,
-            "max_fps": s.max_fps,
-            "overlay_enabled": s.overlay_enabled,
-            "model": s.model_metadata(),
-        }
-        for s in streams.values()
-    ]
+async def list_streams(_: None = Depends(require_catalog_access)):
+    try:
+        configurations = await asyncio.to_thread(stream_config_store.list)
+    except Exception as exc:
+        raise _storage_error(exc) from exc
+    payload = [_stream_payload(item, streams.get(item.stream_id)) for item in configurations]
+    configured_ids = {item.stream_id for item in configurations}
+    for stream in streams.values():
+        if stream.stream_id in configured_ids:
+            continue
+        payload.append(_stream_payload(_stream_configuration(stream, enabled=not stream.closed), stream))
+    return payload
 
 
 @app.delete("/api/streams/{stream_id}", status_code=204, dependencies=[Depends(require_admin)])
 async def delete_stream(stream_id: str):
-    stream = get_stream(stream_id)
-    await stream.close()
+    stream = streams.get(stream_id)
+    try:
+        deleted = await asyncio.to_thread(stream_config_store.delete, stream_id)
+    except Exception as exc:
+        raise _storage_error(exc) from exc
+    if stream is None and not deleted:
+        raise HTTPException(status_code=404, detail="stream not found")
+    if stream is not None:
+        await stream.close()
     streams.pop(stream_id, None)
+    stream_restore_errors.pop(stream_id, None)
 
 
 @app.post("/api/streams/{stream_id}/yolo", dependencies=[Depends(require_admin)])
 async def set_yolo(stream_id: str, request: YoloRequest):
-    stream = get_stream(stream_id)
+    stream = streams.get(stream_id)
+    try:
+        current = await asyncio.to_thread(stream_config_store.get, stream_id)
+    except Exception as exc:
+        raise _storage_error(exc) from exc
+    if stream is None and current is None:
+        raise HTTPException(status_code=404, detail="stream not found")
+    if stream is None:
+        try:
+            stored = await asyncio.to_thread(stream_config_store.update, stream_id, yolo_enabled=request.enabled)
+        except Exception as exc:
+            raise _storage_error(exc) from exc
+        payload = _stream_payload(stored, None)
+        return {
+            "stream_id": stream_id,
+            "state": payload["state"],
+            "yolo_enabled": stored.yolo_enabled,
+            "overlay_enabled": stored.overlay_enabled,
+            "model_error": None,
+            "model": payload["model"],
+        }
+    previous = stream.yolo_enabled
     await stream.set_yolo(request.enabled)
+    try:
+        await asyncio.to_thread(stream_config_store.update, stream_id, yolo_enabled=stream.yolo_enabled)
+    except StreamConfigNotFound as exc:
+        await stream.set_yolo(previous)
+        raise HTTPException(status_code=409, detail={"code": "stream_config_missing", "message": "stream configuration is missing"}) from exc
+    except Exception as exc:
+        await stream.set_yolo(previous)
+        raise _storage_error(exc) from exc
     return {
         "stream_id": stream_id,
         "state": stream.state,
@@ -853,7 +1301,57 @@ async def set_yolo(stream_id: str, request: YoloRequest):
 
 @app.patch("/api/streams/{stream_id}/config", dependencies=[Depends(require_admin)])
 async def update_stream_config(stream_id: str, request: StreamConfigRequest):
-    stream = get_stream(stream_id)
+    stream = streams.get(stream_id)
+    try:
+        current = await asyncio.to_thread(stream_config_store.get, stream_id)
+    except Exception as exc:
+        raise _storage_error(exc) from exc
+    if current is None:
+        if stream is None:
+            raise HTTPException(status_code=404, detail="stream not found")
+        raise HTTPException(status_code=409, detail={"code": "stream_config_missing", "message": "stream configuration is missing"})
+
+    changes: dict[str, Any] = {}
+    for field in ("confidence", "max_fps", "yolo_enabled", "overlay_enabled", "display_name", "enabled"):
+        value = getattr(request, field)
+        if value is not None:
+            changes[field] = value
+    if request.model_id is not None:
+        try:
+            model_catalog.resolve_server_model(request.model_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail={"code": "model_not_found", "message": "model not found"})
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail={"code": "model_not_available", "message": str(exc)})
+        changes["model_id"] = request.model_id
+
+    if stream is None:
+        try:
+            stored = await asyncio.to_thread(stream_config_store.update, stream_id, **changes)
+        except Exception as exc:
+            if isinstance(exc, StreamConfigNotFound):
+                raise HTTPException(status_code=404, detail="stream not found") from exc
+            raise _storage_error(exc) from exc
+        if request.enabled is True:
+            try:
+                stream = await _session_from_configuration(stored)
+                streams[stream_id] = stream
+                stream_restore_errors.pop(stream_id, None)
+            except Exception as exc:
+                await asyncio.to_thread(stream_config_store.update, stream_id, enabled=current.enabled)
+                stream_restore_errors[stream_id] = "persisted stream could not be restored"
+                raise HTTPException(
+                    status_code=503,
+                    detail={"code": "stream_start_failed", "message": "video stream could not be enabled"},
+                ) from exc
+        return _stream_payload(stored, stream)
+
+    old_confidence = stream.detector.confidence
+    old_max_fps = stream.max_fps
+    old_yolo_enabled = stream.yolo_enabled
+    old_overlay_enabled = stream.overlay_enabled
+    old_detector = stream.detector
+    old_model = (stream.model_catalog_id, stream.model_scenario, stream.model_purpose)
     if request.confidence is not None:
         stream.detector.confidence = request.confidence
     if request.max_fps is not None:
@@ -863,45 +1361,88 @@ async def update_stream_config(stream_id: str, request: StreamConfigRequest):
     if request.overlay_enabled is not None:
         stream.overlay_enabled = request.overlay_enabled
     if request.model_id is not None:
+        _bind_registered_model(stream, request.model_id)
+    try:
+        stored = await asyncio.to_thread(stream_config_store.update, stream_id, **changes)
+    except Exception as exc:
+        stream.detector = old_detector
+        stream.detector.confidence = old_confidence
+        stream.model_catalog_id, stream.model_scenario, stream.model_purpose = old_model
+        stream.overlay_enabled = old_overlay_enabled
+        await stream.set_yolo(old_yolo_enabled)
+        await stream.set_max_fps(old_max_fps)
+        if isinstance(exc, StreamConfigNotFound):
+            raise HTTPException(status_code=409, detail={"code": "stream_config_missing", "message": "stream configuration is missing"}) from exc
+        raise _storage_error(exc) from exc
+    if request.enabled is False and not stream.closed:
+        await stream.close()
+    elif request.enabled is True and stream.closed:
         try:
-            item, path = model_catalog.resolve_server_model(request.model_id)
-        except KeyError:
-            raise HTTPException(status_code=404, detail={"code": "model_not_found", "message": "model not found"})
-        except ValueError as exc:
-            raise HTTPException(status_code=409, detail={"code": "model_not_available", "message": str(exc)})
-        stream.bind_model(model_id=request.model_id, model_path=str(path), scenario=item.get("scenario"),
-                          purpose=item.get("purpose"), labels=item.get("labels"), imgsz=item.get("inputSize"))
+            replacement = await _session_from_configuration(stored)
+        except Exception as exc:
+            await asyncio.to_thread(stream_config_store.update, stream_id, enabled=False)
+            stream_restore_errors[stream_id] = "persisted stream could not be restored"
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "stream_start_failed", "message": "video stream could not be enabled"},
+            ) from exc
+        streams[stream_id] = replacement
+        stream = replacement
+        stream_restore_errors.pop(stream_id, None)
     return {
-        "stream_id": stream_id,
-        "state": stream.state,
-        "yolo_enabled": stream.yolo_enabled,
-        "confidence": stream.detector.confidence,
-        "max_fps": stream.max_fps,
-        "overlay_enabled": stream.overlay_enabled,
+        **_stream_payload(stored, stream),
         "model_error": stream.detector.load_error,
-        "model": stream.model_metadata(),
     }
 
 
 @app.put("/api/streams/{stream_id}/model", dependencies=[Depends(require_admin)])
 async def bind_stream_model(stream_id: str, request: StreamModelRequest):
-    stream = get_stream(stream_id)
+    stream = streams.get(stream_id)
     try:
-        item, path = model_catalog.resolve_server_model(request.model_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail={"code": "model_not_found", "message": "model not found"})
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail={"code": "model_not_available", "message": str(exc)})
-    model = stream.bind_model(model_id=request.model_id, model_path=str(path), scenario=item.get("scenario"),
-                              purpose=item.get("purpose"), labels=item.get("labels"), imgsz=item.get("inputSize"))
+        current = await asyncio.to_thread(stream_config_store.get, stream_id)
+    except Exception as exc:
+        raise _storage_error(exc) from exc
+    if stream is None and current is None:
+        raise HTTPException(status_code=404, detail="stream not found")
+    if stream is None:
+        try:
+            model_catalog.resolve_server_model(request.model_id)
+        except KeyError:
+            raise HTTPException(status_code=404, detail={"code": "model_not_found", "message": "model not found"})
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail={"code": "model_not_available", "message": str(exc)})
+        try:
+            await asyncio.to_thread(stream_config_store.update, stream_id, model_id=request.model_id)
+        except Exception as exc:
+            raise _storage_error(exc) from exc
+        return {"stream_id": stream_id, "model": _configured_model(request.model_id)}
+    old_detector = stream.detector
+    old_model = (stream.model_catalog_id, stream.model_scenario, stream.model_purpose)
+    model = _bind_registered_model(stream, request.model_id)
+    try:
+        await asyncio.to_thread(stream_config_store.update, stream_id, model_id=request.model_id)
+    except Exception as exc:
+        stream.detector = old_detector
+        stream.model_catalog_id, stream.model_scenario, stream.model_purpose = old_model
+        if isinstance(exc, StreamConfigNotFound):
+            raise HTTPException(status_code=409, detail={"code": "stream_config_missing", "message": "stream configuration is missing"}) from exc
+        raise _storage_error(exc) from exc
     return {"stream_id": stream_id, "model": model}
 
 
 @app.get("/api/streams/{stream_id}/model")
-async def stream_model(stream_id: str):
+async def stream_model(stream_id: str, _: None = Depends(require_catalog_access)):
     """Return the model binding and registry metadata for one stream."""
-    stream = get_stream(stream_id)
-    return {"stream_id": stream_id, "model": stream.model_metadata()}
+    stream = streams.get(stream_id)
+    if stream is not None:
+        return {"stream_id": stream_id, "model": stream.model_metadata()}
+    try:
+        configuration = await asyncio.to_thread(stream_config_store.get, stream_id)
+    except Exception as exc:
+        raise _storage_error(exc) from exc
+    if configuration is None:
+        raise HTTPException(status_code=404, detail="stream not found")
+    return {"stream_id": stream_id, "model": _configured_model(configuration.model_id)}
 
 
 @app.websocket("/api/streams/{stream_id}/ingest")
@@ -911,11 +1452,9 @@ async def ingest(stream_id: str, websocket: WebSocket):
         await websocket.close(code=4404)
         return
     await websocket.accept()
-    if settings.mobile_token:
-        token = websocket.headers.get("x-video-service-token")
-        if token != settings.mobile_token:
-            await websocket.close(code=4401, reason="mobile token required")
-            return
+    if authenticate_websocket(websocket, ROLE_OPERATOR) is None:
+        await websocket.close(code=4401, reason="mobile session required")
+        return
     try:
         while True:
             message = await websocket.receive()
@@ -933,7 +1472,7 @@ async def ingest(stream_id: str, websocket: WebSocket):
 
 async def mjpeg_generator(stream: StreamSession):
     previous = None
-    while True:
+    while not stream.closed:
         frame = await stream.wait_frame(previous)
         if frame is None:
             return
@@ -942,7 +1481,7 @@ async def mjpeg_generator(stream: StreamSession):
 
 
 @app.get("/api/streams/{stream_id}/mjpeg")
-async def mjpeg(stream_id: str):
+async def mjpeg(stream_id: str, _: None = Depends(require_catalog_access)):
     stream = get_stream(stream_id)
     if not stream.try_subscribe():
         raise HTTPException(status_code=429, detail="output subscriber limit reached")
@@ -954,11 +1493,20 @@ async def mjpeg(stream_id: str):
         finally:
             stream.unsubscribe()
 
-    return StreamingResponse(guarded_generator(), media_type="multipart/x-mixed-replace; boundary=frame")
+    return StreamingResponse(
+        guarded_generator(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/api/streams/{stream_id}/playback")
-async def playback(stream_id: str):
+async def playback(stream_id: str, _: None = Depends(require_catalog_access)):
     """Return WHEP, LL-HLS and diagnostic RTSP playback entries."""
     stream = get_stream(stream_id)
     return {"stream_id": stream.stream_id, **stream.publisher.playback()}
@@ -1000,11 +1548,9 @@ async def detections_ws(stream_id: str, websocket: WebSocket):
         await websocket.close(code=4404)
         return
     await websocket.accept()
-    if settings.mobile_token:
-        token = websocket.headers.get("x-video-service-token")
-        if token != settings.mobile_token:
-            await websocket.close(code=4401, reason="mobile token required")
-            return
+    if authenticate_websocket(websocket, ROLE_OPERATOR) is None:
+        await websocket.close(code=4401, reason="mobile session required")
+        return
 
     heartbeat_interval = 5.0
     last_version = 0

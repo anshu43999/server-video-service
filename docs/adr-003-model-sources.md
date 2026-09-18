@@ -68,7 +68,7 @@ MVP 将场景收敛为四组。四组是目录和规则模板的业务边界，�
 
 ```json
 {
-  "modelId": "site-intrusion-v1",
+  "modelId": "authorized-scene-v1",
   "version": "1.0.0",
   "scenario": "site-compliance",
   "runtime": "server-onnx",
@@ -86,7 +86,7 @@ MVP 将场景收敛为四组。四组是目录和规则模板的业务边界，�
     "artifactId": "server-onnx",
     "format": "onnx",
     "platform": "server",
-    "path": "models/site-intrusion-v1.onnx",
+    "path": "models/authorized-scene-v1.onnx",
     "sizeBytes": 0,
     "sha256": "<64-hex>"
   }]
@@ -118,4 +118,3 @@ MVP 将场景收敛为四组。四组是目录和规则模板的业务边界，�
 - 烟火、抽烟以及 PPE 场景的精度、误报和数据偏差仍需现场重测，不能用 COCO 指标替代；
 - 本 ADR 不授予任何第三方数据集或权重的使用权，也不替代法务对合同、数据集条款和客户交付范围的审查；
 - M10 继续承接数字签名、密钥保管、灰度发布和发布证据，不在本 ADR 中实现签名逻辑。
-

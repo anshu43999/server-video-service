@@ -19,6 +19,10 @@ from urllib.parse import urlencode
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from sqlalchemy import select
+
+from .database import ConversionConfigRecord, ConversionJobRecord, DatabaseManager
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -372,7 +376,8 @@ class RemoteConversionRunner:
 
 
 class ConversionService:
-    def __init__(self, root: Path, runner: ProcessRunner | None = None):
+    def __init__(self, root: Path, runner: ProcessRunner | None = None,
+                 database_manager: DatabaseManager | None = None):
         self.root = root
         self.runner = runner or ProcessRunner()
         self._guard = threading.RLock()
@@ -380,7 +385,55 @@ class ConversionService:
         self._wake = threading.Event()
         self._thread: threading.Thread | None = None
         self._lock_file = None
+        self._database = database_manager
+        self._legacy_import_checked = False
         self.handler: Callable[[dict, Path, ConversionConfig], dict] = self._default_handler
+
+    @property
+    def database_manager(self) -> DatabaseManager | None:
+        return self._database
+
+    def configure_database(self, database_manager: DatabaseManager | None) -> None:
+        with self._guard:
+            self._database = database_manager
+            self._legacy_import_checked = False
+
+    def _import_legacy_once(self) -> None:
+        if self._database is None or self._legacy_import_checked:
+            return
+        with self._guard:
+            if self._legacy_import_checked:
+                return
+            with self._database.session() as session:
+                config_row = session.get(ConversionConfigRecord, "default")
+                legacy_config = self.root / "config.json"
+                if config_row is None and legacy_config.is_file():
+                    config = ConversionConfig.model_validate_json(legacy_config.read_text(encoding="utf-8"))
+                    session.add(ConversionConfigRecord(
+                        config_key="default", payload=config.model_dump()
+                    ))
+                jobs_exist = session.scalar(select(ConversionJobRecord.job_id).limit(1)) is not None
+                legacy_jobs = self.root / "jobs.sqlite3"
+                if not jobs_exist and legacy_jobs.is_file():
+                    with sqlite3.connect(legacy_jobs, timeout=10) as legacy:
+                        rows = legacy.execute("SELECT id, payload FROM jobs").fetchall()
+                    for job_id, payload in rows:
+                        try:
+                            job = json.loads(payload)
+                            if not isinstance(job, dict) or not isinstance(job_id, str):
+                                continue
+                            session.add(ConversionJobRecord(
+                                job_id=job_id,
+                                action=str(job.get("action") or "inspect"),
+                                status=str(job.get("status") or "failed"),
+                                attempt=max(1, int(job.get("attempt", 1))),
+                                created_epoch=float(job.get("created_at", time.time())),
+                                updated_epoch=float(job.get("updated_at", job.get("created_at", time.time()))),
+                                payload=job,
+                            ))
+                        except (TypeError, ValueError, json.JSONDecodeError):
+                            continue
+            self._legacy_import_checked = True
 
     @contextmanager
     def _db(self):
@@ -394,6 +447,12 @@ class ConversionService:
             connection.close()
 
     def config(self) -> ConversionConfig:
+        if self._database is not None:
+            self._import_legacy_once()
+            with self._database.session() as session:
+                row = session.get(ConversionConfigRecord, "default")
+                if row is not None:
+                    return ConversionConfig.model_validate(row.payload)
         path = self.root / "config.json"
         return ConversionConfig.model_validate_json(path.read_text(encoding="utf-8")) if path.exists() else ConversionConfig()
 
@@ -401,21 +460,62 @@ class ConversionService:
         # Validate the executable argument now; dependency availability is checked asynchronously.
         self.runner.command(config, "check", self.root / "probe")
         with self._guard:
-            atomic_json(self.root / "config.json", config.model_dump())
+            if self._database is not None:
+                self._import_legacy_once()
+                with self._database.session() as session:
+                    row = session.get(ConversionConfigRecord, "default")
+                    if row is None:
+                        session.add(ConversionConfigRecord(config_key="default", payload=config.model_dump()))
+                    else:
+                        row.payload = config.model_dump()
+            else:
+                atomic_json(self.root / "config.json", config.model_dump())
         return config
 
     def _save(self, job: dict) -> dict:
         job["updated_at"] = time.time()
+        if self._database is not None:
+            self._import_legacy_once()
+            with self._database.session() as session:
+                row = session.get(ConversionJobRecord, job["id"])
+                values = {
+                    "action": str(job.get("action") or "inspect"),
+                    "status": str(job.get("status") or "failed"),
+                    "attempt": max(1, int(job.get("attempt", 1))),
+                    "created_epoch": float(job.get("created_at", time.time())),
+                    "updated_epoch": float(job["updated_at"]),
+                    "payload": json.loads(json.dumps(job, ensure_ascii=False)),
+                }
+                if row is None:
+                    session.add(ConversionJobRecord(job_id=job["id"], **values))
+                else:
+                    for key, value in values.items():
+                        setattr(row, key, value)
+            return job
         with self._db() as db:
             db.execute("INSERT OR REPLACE INTO jobs VALUES (?, ?)", (job["id"], json.dumps(job, ensure_ascii=False)))
         return job
 
     def jobs(self) -> list[dict]:
+        if self._database is not None:
+            self._import_legacy_once()
+            with self._database.session() as session:
+                rows = session.scalars(select(ConversionJobRecord).order_by(
+                    ConversionJobRecord.created_epoch.desc()
+                )).all()
+                return [json.loads(json.dumps(row.payload, ensure_ascii=False)) for row in rows]
         with self._guard, self._db() as db:
             return sorted((json.loads(row[0]) for row in db.execute("SELECT payload FROM jobs")),
                           key=lambda job: job["created_at"], reverse=True)
 
     def get(self, job_id: str) -> dict:
+        if self._database is not None:
+            self._import_legacy_once()
+            with self._database.session() as session:
+                row = session.get(ConversionJobRecord, job_id)
+                if row is None:
+                    raise KeyError(job_id)
+                return json.loads(json.dumps(row.payload, ensure_ascii=False))
         with self._guard, self._db() as db:
             row = db.execute("SELECT payload FROM jobs WHERE id = ?", (job_id,)).fetchone()
             if row is None:
@@ -456,6 +556,7 @@ class ConversionService:
         if self._thread is not None:
             return
         self.root.mkdir(parents=True, exist_ok=True)
+        self._import_legacy_once()
         lock = (self.root / "worker.lock").open("a+b")
         try:
             lock.seek(0)

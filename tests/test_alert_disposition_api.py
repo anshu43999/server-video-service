@@ -8,6 +8,8 @@ from app.alerts.disposition import alert_disposition_store
 
 class AlertDispositionApiTests(unittest.TestCase):
     def setUp(self):
+        self.old_database = alert_disposition_store.database_manager
+        alert_disposition_store.configure_database(None)
         self.old_admin, self.old_mobile = settings.admin_token, settings.mobile_token
         settings.admin_token, settings.mobile_token = "admin-secret", "mobile-secret"
         alert_disposition_store.reset()
@@ -22,6 +24,7 @@ class AlertDispositionApiTests(unittest.TestCase):
     def tearDown(self):
         settings.admin_token, settings.mobile_token = self.old_admin, self.old_mobile
         alert_disposition_store.reset()
+        alert_disposition_store.configure_database(self.old_database)
 
     def test_mobile_can_read_but_cannot_dispose(self):
         response = self.client.get("/api/alerts", headers={"X-Video-Service-Token": "mobile-secret"})

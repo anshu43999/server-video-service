@@ -68,8 +68,8 @@
 {
   "models": [
     {
-      "modelId": "site-intrusion-v1",
-      "name": "异物入侵五类",
+      "modelId": "authorized-scene-v1",
+      "name": "已授权场景检测模型",
       "version": "1.0.0",
       "scenario": "intrusion",
       "purpose": "business",
@@ -81,13 +81,13 @@
         "artifactId": "android-arm64-int8",
         "format": "tflite",
         "platform": "android",
-        "url": "/api/models/site-intrusion-v1/artifacts/android-arm64-int8/download",
+        "url": "/api/models/authorized-scene-v1/artifacts/android-arm64-int8/download",
         "sizeBytes": 12345678,
         "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "contentType": "application/octet-stream"
       }],
       "format": "tflite",
-      "downloadUrl": "/api/models/site-intrusion-v1/artifacts/android-arm64-int8/download",
+      "downloadUrl": "/api/models/authorized-scene-v1/artifacts/android-arm64-int8/download",
       "sizeBytes": 12345678,
       "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "releaseEligible": true
@@ -117,6 +117,27 @@
 
 客户端应下载到临时文件，校验大小和 SHA-256 均通过后再原子移动到模型安装目录；校验失败的临时文件必须删除，不得标记为可激活模型。支持 HTTP `Range` 时可断点续传；MVP 不要求服务端必须支持 Range。
 
+### 4.4 卸载模型
+
+`DELETE /api/models/{modelId}`
+
+仅管理员可调用。成功后从目录移除模型，并删除未被其他目录条目共享的本地产物；模型参数及审计历史保留。当前激活模型或仍被任一视频流绑定的模型返回 `409 model_in_use`，管理员必须先切换默认模型或流绑定后重试。
+
+成功 `200` 返回卸载和文件清理摘要：
+
+```json
+{
+  "modelId": "authorized-scene-v1",
+  "uninstalled": true,
+  "deletedFiles": 2,
+  "missingFiles": 0,
+  "retainedSharedFiles": 1,
+  "cleanupFailures": []
+}
+```
+
+目录条目移除后若个别文件因操作系统占用无法删除，`cleanupFailures` 返回安全文件名，响应不暴露绝对路径。
+
 ## 5. 错误响应与重试
 
 JSON 错误统一为：
@@ -132,6 +153,7 @@ JSON 错误统一为：
 | 401/403 | `authentication_required` / `authentication_failed` | 缺少或无效令牌 | 提示重新配置服务地址或令牌，不自动重试 |
 | 404 | `model_not_found` | 模型或产物不存在 | 刷新目录；不重试同一 URL |
 | 409 | `model_not_available` | 模型未发布或当前不可下载 | 提示稍后再试，按 `retryable` 决定 |
+| 409 | `model_in_use` | 模型当前激活或仍被视频流绑定 | 先切换默认模型或相关流绑定，再重新卸载 |
 | 416 | `range_not_satisfiable` | 断点范围无效 | 删除临时文件后从头下载 |
 | 429 | `rate_limited` | 下载/查询限流 | 指数退避并限制重试次数 |
 | 500/502/503/504 | `internal_error` / `service_unavailable` | 服务端或上游暂时故障 | 有界指数退避；不得把 token 写入日志 |

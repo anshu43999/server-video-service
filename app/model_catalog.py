@@ -210,7 +210,7 @@ class ModelCatalog:
                 existing.append(item)
             else:
                 old.update(item)
-            registered.append(self.inspect(item, registry.get("activeServerModel")))
+            registered.append(self.inspect(item, self._resolve_active_model_id(registry)))
         if not registered:
             raise ValueError("manifest has no supported model artifacts")
         registry["updatedAt"] = date.today().isoformat()
@@ -248,22 +248,107 @@ class ModelCatalog:
             "exists": exists,
             "hashValid": exists and actual_hash == item.get("sha256"),
             "actualSha256": actual_hash,
-            "active": active_name == path.name,
+            "active": active_name == item.get("modelId"),
         }
         if inspected_artifacts:
             result["artifacts"] = inspected_artifacts
         return result
 
+    def _resolve_active_model_id(self, registry: dict[str, Any]) -> str | None:
+        """Resolve both new modelId and legacy basename active references."""
+        active_ref = str(registry.get("activeServerModel") or "")
+        if not active_ref:
+            return None
+        models = registry.get("models", [])
+        if any(item.get("modelId") == active_ref for item in models):
+            return active_ref
+        # Legacy catalogs stored only the basename. Select the first matching
+        # server model, preserving the historical default without collisions.
+        for item in models:
+            if item.get("format") in {"pt", "onnx"} and Path(str(item.get("path", ""))).name == Path(active_ref).name:
+                return str(item.get("modelId"))
+        return None
+
     def list_models(self) -> list[dict[str, Any]]:
         registry = self._load()
-        return [self.public_inspect(item, registry.get("activeServerModel")) for item in registry.get("models", [])]
+        return [self.public_inspect(item, self._resolve_active_model_id(registry)) for item in registry.get("models", [])]
 
     def get(self, model_id: str) -> dict[str, Any]:
         registry = self._load()
         for item in registry.get("models", []):
             if item.get("modelId") == model_id:
-                return self.public_inspect(item, registry.get("activeServerModel"))
+                return self.public_inspect(item, self._resolve_active_model_id(registry))
         raise KeyError(model_id)
+
+    def _model_paths(self, item: dict[str, Any]) -> set[Path]:
+        paths: set[Path] = set()
+        for field in ("path", "labelsPath", "manifestPath"):
+            value = item.get(field)
+            if isinstance(value, str) and value.strip():
+                # Labels and manifests may intentionally live under docs/;
+                # uninstall only cleans files owned by the models directory.
+                try:
+                    paths.add(self._artifact_path({"path": value}))
+                except ModelCatalogValidationError:
+                    continue
+        for artifact in item.get("artifacts", []):
+            if isinstance(artifact, dict):
+                paths.add(self._artifact_path(artifact))
+        return paths
+
+    @serialized_mutation
+    def uninstall(self, model_id: str) -> dict[str, Any]:
+        """Remove a catalog entry and delete only files no remaining entry uses."""
+        registry = self._load()
+        models = registry.get("models", [])
+        target = next((item for item in models if item.get("modelId") == model_id), None)
+        if target is None:
+            raise KeyError(model_id)
+
+        if self._resolve_active_model_id(registry) == model_id:
+            raise ValueError("active model cannot be uninstalled")
+
+        remaining = [item for item in models if item is not target]
+        target_paths = self._model_paths(target)
+        shared_paths: set[Path] = set()
+        for item in remaining:
+            shared_paths.update(self._model_paths(item))
+        removable_paths = target_paths - shared_paths
+
+        registry["models"] = remaining
+        registry["updatedAt"] = date.today().isoformat()
+        self._save(registry)
+
+        deleted = 0
+        missing = 0
+        cleanup_failures: list[str] = []
+        models_root = (self.project_root / "models").resolve()
+        for path in sorted(removable_paths, key=lambda value: len(value.parts), reverse=True):
+            try:
+                if path.is_file():
+                    path.unlink()
+                    deleted += 1
+                else:
+                    missing += 1
+            except OSError:
+                cleanup_failures.append(path.name)
+                continue
+            parent = path.parent
+            while parent != models_root and models_root in parent.parents:
+                try:
+                    parent.rmdir()
+                except OSError:
+                    break
+                parent = parent.parent
+
+        return {
+            "modelId": model_id,
+            "uninstalled": True,
+            "deletedFiles": deleted,
+            "missingFiles": missing,
+            "retainedSharedFiles": len(target_paths & shared_paths),
+            "cleanupFailures": cleanup_failures,
+        }
 
     def get_artifact(self, model_id: str, artifact_id: str) -> tuple[dict[str, Any], Path]:
         """Resolve a registered artifact for download without exposing its path.
@@ -352,22 +437,22 @@ class ModelCatalog:
             raise KeyError(model_id)
         if target.get("placeholder"):
             raise ValueError("placeholder models cannot be activated")
-        inspected = self.inspect(target, registry.get("activeServerModel"))
+        inspected = self.inspect(target, self._resolve_active_model_id(registry))
         if not inspected["exists"]:
             raise ValueError("model file does not exist")
         if not inspected["hashValid"]:
             raise ValueError("model SHA-256 does not match registry")
         if target.get("format") not in {"pt", "onnx"}:
             raise ValueError("only server model formats pt and onnx can be activated")
-        registry["activeServerModel"] = Path(target["path"]).name
+        registry["activeServerModel"] = model_id
         self._save(registry)
-        return self.inspect(target, registry["activeServerModel"])
+        return self.inspect(target, model_id)
 
     def active_server_path(self) -> str:
         registry = self._load()
-        active = registry.get("activeServerModel")
+        active_id = self._resolve_active_model_id(registry)
         for item in registry.get("models", []):
-            if item.get("path", "").endswith(str(active)) and item.get("format") in {"pt", "onnx"}:
+            if item.get("modelId") == active_id and item.get("format") in {"pt", "onnx"}:
                 return str((self.registry_path.parents[1] / item["path"]).resolve())
         return str((self.registry_path.parents[1] / "models" / "yolo11n.pt").resolve())
 

@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,8 +11,10 @@ class Settings(BaseSettings):
     max_fps: float = 20.0
     mobile_token: str | None = None
     admin_token: str | None = None
+    auth_session_days: int = 30
     max_input_fps: float = 30.0
     max_output_subscribers: int = 4
+    rtsp_transport: str = "tcp"
     yolo_imgsz: int = 640
     yolo_device: str = "auto"
     yolo_classes: str | None = None
@@ -39,7 +42,25 @@ class Settings(BaseSettings):
     # must never be persisted in model jobs or returned by an API.
     model_signing_key_id: str | None = None
     model_signing_private_key_path: str | None = None
+    database_url: str | None = None
+    database_connect_timeout_seconds: int = 5
     model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore")
+
+    @field_validator("database_url")
+    @classmethod
+    def validate_database_url(cls, value: str | None) -> str | None:
+        value = value.strip() if value else None
+        if value and not value.startswith(("postgresql://", "postgresql+psycopg://")):
+            raise ValueError("DATABASE_URL must use PostgreSQL with the psycopg driver")
+        return value
+
+    @field_validator("rtsp_transport")
+    @classmethod
+    def validate_rtsp_transport(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"tcp", "udp"}:
+            raise ValueError("RTSP_TRANSPORT must be tcp or udp")
+        return normalized
 
 
 settings = Settings()

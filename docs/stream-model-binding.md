@@ -1,7 +1,8 @@
 # 按流绑定服务端模型（M08-T09）
 
 每个 `StreamSession` 持有自己的 `YoloDetector`。模型注册表中的全局
-`activeServerModel` 仅作为创建新流时的默认值；它不会在运行中覆盖已有流。
+`activeServerModel` 保存唯一的注册表 `modelId`，仅作为创建新流时的默认值；
+服务仍兼容旧注册表中的文件名值，并按注册顺序解析为唯一模型。它不会在运行中覆盖已有流。
 
 ## 接口
 

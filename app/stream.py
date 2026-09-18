@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import threading
 import time
 from dataclasses import dataclass, field
@@ -14,6 +15,26 @@ from .detector import YoloDetector, decode_image
 from .overlay import draw_overlay
 from .publisher import MediaMTXPublisher, PublisherConfig
 from .protocol import InputRateLimitError, MAX_FRAME_BYTES, MAX_FRAME_HEIGHT, MAX_FRAME_WIDTH, StreamState
+from .stream_config import redact_source_url
+
+
+OPENCV_FFMPEG_CAPTURE_OPTIONS = "OPENCV_FFMPEG_CAPTURE_OPTIONS"
+
+
+def _open_video_capture(source: str | int):
+    """Open RTSP through FFmpeg with an explicit reliable transport."""
+    if not isinstance(source, str) or not source.lower().startswith(("rtsp://", "rtsps://")):
+        return cv2.VideoCapture(source)
+
+    existing = os.environ.get(OPENCV_FFMPEG_CAPTURE_OPTIONS, "")
+    options = [
+        item
+        for item in existing.split("|")
+        if item and not item.lower().startswith("rtsp_transport;")
+    ]
+    options.append(f"rtsp_transport;{settings.rtsp_transport}")
+    os.environ[OPENCV_FFMPEG_CAPTURE_OPTIONS] = "|".join(options)
+    return cv2.VideoCapture(source, cv2.CAP_FFMPEG)
 
 
 class _FrameRateLimiter:
@@ -96,6 +117,8 @@ class StreamSession:
     model_catalog_id: str | None = field(default=None, init=False)
     model_scenario: str | None = field(default=None, init=False)
     model_purpose: str | None = field(default=None, init=False)
+    alert_runtime: Any | None = None
+    alert_error: str | None = None
 
     def __post_init__(self) -> None:
         self.publisher = MediaMTXPublisher(
@@ -130,6 +153,13 @@ class StreamSession:
     async def close(self):
         self._closed = True
         self._state = StreamState.CLOSED
+        # Wake output consumers before waiting for capture/encoder cleanup.  This
+        # lets browsers tear down the old multipart response immediately while
+        # the remaining session resources finish closing in the background.
+        async with self._condition:
+            self._condition.notify_all()
+        async with self._detection_condition:
+            self._detection_condition.notify_all()
         if self._pull_task:
             self._pull_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -143,10 +173,6 @@ class StreamSession:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._preview_task
         await self.publisher.close()
-        async with self._condition:
-            self._condition.notify_all()
-        async with self._detection_condition:
-            self._detection_condition.notify_all()
 
     async def set_yolo(self, enabled: bool):
         self.yolo_enabled = enabled
@@ -264,6 +290,7 @@ class StreamSession:
             "p95_latency_ms": self.p95_latency_ms,
             "active_subscribers": self.active_subscribers,
             "detections_last": self.latest_detections.result.detection_count if self.latest_detections else 0,
+            "alert_error": self.alert_error,
         }
         result.update(self.publisher.metrics())
         return result
@@ -319,6 +346,18 @@ class StreamSession:
                     index = min(len(ordered) - 1, max(0, int(len(ordered) * 0.95) - 1))
                     self.p95_latency_ms = round(ordered[index], 2)
                 await self._publish_frame(processed)
+                if self.alert_runtime is not None and not detector.load_error and not result.fallback_reason:
+                    try:
+                        self.alert_runtime.process(
+                            source_id=self.stream_id,
+                            captured_at_us=captured_at_us,
+                            result=result,
+                            frame=processed,
+                        )
+                        self.alert_error = None
+                    except Exception as exc:
+                        # Persistence and delivery failures must not take down video.
+                        self.alert_error = str(exc)[:500]
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -375,6 +414,11 @@ class StreamSession:
         async with self._condition:
             # Compare object identity: two consecutive frames may encode to identical bytes.
             await self._condition.wait_for(lambda: self._closed or self.latest_jpeg is not previous)
+            # A closed session must terminate every MJPEG/WebSocket consumer.  Returning
+            # the retained last frame here makes a consumer spin without waiting and
+            # repeatedly send that stale frame after the browser has disconnected.
+            if self._closed:
+                return None
             return self.latest_jpeg
 
     @property
@@ -431,13 +475,13 @@ class StreamSession:
                 frames.put_nowait((ok, frame, error))
 
             def read_source() -> None:
-                capture = cv2.VideoCapture(self.source_url)
+                capture = _open_video_capture(self.source_url)
                 limiter = _FrameRateLimiter()
                 pending_drops = 0
                 try:
                     if not capture.isOpened():
                         loop.call_soon_threadsafe(
-                            offer, False, None, f"cannot open source: {self.source_url}"
+                            offer, False, None, f"cannot open source: {redact_source_url(self.source_url)}"
                         )
                         return
                     while not stop_reader.is_set():
@@ -455,7 +499,14 @@ class StreamSession:
                         loop.call_soon_threadsafe(offer, True, frame, None, pending_drops)
                         pending_drops = 0
                 except Exception as exc:
-                    loop.call_soon_threadsafe(offer, False, None, str(exc))
+                    raw_source = str(self.source_url)
+                    safe_source = redact_source_url(self.source_url) or "<source>"
+                    loop.call_soon_threadsafe(
+                        offer,
+                        False,
+                        None,
+                        str(exc).replace(raw_source, safe_source),
+                    )
                 finally:
                     capture.release()
 
@@ -464,7 +515,7 @@ class StreamSession:
                 while not self._closed:
                     ok, frame, error = await frames.get()
                     if not ok:
-                        raise RuntimeError(error or f"cannot read source: {self.source_url}")
+                        raise RuntimeError(error or f"cannot read source: {redact_source_url(self.source_url)}")
                     # Network cameras have normal arrival jitter. The public
                     # upload endpoint rejects bursts, but an internal RTSP pull
                     # must not tear down and reconnect because two frames arrive

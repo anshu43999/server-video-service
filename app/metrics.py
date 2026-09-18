@@ -7,13 +7,22 @@ from typing import Any
 
 
 def system_metrics() -> dict[str, Any]:
-    metrics: dict[str, Any] = {"pid": os.getpid(), "cpu_percent": None, "memory_mb": None, "gpu": None}
+    metrics: dict[str, Any] = {
+        "pid": os.getpid(),
+        "cpu_percent": None,
+        "memory_mb": None,
+        "memory_percent": None,
+        "disk_percent": None,
+        "gpu": None,
+    }
     try:
         import psutil  # type: ignore
 
         process = psutil.Process()
         metrics["cpu_percent"] = process.cpu_percent(interval=None)
         metrics["memory_mb"] = round(process.memory_info().rss / 1024 / 1024, 2)
+        metrics["memory_percent"] = round(psutil.virtual_memory().percent, 1)
+        metrics["disk_percent"] = round(psutil.disk_usage(os.path.abspath(os.sep)).percent, 1)
     except Exception:
         pass
     nvidia_smi = shutil.which("nvidia-smi")

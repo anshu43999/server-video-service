@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 import threading
 from copy import deepcopy
@@ -8,7 +9,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from sqlalchemy import select
+
 from .conversion import atomic_json
+from .database import (
+    DatabaseManager,
+    ModelParameterAuditRecord,
+    ModelParameterProfileRecord,
+    database,
+)
 
 
 PLATFORMS = {"android", "server"}
@@ -48,9 +57,11 @@ class ModelParameterConflict(ModelParameterError):
 class ModelParameterStore:
     """Versioned parameter profiles kept outside signed model manifests."""
 
-    def __init__(self, path: Path | None = None):
+    def __init__(self, path: Path | None = None, database_manager: DatabaseManager | None = None):
         self.path = path or Path(__file__).resolve().parents[1] / "models" / "parameter-profiles.json"
         self._lock = threading.RLock()
+        self._database = database_manager
+        self._legacy_import_checked = False
 
     @staticmethod
     def _now() -> str:
@@ -59,6 +70,15 @@ class ModelParameterStore:
     @staticmethod
     def _profile_key(model: dict[str, Any], platform: str) -> str:
         return f"{model['modelId']}\0{model['version']}\0{platform}"
+
+    @staticmethod
+    def _database_profile_key(model_id: str, model_version: str, platform: str) -> str:
+        identity = json.dumps([model_id, model_version, platform], ensure_ascii=False, separators=(",", ":"))
+        return "mp-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def _database_key_for_model(cls, model: dict[str, Any], platform: str) -> str:
+        return cls._database_profile_key(str(model["modelId"]), str(model["version"]), platform)
 
     @staticmethod
     def _event_code(label: str) -> str:
@@ -122,6 +142,58 @@ class ModelParameterStore:
         if not isinstance(payload, dict) or not isinstance(payload.get("profiles"), dict) or not isinstance(payload.get("audit"), list):
             raise ModelParameterError("profile_store_invalid", "model parameter store has an invalid structure")
         return payload
+
+    def _import_legacy_once(self) -> None:
+        if self._database is None or self._legacy_import_checked:
+            return
+        with self._lock:
+            if self._legacy_import_checked:
+                return
+            payload = self._load()
+            with self._database.session() as session:
+                has_profiles = session.scalar(select(ModelParameterProfileRecord.profile_key).limit(1)) is not None
+                if not has_profiles:
+                    imported_keys: dict[str, str] = {}
+                    for legacy_key, raw_profile in payload.get("profiles", {}).items():
+                        if not isinstance(raw_profile, dict):
+                            continue
+                        profile = deepcopy(raw_profile)
+                        model_id = str(profile.get("modelId") or "")
+                        model_version = str(profile.get("modelVersion") or "")
+                        platform = str(profile.get("platform") or "")
+                        if not model_id or not model_version or platform not in PLATFORMS:
+                            continue
+                        key = self._database_profile_key(model_id, model_version, platform)
+                        session.add(ModelParameterProfileRecord(
+                            profile_key=key, model_id=model_id, model_version=model_version,
+                            platform=platform, revision=int(profile.get("revision", 0)), payload=profile,
+                        ))
+                        imported_keys[str(legacy_key)] = key
+                    session.flush()
+                    for audit in payload.get("audit", []):
+                        legacy_key = str(audit.get("profileKey") or "") if isinstance(audit, dict) else ""
+                        key = imported_keys.get(legacy_key)
+                        if key is None:
+                            continue
+                        audit_payload = deepcopy(audit)
+                        audit_payload["profileKey"] = key
+                        session.add(ModelParameterAuditRecord(
+                            profile_key=key, action=str(audit.get("action") or "IMPORTED")[:32],
+                            revision=int(audit.get("revision", 0)), actor=str(audit.get("actor") or "legacy-import")[:128],
+                            payload=audit_payload,
+                        ))
+            self._legacy_import_checked = True
+
+    def _database_payload(self, session, key: str) -> tuple[dict[str, Any], dict[str, Any] | None]:
+        row = session.get(ModelParameterProfileRecord, key)
+        audits = session.scalars(select(ModelParameterAuditRecord).where(
+            ModelParameterAuditRecord.profile_key == key
+        ).order_by(ModelParameterAuditRecord.id)).all()
+        payload = {"schemaVersion": PROFILE_SCHEMA_VERSION, "profiles": {},
+                   "audit": [deepcopy(dict(item.payload)) for item in audits]}
+        if row is not None:
+            payload["profiles"][key] = deepcopy(dict(row.payload))
+        return payload, deepcopy(dict(row.payload)) if row is not None else None
 
     @staticmethod
     def _validate_platform(platform: str) -> None:
@@ -273,6 +345,14 @@ class ModelParameterStore:
 
     def get(self, model: dict[str, Any], platform: str) -> dict[str, Any]:
         self._validate_platform(platform)
+        if self._database is not None:
+            self._import_legacy_once()
+            key = self._database_key_for_model(model, platform)
+            with self._database.session() as session:
+                payload, stored = self._database_payload(session, key)
+                profile = self.default_profile(model, platform) if stored is None else self._normalize_profile(model, stored)
+                self._validate_profile(model, profile)
+                return self._response(payload, profile, key)
         with self._lock:
             payload = self._load()
             payload["schemaVersion"] = PROFILE_SCHEMA_VERSION
@@ -306,6 +386,43 @@ class ModelParameterStore:
             "alertRules": deepcopy(values.get("alertRules")),
         }
         self._validate_profile(model, candidate)
+        if self._database is not None:
+            self._import_legacy_once()
+            key = self._database_key_for_model(model, platform)
+            with self._database.session() as session:
+                row = session.scalar(select(ModelParameterProfileRecord).where(
+                    ModelParameterProfileRecord.profile_key == key
+                ).with_for_update())
+                current_profile = self._normalize_profile(model, row.payload) if row else None
+                revision = int(current_profile.get("revision", 0)) if current_profile else 0
+                if expected_revision is not None and expected_revision != revision:
+                    raise ModelParameterConflict("revision_conflict", "model parameters were changed by another operator")
+                now = self._now()
+                profile = {
+                    "schemaVersion": PROFILE_SCHEMA_VERSION, "modelId": model["modelId"],
+                    "modelName": model.get("name") or model["modelId"], "modelVersion": model["version"],
+                    "platform": platform, "revision": revision + 1, "source": "custom",
+                    "updatedAt": now, "updatedBy": actor, "detection": deepcopy(values["detection"]),
+                    "alertRules": deepcopy(values["alertRules"]),
+                }
+                if row is None:
+                    row = ModelParameterProfileRecord(
+                        profile_key=key, model_id=model["modelId"], model_version=model["version"],
+                        platform=platform, revision=profile["revision"], payload=profile,
+                    )
+                    session.add(row)
+                else:
+                    row.revision = profile["revision"]
+                    row.payload = deepcopy(profile)
+                session.flush()
+                audit = {"profileKey": key, "action": "UPDATED", "revision": profile["revision"],
+                         "at": now, "actor": actor, "snapshot": deepcopy(profile)}
+                session.add(ModelParameterAuditRecord(
+                    profile_key=key, action="UPDATED", revision=profile["revision"], actor=actor, payload=audit,
+                ))
+                session.flush()
+                payload, _ = self._database_payload(session, key)
+                return self._response(payload, profile, key)
         with self._lock:
             payload = self._load()
             payload["schemaVersion"] = PROFILE_SCHEMA_VERSION
@@ -339,6 +456,36 @@ class ModelParameterStore:
 
     def reset(self, model: dict[str, Any], platform: str, actor: str) -> dict[str, Any]:
         self._validate_platform(platform)
+        if self._database is not None:
+            self._import_legacy_once()
+            key = self._database_key_for_model(model, platform)
+            with self._database.session() as session:
+                row = session.scalar(select(ModelParameterProfileRecord).where(
+                    ModelParameterProfileRecord.profile_key == key
+                ).with_for_update())
+                current_profile = self._normalize_profile(model, row.payload) if row else None
+                revision = int(current_profile.get("revision", 0)) if current_profile else 0
+                now = self._now()
+                profile = self.default_profile(model, platform)
+                profile.update({"revision": revision + 1, "updatedAt": now, "updatedBy": actor})
+                if row is None:
+                    row = ModelParameterProfileRecord(
+                        profile_key=key, model_id=model["modelId"], model_version=model["version"],
+                        platform=platform, revision=profile["revision"], payload=profile,
+                    )
+                    session.add(row)
+                else:
+                    row.revision = profile["revision"]
+                    row.payload = deepcopy(profile)
+                session.flush()
+                audit = {"profileKey": key, "action": "RESET", "revision": profile["revision"],
+                         "at": now, "actor": actor, "snapshot": deepcopy(profile)}
+                session.add(ModelParameterAuditRecord(
+                    profile_key=key, action="RESET", revision=profile["revision"], actor=actor, payload=audit,
+                ))
+                session.flush()
+                payload, _ = self._database_payload(session, key)
+                return self._response(payload, profile, key)
         with self._lock:
             payload = self._load()
             payload["schemaVersion"] = PROFILE_SCHEMA_VERSION

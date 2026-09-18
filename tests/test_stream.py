@@ -1,4 +1,5 @@
 import asyncio
+import os
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -6,7 +7,12 @@ import cv2
 import numpy as np
 
 from app.detection import InferenceResult
-from app.stream import StreamSession, _FrameRateLimiter
+from app.stream import (
+    OPENCV_FFMPEG_CAPTURE_OPTIONS,
+    StreamSession,
+    _FrameRateLimiter,
+    _open_video_capture,
+)
 from app.protocol import InputRateLimitError
 
 
@@ -19,6 +25,42 @@ def make_jpeg() -> bytes:
 
 
 class StreamSessionTests(unittest.TestCase):
+    def test_rtsp_capture_forces_ffmpeg_tcp_transport(self):
+        with patch.dict(os.environ, {OPENCV_FFMPEG_CAPTURE_OPTIONS: "stimeout;5000000"}), \
+             patch("app.stream.cv2.VideoCapture") as video_capture:
+            _open_video_capture("rtsp://127.0.0.1:18554/file-test")
+            capture_options = os.environ[OPENCV_FFMPEG_CAPTURE_OPTIONS]
+
+        video_capture.assert_called_once_with(
+            "rtsp://127.0.0.1:18554/file-test",
+            cv2.CAP_FFMPEG,
+        )
+        self.assertEqual(
+            capture_options,
+            "stimeout;5000000|rtsp_transport;tcp",
+        )
+
+    def test_rtsp_capture_replaces_conflicting_transport_option(self):
+        with patch.dict(
+            os.environ,
+            {OPENCV_FFMPEG_CAPTURE_OPTIONS: "rtsp_transport;udp|stimeout;5000000"},
+        ), patch("app.stream.cv2.VideoCapture"):
+            _open_video_capture("rtsps://camera.example/live")
+            capture_options = os.environ[OPENCV_FFMPEG_CAPTURE_OPTIONS]
+
+        self.assertEqual(
+            capture_options,
+            "stimeout;5000000|rtsp_transport;tcp",
+        )
+
+    def test_non_rtsp_capture_keeps_default_backend_and_options(self):
+        with patch.dict(os.environ, {}, clear=True), \
+             patch("app.stream.cv2.VideoCapture") as video_capture:
+            _open_video_capture(0)
+
+        video_capture.assert_called_once_with(0)
+        self.assertNotIn(OPENCV_FFMPEG_CAPTURE_OPTIONS, os.environ)
+
     def test_rtsp_rate_limiter_tolerates_jitter_but_caps_sustained_bursts(self):
         limiter = _FrameRateLimiter()
         jittered_25_fps = [0.0, 0.02, 0.04, 0.08, 0.12, 0.16, 0.20]

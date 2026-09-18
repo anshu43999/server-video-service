@@ -43,6 +43,14 @@ cd E:\aiyolo\server-video-service
 
 随后打开 `http://127.0.0.1:8080/admin/`，在“视频流管理”中新建流，填写唯一流 ID，并将服务端拉流地址设为 `rtsp://127.0.0.1:18554/file-test`。脚本默认把后台输出 MediaMTX 绑定到 RTSP `19554`、LL-HLS `18888`、WHEP `18889`、WebRTC UDP `18189` 和 API `19997`；所有端口均可用对应的 `-Media*Port` 参数覆盖。按 `Ctrl+C` 停止后台时，脚本会同时停止它启动的 MediaMTX。
 
+Android 模拟器不能使用服务端返回的 `127.0.0.1` 媒体地址，因为该地址在 Android 中指向模拟器自身。联调模拟器时使用 Android Emulator 的宿主机别名，并显式开放媒体监听地址：
+
+```powershell
+.\start-server.ps1 -WithMediaMtx -NoInstall -MediaBindAddress 0.0.0.0 -MediaPublicHost 10.0.2.2
+```
+
+此时 App 的视频服务地址应为 `http://10.0.2.2:8080`，播放接口会返回 `10.0.2.2:18889` 的 WHEP 地址和 `10.0.2.2:18888` 的 LL-HLS 地址。真机联调时将 `MediaPublicHost` 和 App 服务地址改为电脑的局域网 IPv4 地址，例如 `192.168.1.210`；同时只在受信任网络中放行 TCP `8080/18888/18889` 与 UDP `18189`。不传这两个参数时仍默认绑定和发布 `127.0.0.1`，保持仅本机可访问。
+
 ## 开发任务 Harness
 
 服务器项目有独立的任务驱动开发流程，位于 `harness/`：

@@ -47,14 +47,22 @@ class AdminModelMarketViewTests(unittest.TestCase):
     def test_conversion_connects_automatically_without_legacy_button(self):
         self.assertNotIn("id=\"conversion-connect\"", self.conversion_js)
         self.assertNotIn("连接并读取配置", self.conversion_js)
-        self.assertIn("byId('conversion-token').addEventListener('change'", self.conversion_js)
-        self.assertIn("connect();", self.conversion_js)
+        self.assertNotIn("conversion-token", self.conversion_js)
+        self.assertIn("aiyolo-authenticated", self.conversion_js)
 
     def test_model_catalog_has_search_summary_and_real_detail_projection(self):
         for marker in ("model-total", "model-server-ready", "model-android-ready", "model-active-count", "model-search-input"):
             self.assertIn(marker, self.html)
         for marker in ("function openModelDetails", "modelReadiness", "model-detail-artifacts", "data-model-detail"):
             self.assertIn(marker, self.js)
+
+    def test_model_uninstall_has_confirmation_and_real_delete_request(self):
+        for marker in ("model-uninstall-dialog", "model-uninstall-confirm", "确认卸载"):
+            self.assertIn(marker, self.html)
+        for marker in ("data-model-uninstall", "function confirmModelUninstall", "method:'DELETE'", "encodeURIComponent(modelId)"):
+            self.assertIn(marker, self.js)
+        self.assertIn("当前生效模型不能卸载", self.js)
+        self.assertIn("detail.streamIds", self.js)
 
 
 if __name__ == "__main__":

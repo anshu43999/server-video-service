@@ -20,3 +20,10 @@
 #model-conversion-workspace .conversion-panel .conversion-actions{border-top:1px solid #e6ede7;padding-top:8px}
 #model-conversion-workspace .conversion-panel .ghost-btn{border-color:#cad9cf;background:#fff}
 @media(max-width:600px){#model-conversion-workspace .conversion-panel{padding:16px}#model-conversion-workspace .conversion-heading{display:block}#model-conversion-workspace .conversion-mode-label{display:inline-block;margin-top:10px}}
+#model-conversion-workspace .conversion-drop{position:relative;display:grid;place-items:center;gap:6px;min-height:132px;margin:4px 0 14px;padding:18px 16px;border:1px dashed #9bb8a3;border-radius:8px;background:#f4faf6;color:#3f5f4b;text-align:center;cursor:pointer}
+#model-conversion-workspace .conversion-drop input{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+#model-conversion-workspace .conversion-drop b{font-size:14px}
+#model-conversion-workspace .conversion-drop small{color:#6d8174;font-size:12px}
+#model-conversion-workspace .conversion-drop.is-over,#model-conversion-workspace .conversion-drop:hover{border-color:#34774f;background:#eaf5ee}
+#model-conversion-workspace #conversion-settings{margin-bottom:16px}
+.conversion-auth-note{margin:0 0 14px;padding:10px 12px;background:#eef6f0;color:#52745d;border-left:3px solid #6daa82;font-size:11px;line-height:1.5}

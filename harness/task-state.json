@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "server-video-service",
-  "updatedAt": "2026-09-12T16:48:34+08:00",
+  "updatedAt": "2026-09-18T09:27:40+08:00",
   "majorTasks": [
     {
       "id": "M00",
@@ -415,6 +415,34 @@
           ],
           "acceptance": "发布候选版本完成安装、升级、回滚、健康检查和关键业务流程验收",
           "record": "harness/records/M05/M05-T04.md"
+        },
+        {
+          "id": "M05-T05",
+          "title": "持久化视频流配置与模型绑定",
+          "status": "superseded",
+          "dependsOn": [
+            "M29-T10"
+          ],
+          "acceptance": "新增视频流配置数据模型和数据库迁移，持久化 stream_id、名称/来源类型、source_url 安全引用、model_id、YOLO 参数、启用状态和创建更新时间；创建、修改、绑定、停用和删除接口与现有视频流 API 契约一致；RTSP 凭据不得明文进入日志或普通 API 响应；实时帧、WebSocket 队列和运行指标不写入业务数据库；数据库仓储、权限、幂等和回归测试通过",
+          "record": "harness/records/M05/M05-T05.md",
+          "owner": "codex",
+          "supersededReason": "PC端优先开发顺序下，视频流持久化任务迁移到 M30 后续任务线，原 M05 归属不再适用。",
+          "supersededAt": "2026-09-17T15:00:33+08:00",
+          "supersededBy": "M30-T05"
+        },
+        {
+          "id": "M05-T06",
+          "title": "实现视频流重启恢复与持久状态展示",
+          "status": "superseded",
+          "dependsOn": [
+            "M05-T05"
+          ],
+          "acceptance": "服务启动时读取启用的视频流配置并按策略恢复 StreamSession，连接失败进入可重试错误状态而不阻塞服务启动；管理后台现场流绑定读取持久配置并区分配置状态与实时运行状态；服务重启后流配置、模型绑定和 YOLO 参数保持不丢失；停用/删除不会自动恢复；覆盖启动恢复、断线重试、鉴权、并发修改和后台回归测试",
+          "record": "harness/records/M05/M05-T06.md",
+          "owner": "codex",
+          "supersededReason": "PC端优先开发顺序下，视频流重启恢复任务迁移到 M30 后续任务线，原 M05 归属不再适用。",
+          "supersededAt": "2026-09-17T15:00:34+08:00",
+          "supersededBy": "M30-T06"
         }
       ]
     },
@@ -1841,9 +1869,428 @@
           "owner": "codex",
           "startedAt": "2026-09-12T16:43:08+08:00",
           "completedAt": "2026-09-12T16:48:34+08:00"
+        },
+        {
+          "id": "M28-T03",
+          "title": "下线异物入侵五类开发占位模型",
+          "status": "completed",
+          "dependsOn": [
+            "M28-T01"
+          ],
+          "acceptance": "从服务端模型目录删除 site-intrusion-v1 开发占位条目、Manifest、占位产物和现行说明；模型目录与下载回归测试改用独立的小型测试夹具；后台与 API 不再返回该占位模型，历史 Harness 记录保持不变",
+          "record": "harness/records/M28/M28-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-09-17T11:15:33+08:00",
+          "completedAt": "2026-09-17T11:26:35+08:00"
+        },
+        {
+          "id": "M28-T04",
+          "title": "实现模型资产安全卸载",
+          "status": "completed",
+          "dependsOn": [
+            "M28-T03"
+          ],
+          "acceptance": "管理后台模型卡片与详情页提供卸载入口和二次确认；新增管理员 DELETE 模型 API，删除目录条目和未被其他模型共享的产物；当前激活模型或任一视频流绑定模型拒绝卸载；成功后刷新真实目录并显示删除结果，接口、目录和前端回归测试通过",
+          "record": "harness/records/M28/M28-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-09-17T11:30:28+08:00",
+          "completedAt": "2026-09-17T11:41:38+08:00"
+        },
+        {
+          "id": "M28-T05",
+          "title": "修复模型激活标识冲突",
+          "status": "completed",
+          "dependsOn": [
+            "M28-T04"
+          ],
+          "acceptance": "模型目录使用唯一 modelId 记录并判断当前生效模型；兼容并确定性迁移旧的文件名标识；后台只显示一个当前生效模型；只有该模型受卸载保护；新视频流默认绑定同一模型；目录、卸载、视频流与管理页回归测试通过",
+          "record": "harness/records/M28/M28-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-09-17T13:18:29+08:00",
+          "completedAt": "2026-09-17T13:54:33+08:00"
+        },
+        {
+          "id": "M28-T06",
+          "title": "修复模型卸载外部元数据路径",
+          "status": "completed",
+          "dependsOn": [
+            "M28-T05"
+          ],
+          "acceptance": "卸载模型时仅清理 models 目录内产物；docs/models 等外部标签或说明路径被安全保留，不再导致 artifact path must stay under models directory；卸载 API 与回归测试通过",
+          "record": "harness/records/M28/M28-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-09-17T14:02:21+08:00",
+          "completedAt": "2026-09-17T14:06:26+08:00"
         }
       ],
       "startedAt": "2026-09-12T15:33:28+08:00"
+    },
+    {
+      "id": "M29",
+      "title": "移动端告警接收与管理后台展示",
+      "status": "in_progress",
+      "dependsOn": [],
+      "acceptanceDocument": "harness/acceptance/M29-mobile-alert-ingest.md",
+      "acceptanceCriteria": [
+        "服务端提供移动端Token保护的告警上报接口，接收现场拍照和相机巡检事件及参数、检测和截图证据",
+        "相同eventId重复上报幂等，不重置已有处置历史；确认和误报结果可随上报落库，管理后台告警列表读取真实事件",
+        "截图证据不暴露本机路径，服务端接口鉴权、校验、幂等、后台列表和回归测试通过"
+      ],
+      "subtasks": [
+        {
+          "id": "M29-T01",
+          "title": "实现移动端告警上报接口与幂等存储",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "新增移动端Token保护的mobile-ingest接口，规范事件字段和data URL证据大小，支持重复上报与确认/误报处置，不改变管理员处置权限；接口测试覆盖鉴权、幂等、证据和后台读取",
+          "record": "harness/records/M29/M29-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-14T13:32:17+08:00",
+          "completedAt": "2026-09-14T14:00:59+08:00"
+        },
+        {
+          "id": "M29-T02",
+          "title": "建立 PostgreSQL 数据访问与迁移基础",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "增加可校验的 DATABASE_URL 配置、SQLAlchemy 2.x 会话工厂与 Alembic 基线迁移；开发 PostgreSQL 可执行迁移并通过连接健康检查；未配置数据库时保持明确的内存开发回退；测试不得连接或清空 aiyolo_dev，依赖与配置文档齐全",
+          "record": "harness/records/M29/M29-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-09-14T15:07:42+08:00",
+          "completedAt": "2026-09-14T15:14:47+08:00"
+        },
+        {
+          "id": "M29-T03",
+          "title": "将告警处置与误报回流持久化到 PostgreSQL",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T02"
+          ],
+          "acceptance": "告警事件、检测结果、参数快照、证据引用、处置历史和误报反馈通过数据库仓储持久化；eventId 幂等且重复移动端上报不重复处置历史；服务重启后 API 与管理后台仍可查询；内存仓储仅用于显式测试或无数据库回退",
+          "record": "harness/records/M29/M29-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-09-14T15:17:00+08:00",
+          "completedAt": "2026-09-14T15:48:11+08:00"
+        },
+        {
+          "id": "M29-T04",
+          "title": "完成 PostgreSQL 告警链路兼容与恢复验收",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T03"
+          ],
+          "acceptance": "自动化覆盖迁移、并发幂等、确认、误报、筛选、导出、数据库不可用和服务重启恢复；现有告警、后台与移动端接口回归通过；文档给出本地启动、迁移、备份和生产连接要求",
+          "record": "harness/records/M29/M29-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-09-14T15:48:44+08:00",
+          "completedAt": "2026-09-14T16:21:24+08:00"
+        },
+        {
+          "id": "M29-T05",
+          "title": "扩展 PostgreSQL 业务数据模型与迁移",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T04"
+          ],
+          "acceptance": "为规则、规则绑定与审计、模型参数与审计、复核配置与结果、投递记录、转换配置与任务建立 SQLAlchemy 模型和 Alembic 增量迁移；约束、索引、外键和 JSONB 字段可校验；迁移不存储模型权重、转换产物、截图二进制或凭据。",
+          "record": "harness/records/M29/M29-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-09-14T16:39:05+08:00",
+          "completedAt": "2026-09-14T16:41:35+08:00"
+        },
+        {
+          "id": "M29-T06",
+          "title": "迁移规则与模型参数仓储到 PostgreSQL",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T05"
+          ],
+          "acceptance": "规则、绑定、规则审计、模型参数档案及参数审计通过 PostgreSQL 仓储持久化；现有 API 契约不变；首次启动可幂等导入已有 parameter-profiles.json，导入失败不覆盖数据库，服务重启与并发修订测试通过。",
+          "record": "harness/records/M29/M29-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-09-14T16:41:47+08:00",
+          "completedAt": "2026-09-14T16:54:46+08:00"
+        },
+        {
+          "id": "M29-T07",
+          "title": "迁移复核与告警投递历史到 PostgreSQL",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T06"
+          ],
+          "acceptance": "复核配置、额度、结果和告警投递回执通过 PostgreSQL 持久化；重启后复核查询与用量不丢失，投递历史可查询且不含凭据；实时 WebSocket 队列保持短生命周期内存实现。",
+          "record": "harness/records/M29/M29-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-09-14T16:55:45+08:00",
+          "completedAt": "2026-09-14T17:07:33+08:00"
+        },
+        {
+          "id": "M29-T08",
+          "title": "迁移模型转换配置与任务到 PostgreSQL",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T07"
+          ],
+          "acceptance": "转换配置和任务状态改用 PostgreSQL 仓储，转换工作目录及产物仍在文件系统；已有 jobs.sqlite3 与 config.json 可一次性幂等导入；排队、执行、失败、重试和服务重启恢复 API 回归通过。",
+          "record": "harness/records/M29/M29-T08.md",
+          "owner": "codex",
+          "startedAt": "2026-09-14T17:08:03+08:00",
+          "completedAt": "2026-09-14T17:11:14+08:00"
+        },
+        {
+          "id": "M29-T09",
+          "title": "接通服务端自产告警持久化与投递",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T08"
+          ],
+          "acceptance": "服务端检测与告警引擎产生的正式事件在投递前写入 PostgreSQL，更新和结束状态幂等；管理后台可查询服务端与移动端统一事件，服务重启后仍可恢复；候选态和逐帧运行状态不持久化。",
+          "record": "harness/records/M29/M29-T09.md",
+          "owner": "codex",
+          "startedAt": "2026-09-14T17:11:42+08:00",
+          "completedAt": "2026-09-14T17:22:19+08:00"
+        },
+        {
+          "id": "M29-T10",
+          "title": "完成全业务 PostgreSQL 迁移验收",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T09"
+          ],
+          "acceptance": "自动化和真实 PostgreSQL 覆盖规则、模型参数、复核、投递、转换任务、移动端告警和服务端自产告警；验证旧数据导入、并发、重启、数据库不可用、迁移升级、备份恢复和后台接口；文档明确仍留在文件系统与内存中的非业务持久状态。",
+          "record": "harness/records/M29/M29-T10.md",
+          "owner": "codex",
+          "startedAt": "2026-09-14T17:22:49+08:00",
+          "completedAt": "2026-09-14T17:40:38+08:00"
+        },
+        {
+          "id": "M29-T11",
+          "title": "将管理后台统计切换为真实业务数据",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T10"
+          ],
+          "acceptance": "新增受管理鉴权保护的真实统计接口，按今日、近7天、近30天聚合 PostgreSQL 告警、处置、类别、复核数据，并合并实时流和服务器资源指标；管理后台总览与数据看板不再展示固定统计数字，空库显示0或暂无数据，接口异常显示不可用；后端、前端契约和回归测试通过。",
+          "record": "harness/records/M29/M29-T11.md",
+          "owner": "codex",
+          "startedAt": "2026-09-14T18:17:26+08:00",
+          "completedAt": "2026-09-14T18:34:11+08:00"
+        },
+        {
+          "id": "M29-T12",
+          "title": "将管理后台告警中心切换为真实事件数据",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T11"
+          ],
+          "acceptance": "告警中心直接使用 /api/alerts 返回的真实事件，不再显示或短暂渲染 Mock 告警；全部、严重、重要、一般计数按真实数据动态计算；空库与接口失败有明确状态；事件详情、截图、复核、确认告警和标记误报均绑定真实 eventId；前端契约、API 回归及浏览器验收通过。",
+          "record": "harness/records/M29/M29-T12.md",
+          "owner": "codex",
+          "startedAt": "2026-09-14T18:40:11+08:00",
+          "completedAt": "2026-09-14T18:52:01+08:00"
+        },
+        {
+          "id": "M29-T13",
+          "title": "清理管理后台左侧菜单静态数字",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T12"
+          ],
+          "acceptance": "删除左侧菜单固定页面序号和 Mock 推送数量；视频流与告警中心数量只显示真实接口数据，加载前显示占位符；页面、脚本和回归测试通过。",
+          "record": "harness/records/M29/M29-T13.md",
+          "owner": "codex",
+          "startedAt": "2026-09-15T09:13:18+08:00",
+          "completedAt": "2026-09-15T09:17:12+08:00"
+        },
+        {
+          "id": "M29-T14",
+          "title": "接入统一账号会话与双端登录",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T13"
+          ],
+          "acceptance": "PostgreSQL持久化账号与会话；密码使用强哈希且服务端仅存会话摘要；提供登录、当前用户、退出接口和管理员/操作员角色鉴权；管理后台未登录不可读取业务数据并提供登录/退出页面；兼容旧静态Token迁移；API、数据库、前端回归测试通过。",
+          "record": "harness/records/M29/M29-T14.md",
+          "owner": "codex",
+          "startedAt": "2026-09-15T09:43:08+08:00",
+          "completedAt": "2026-09-15T11:22:10+08:00"
+        }
+      ]
+    },
+    {
+      "id": "M30",
+      "title": "管理后台视频流真实接入",
+      "status": "in_progress",
+      "dependsOn": [],
+      "acceptanceDocument": "harness/acceptance/M30-admin-stream-integration.md",
+      "acceptanceCriteria": [
+        "管理后台可以使用真实 API 创建、刷新、配置和删除视频流会话",
+        "服务端拉流地址进入真实 StreamSession，管理页显示实时 MJPEG 预览而不是静态演示图",
+        "真实 RTSP 输入经过后台重新编码并暴露 WHEP、LL-HLS 和 RTSP 播放入口",
+        "Demo 模式保持隔离，鉴权、错误状态和相关自动化测试通过"
+      ],
+      "subtasks": [
+        {
+          "id": "M30-T01",
+          "title": "接通管理后台真实视频流操作与预览",
+          "status": "completed",
+          "dependsOn": [
+            "M08-T04",
+            "M08-T07"
+          ],
+          "acceptance": "Live 模式的新建流表单调用 POST /api/streams 并传递 source_url；刷新、YOLO 开关、置信度、最大 FPS 和删除调用真实 API；选中真实流时使用受会话鉴权保护的 MJPEG 预览，Demo 模式继续使用演示素材；使用 E:/aiyolo/tools/rtsp 的 H.264 测试源完成帧接收、重新发布、WHEP/LL-HLS/RTSP 地址和管理页契约验证。",
+          "record": "harness/records/M30/M30-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-15T16:53:43+08:00",
+          "completedAt": "2026-09-15T17:41:04+08:00"
+        },
+        {
+          "id": "M30-T02",
+          "title": "修复后端 H.264 马赛克与卡顿",
+          "status": "completed",
+          "dependsOn": [
+            "M30-T01"
+          ],
+          "acceptance": "每路视频流使用单个长驻 FFmpeg 进程将连续 BGR 帧编码并发布到 MediaMTX，不再逐帧启动编码器；RTSP 拉流输入不经过 JPEG 往返；720p/25 FPS 真实视频连续输出无明显马赛克或周期性停顿，后台健康接口保持响应，编码进程与流会话可正确清理。",
+          "record": "harness/records/M30/M30-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-09-15T18:05:11+08:00",
+          "completedAt": "2026-09-15T19:09:52+08:00"
+        },
+        {
+          "id": "M30-T03",
+          "title": "修复管理后台视频预览比例裁切",
+          "status": "completed",
+          "dependsOn": [
+            "M30-T02"
+          ],
+          "acceptance": "视频流管理预览和数据看板视频墙均使用等比例 contain 展示完整画面，不再使用 cover 裁切；横屏、竖屏及非16:9输入允许留黑边但不得拉伸或缺失；补齐样式契约测试并完成浏览器桌面与移动视口验证。",
+          "record": "harness/records/M30/M30-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-09-17T09:22:23+08:00",
+          "completedAt": "2026-09-17T09:53:07+08:00"
+        },
+        {
+          "id": "M30-T04",
+          "title": "修复开启 YOLO 后 H.264 解码损坏",
+          "status": "completed",
+          "dependsOn": [
+            "M30-T03"
+          ],
+          "acceptance": "服务端 RTSP 拉流显式使用 TCP，避免 UDP 丢包导致 Invalid level prefix、corrupted macroblock；开启 YOLO 后真实视频连续运行并保持可解码，补齐传输配置与回归测试。",
+          "record": "harness/records/M30/M30-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-09-17T10:03:49+08:00",
+          "completedAt": "2026-09-17T10:24:03+08:00"
+        },
+        {
+          "id": "M30-T05",
+          "title": "PC端持久化视频流配置与模型绑定",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T10"
+          ],
+          "acceptance": "新增视频流配置数据模型和数据库迁移，持久化 stream_id、名称/来源类型、source_url 安全引用、model_id、YOLO 参数、启用状态和创建更新时间；创建、修改、绑定、停用和删除接口与现有视频流 API 契约一致；RTSP 凭据不得明文进入日志或普通 API 响应；实时帧、WebSocket 队列和运行指标不写入业务数据库；数据库仓储、权限、幂等和回归测试通过",
+          "record": "harness/records/M30/M30-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-09-17T15:01:15+08:00",
+          "completedAt": "2026-09-17T15:31:32+08:00"
+        },
+        {
+          "id": "M30-T06",
+          "title": "PC端视频流重启恢复与持久状态展示",
+          "status": "completed",
+          "dependsOn": [
+            "M30-T05"
+          ],
+          "acceptance": "服务启动时读取启用的视频流配置并按策略恢复 StreamSession，连接失败进入可重试错误状态而不阻塞服务启动；管理后台现场流绑定读取持久配置并区分配置状态与实时运行状态；服务重启后流配置、模型绑定和 YOLO 参数保持不丢失；停用/删除不会自动恢复；覆盖启动恢复、断线重试、鉴权、并发修改和后台回归测试",
+          "record": "harness/records/M30/M30-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-09-17T15:32:05+08:00",
+          "completedAt": "2026-09-17T15:50:04+08:00"
+        },
+        {
+          "id": "M30-T07",
+          "title": "修复视频流停用后无法重新启用",
+          "status": "completed",
+          "dependsOn": [
+            "M30-T06"
+          ],
+          "acceptance": "管理后台关闭启用视频流后可再次打开；后端从 closed 状态创建新的 StreamSession 并恢复持久化来源、模型绑定和 YOLO 参数；启停失败时前端开关回滚且显示可诊断错误；覆盖连续关开、无来源流、RTSP 流和管理后台契约测试。",
+          "record": "harness/records/M30/M30-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-09-17T15:54:13+08:00",
+          "completedAt": "2026-09-17T16:11:43+08:00"
+        },
+        {
+          "id": "M30-T08",
+          "title": "移除视频预览装饰扫描线",
+          "status": "completed",
+          "dependsOn": [
+            "M30-T07"
+          ],
+          "acceptance": "视频流管理页真实视频和演示视频均不再叠加绿色扫描线或原型矩形框；状态文字、FPS 信息、等比例完整画面与不可用回退保持正常；前端契约测试通过。",
+          "record": "harness/records/M30/M30-T08.md",
+          "owner": "codex",
+          "startedAt": "2026-09-17T16:24:53+08:00",
+          "completedAt": "2026-09-17T16:25:55+08:00"
+        },
+        {
+          "id": "M30-T09",
+          "title": "修复视频流重新启用后预览不恢复",
+          "status": "completed",
+          "dependsOn": [
+            "M30-T08"
+          ],
+          "acceptance": "关闭视频流后再次启用时，管理后台必须重新请求该流的 MJPEG 预览并恢复画面；停用状态不保留失效预览地址；连续启停不得因前端预览缓存键跳过加载；前端契约与后端启停回归测试通过。",
+          "record": "harness/records/M30/M30-T09.md",
+          "owner": "codex",
+          "startedAt": "2026-09-17T16:38:38+08:00",
+          "completedAt": "2026-09-17T16:39:50+08:00"
+        },
+        {
+          "id": "M30-T10",
+          "title": "修复视频流重新启用后预览卡帧",
+          "status": "completed",
+          "dependsOn": [
+            "M30-T09"
+          ],
+          "acceptance": "视频流关闭后再次启用时，管理后台必须建立全新的 MJPEG 请求且不得复用旧响应或最后一帧；后端重建会话后帧序号持续增长，旧预览订阅及时退出；连续启停、缓存控制和真实 RTSP 恢复回归测试通过。",
+          "record": "harness/records/M30/M30-T10.md",
+          "owner": "codex",
+          "startedAt": "2026-09-17T16:50:10+08:00",
+          "completedAt": "2026-09-17T17:33:43+08:00"
+        }
+      ],
+      "startedAt": "2026-09-15T16:53:43+08:00"
+    },
+    {
+      "id": "M31",
+      "title": "移动端媒体出口联调",
+      "status": "in_progress",
+      "dependsOn": [
+        "M08-T06"
+      ],
+      "acceptanceDocument": "harness/acceptance/M31-mobile-media-egress.md",
+      "acceptanceCriteria": [
+        "本机 MediaMTX 启动脚本可显式配置移动端可达的媒体主机与监听地址",
+        "播放接口返回的 WHEP 与 LL-HLS 地址不再固定指向移动端自身的回环地址",
+        "Android 模拟器可选择已发布流并收到真实视频画面"
+      ],
+      "subtasks": [
+        {
+          "id": "M31-T01",
+          "title": "修复移动端无法访问本机 WHEP 与 LL-HLS",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "start-server.ps1 支持安全配置媒体对外主机与监听地址，默认仍仅绑定回环地址；Android 模拟器模式下 /playback 返回 10.0.2.2 可达的 WHEP/LL-HLS 地址，MediaMTX 对应 TCP/UDP 端口可访问；README 给出模拟器与真机启动命令；脚本契约测试、服务端回归和模拟器真实首帧验证通过。",
+          "record": "harness/records/M31/M31-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-18T09:19:12+08:00",
+          "completedAt": "2026-09-18T09:27:40+08:00"
+        }
+      ],
+      "startedAt": "2026-09-18T09:19:12+08:00"
     }
   ]
 }

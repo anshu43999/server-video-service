@@ -1,8 +1,8 @@
 # M09 模型市场自动化测试
 
 M09-T07 的回归测试覆盖目录查询、鉴权失败、下载完整性和限流。测试通过
-FastAPI `TestClient` 调用真实路由，并复用 `models/registry.json` 中
-`site-intrusion-v1` 的 187 字节服务端占位产物；不会下载或加载真实的大体积模型权重。
+FastAPI `TestClient` 调用真实路由，并临时切换到 `models/registry.test.json`
+引用的通用小型下载夹具；生产目录不再为了自动化测试保留占位模型，也不会下载或加载真实的大体积模型权重。
 
 ## 覆盖矩阵
 
