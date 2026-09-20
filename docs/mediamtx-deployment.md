@@ -1,6 +1,6 @@
 # MediaMTX 编排与端口策略（M08-T06）
 
-`docker compose up --build` 会同时启动 `video-service` 与 MediaMTX 1.20.1。两个容器都使用 `restart: unless-stopped`；MediaMTX 通过控制 API 健康检查后，服务端才开始推流。媒体进程或容器异常退出时由 Compose 自动拉起，发布器（M08-T03）会在首帧到达后重新建立 RTSP 发布。
+根目录唯一的 `compose.yml` 会同时启动 `video-service`、`model-converter`、PostgreSQL 与 MediaMTX 1.20.1。服务均使用 `restart: unless-stopped`；MediaMTX 通过健康检查后，视频服务才开始推流。媒体进程或容器异常退出时由 Compose 自动拉起，发布器（M08-T03）会在首帧到达后重新建立 RTSP 发布。
 
 ## 控制面与媒体面
 

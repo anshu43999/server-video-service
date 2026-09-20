@@ -114,24 +114,27 @@ python tools/convert_model.py --weights models/yolo11n.pt --format all --imgsz 6
 
 注意：Ultralytics 当前 LiteRT 导出器不支持 Windows 原生环境。Windows 上可正常生成 ONNX/PT；要生成移动端 TFLite，请在 WSL2 Ubuntu/Linux x86 或 macOS 中安装同一份 `requirements-convert.txt` 后执行 `mobile` 命令。工具会在不支持的平台返回明确错误，不会伪造 TFLite 产物。
 
-也可以直接使用 Docker（将模型放入项目的 `models/best.pt`）：
-
-```powershell
-docker compose up --build
-```
-
-## CentOS 服务器部署
-
-CentOS Stream 9 / RHEL 9 兼容服务器使用独立生产编排 `compose.centos.yml`，包含后端、独立模型转换服务、PostgreSQL 和 MediaMTX，并启用配置门禁、自动数据库迁移、健康检查、持久卷、只读模型/校准集挂载、非 root 进程、转换资源限制和日志轮转。部署前先阅读 [CentOS Docker 部署说明](docs/centos-docker-deployment.md)：
+也可以直接使用统一 Docker Compose。仓库只分发转换后的 ONNX/TFLite，默认允许无服务端模型启动：
 
 ```bash
-cp deploy/centos/.env.example deploy/centos/.env
-# 编辑 deploy/centos/.env，替换全部 CHANGE_ME
-bash deploy/centos/deploy.sh config
-bash deploy/centos/deploy.sh up
+cp .env.example .env
+# 编辑 .env，替换全部 CHANGE_ME
+bash deploy/deploy.sh config
+bash deploy/deploy.sh up
 ```
 
-CentOS Linux 7 已停止维护，不作为生产支持目标。当前开发机没有可用的 Docker CLI 时，只能完成静态配置和单元测试；镜像构建与真实三容器健康检查必须在安装了 Docker Engine/Compose 的 CentOS 服务器执行。
+## Linux 服务器部署
+
+项目只保留一套根目录 `compose.yml`，CentOS Stream 9、Rocky Linux、AlmaLinux、Ubuntu 等 Linux 服务器共用同一编排。它包含后端、独立模型转换服务、PostgreSQL 和 MediaMTX，并启用配置门禁、自动数据库迁移、健康检查、持久卷、只读模型/校准集挂载、非 root 进程、转换资源限制和日志轮转。部署前先阅读 [Docker 部署说明](docs/docker-deployment.md)：
+
+```bash
+cp .env.example .env
+# 编辑 .env，替换全部 CHANGE_ME
+bash deploy/deploy.sh config
+bash deploy/deploy.sh up
+```
+
+CentOS/RHEL 的 Docker 安装、firewalld 和 SELinux 注意事项单独记录在 `deploy/centos/README.md`，不再维护第二套 Compose。CentOS Linux 7 已停止维护，不作为生产支持目标。
 
 ## API 示例
 

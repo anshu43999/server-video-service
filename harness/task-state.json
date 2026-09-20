@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "server-video-service",
-  "updatedAt": "2026-09-20T11:04:24+08:00",
+  "updatedAt": "2026-09-20T11:31:45+08:00",
   "majorTasks": [
     {
       "id": "M00",
@@ -95,6 +95,17 @@
           "owner": "codex",
           "startedAt": "2026-09-20T10:55:59+08:00",
           "completedAt": "2026-09-20T11:04:24+08:00"
+        },
+        {
+          "id": "M00-T09",
+          "title": "统一跨 Linux Docker Compose 部署",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "项目只保留一套标准 compose.yml 编排 video-service、model-converter、PostgreSQL 与 MediaMTX；根目录提供统一 .env.example，deploy/deploy.sh 作为通用部署入口；CentOS/RHEL 差异仅保留在宿主机说明中；旧 compose.centos.yml、docker-compose.yml 与 deploy/centos 部署文件不再作为独立编排；自动化测试和文档引用全部更新",
+          "record": "harness/records/M00/M00-T09.md",
+          "owner": "codex",
+          "startedAt": "2026-09-20T11:26:04+08:00",
+          "completedAt": "2026-09-20T11:31:45+08:00"
         }
       ]
     },

@@ -1,4 +1,4 @@
-name: aiyolo
+name: ${COMPOSE_PROJECT_NAME:-aiyolo}
 
 x-logging: &default-logging
   driver: json-file
@@ -41,10 +41,11 @@ services:
       - "${MEDIA_BIND_ADDRESS:-0.0.0.0}:${MEDIA_WEBRTC_UDP_PORT:-8189}:8189/udp"
       - "${MEDIA_BIND_ADDRESS:-0.0.0.0}:${MEDIA_LLHLS_PORT:-8888}:8888"
       - "${DIAGNOSTIC_BIND_ADDRESS:-127.0.0.1}:${DIAGNOSTIC_RTSP_PORT:-8554}:8554"
+      - "${SRT_BIND_ADDRESS:-127.0.0.1}:${SRT_PORT:-8890}:8890/udp"
     expose:
       - "9997"
     volumes:
-      - ./deploy/mediamtx/mediamtx.yml.example:/mediamtx.yml:ro,Z
+      - "${MEDIAMTX_CONFIG:-./deploy/mediamtx/mediamtx.yml.example}:/mediamtx.yml:ro,Z"
     healthcheck:
       test: ["CMD", "/mediamtx", "--version"]
       interval: 10s
@@ -102,7 +103,7 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      DEPLOYMENT_ENV: production
+      DEPLOYMENT_ENV: "${DEPLOYMENT_ENV:-production}"
       HOST: 0.0.0.0
       PORT: "8080"
       DATABASE_URL: "${DATABASE_URL:?Set DATABASE_URL in the production env file}"
@@ -111,8 +112,8 @@ services:
       ADMIN_TOKEN: "${ADMIN_TOKEN:?Set ADMIN_TOKEN in the production env file}"
       MOBILE_TOKEN: "${MOBILE_TOKEN:?Set MOBILE_TOKEN in the production env file}"
       AUTH_SESSION_DAYS: "${AUTH_SESSION_DAYS:-30}"
-      YOLO_MODEL_PATH: "${YOLO_MODEL_PATH:-/models/best.pt}"
-      REQUIRE_YOLO_MODEL: "${REQUIRE_YOLO_MODEL:-true}"
+      YOLO_MODEL_PATH: "${YOLO_MODEL_PATH:-/models/converted/yolo11n_640.onnx}"
+      REQUIRE_YOLO_MODEL: "${REQUIRE_YOLO_MODEL:-false}"
       YOLO_CONFIDENCE: "${YOLO_CONFIDENCE:-0.25}"
       YOLO_IMGSZ: "${YOLO_IMGSZ:-640}"
       YOLO_DEVICE: "${YOLO_DEVICE:-auto}"

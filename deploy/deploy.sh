@@ -2,9 +2,9 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/../.." && pwd)"
-ENV_FILE="${AIYOLO_ENV_FILE:-${SCRIPT_DIR}/.env}"
-COMPOSE_FILE="${PROJECT_ROOT}/compose.centos.yml"
+PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+ENV_FILE="${AIYOLO_ENV_FILE:-${PROJECT_ROOT}/.env}"
+COMPOSE_FILE="${PROJECT_ROOT}/compose.yml"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker is not installed or not available on PATH" >&2
@@ -16,7 +16,7 @@ if ! docker compose version >/dev/null 2>&1; then
 fi
 if [[ ! -f "${ENV_FILE}" ]]; then
   echo "missing environment file: ${ENV_FILE}" >&2
-  echo "copy deploy/centos/.env.example to deploy/centos/.env and replace CHANGE_ME values" >&2
+  echo "copy .env.example to .env and replace CHANGE_ME values" >&2
   exit 1
 fi
 if grep -q 'CHANGE_ME' "${ENV_FILE}"; then
@@ -63,7 +63,7 @@ case "${action}" in
     ;;
   help|*)
     cat <<'EOF'
-Usage: bash deploy/centos/deploy.sh <command>
+Usage: bash deploy/deploy.sh <command>
 
 Commands:
   config             validate Compose and required environment values

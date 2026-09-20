@@ -9,13 +9,21 @@ from app.model_catalog import ModelCatalog
 ROOT = Path(__file__).resolve().parents[1]
 
 
-class CentOSDockerDeploymentTests(unittest.TestCase):
+class DockerDeploymentTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.compose = (ROOT / "compose.centos.yml").read_text(encoding="utf-8")
+        cls.compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
         cls.dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
         cls.converter_dockerfile = (ROOT / "Dockerfile.converter").read_text(encoding="utf-8")
-        cls.env_example = (ROOT / "deploy" / "centos" / ".env.example").read_text(encoding="utf-8")
+        cls.env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+
+    def test_single_canonical_compose_and_deploy_entrypoint(self) -> None:
+        self.assertTrue((ROOT / "compose.yml").is_file())
+        self.assertFalse((ROOT / "compose.centos.yml").exists())
+        self.assertFalse((ROOT / "docker-compose.yml").exists())
+        script = (ROOT / "deploy" / "deploy.sh").read_text(encoding="utf-8")
+        self.assertIn('COMPOSE_FILE="${PROJECT_ROOT}/compose.yml"', script)
+        self.assertIn('ENV_FILE="${AIYOLO_ENV_FILE:-${PROJECT_ROOT}/.env}"', script)
 
     def test_runtime_image_is_non_root_and_self_checking(self) -> None:
         self.assertIn("USER app", self.dockerfile)
@@ -65,6 +73,7 @@ class CentOSDockerDeploymentTests(unittest.TestCase):
         self.assertIn("CONTROL_BIND_ADDRESS:-127.0.0.1", self.compose)
         self.assertIn("DIAGNOSTIC_BIND_ADDRESS:-127.0.0.1", self.compose)
         self.assertIn("MEDIA_WEBRTC_UDP_PORT:-8189}:8189/udp", self.compose)
+        self.assertIn("SRT_BIND_ADDRESS:-127.0.0.1", self.compose)
         self.assertNotIn("5432:5432", self.compose)
         self.assertNotIn("9997:9997", self.compose)
         self.assertIn("read_only: true", self.compose)

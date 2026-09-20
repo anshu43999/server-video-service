@@ -11,6 +11,7 @@ auto.crt
 auto.key
 evidence
 backups
+calibration
 harness
 tests
 docs

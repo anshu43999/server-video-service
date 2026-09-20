@@ -1,6 +1,6 @@
 # 远程模型转换 HTTP 协议
 
-对应任务：`M27-T01`，服务端实现由 `M00-T07` 补齐。调用方是视频服务，提供方可以部署在本机、局域网 GPU/CPU 主机或独立转换服务器。CentOS 生产编排使用同一 Compose 项目中的 `model-converter` 容器，远程 URL 是 HTTP API endpoint，不冒充 Python 路径。
+对应任务：`M27-T01`，服务端实现由 `M00-T07` 补齐。调用方是视频服务，提供方可以部署在本机、局域网 GPU/CPU 主机或独立转换服务器。统一生产编排使用同一 `compose.yml` 项目中的 `model-converter` 容器，远程 URL 是 HTTP API endpoint，不冒充 Python 路径。
 
 ## 配置与秘密
 
@@ -14,7 +14,7 @@
 - `timeout_seconds`: 整个提交、排队、转换和下载流程的总截止时间。
 - `input_size`、`calibration_data`: 与本机转换含义一致。
 
-配置文件、任务快照、日志与 API 只保存环境变量名，不保存或回显令牌值。endpoint 禁止 URL 内凭据、query 和 fragment。跨主机生产环境不得开启明文 HTTP。同一 `compose.centos.yml` 中的调用使用不发布宿主机端口的内部网络和独立 Bearer Token，允许显式开启内部 HTTP；一旦转换服务跨主机或端口被发布，必须改为 HTTPS。
+配置文件、任务快照、日志与 API 只保存环境变量名，不保存或回显令牌值。endpoint 禁止 URL 内凭据、query 和 fragment。跨主机生产环境不得开启明文 HTTP。同一 `compose.yml` 中的调用使用不发布宿主机端口的内部网络和独立 Bearer Token，允许显式开启内部 HTTP；一旦转换服务跨主机或端口被发布，必须改为 HTTPS。
 
 仓库内的提供方实现位于 `converter_service/`，镜像定义为 `Dockerfile.converter`。服务持久化任务、源 PT 与产物到 `converter-data` 卷，校准集通过只读目录挂载；默认单 Worker 串行执行，避免多个导出进程争用内存。API 不返回本机路径、日志或堆栈。
 

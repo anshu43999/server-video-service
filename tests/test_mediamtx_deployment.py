@@ -3,7 +3,7 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPOSE = ROOT / "docker-compose.yml"
+COMPOSE = ROOT / "compose.yml"
 TEMPLATE = ROOT / "deploy" / "mediamtx" / "mediamtx.yml.example"
 
 
