@@ -109,8 +109,6 @@ services:
       DATABASE_URL: "${DATABASE_URL:?Set DATABASE_URL in the production env file}"
       DATABASE_CONNECT_TIMEOUT_SECONDS: "${DATABASE_CONNECT_TIMEOUT_SECONDS:-10}"
       RUN_DATABASE_MIGRATIONS: "${RUN_DATABASE_MIGRATIONS:-true}"
-      ADMIN_TOKEN: "${ADMIN_TOKEN:?Set ADMIN_TOKEN in the production env file}"
-      MOBILE_TOKEN: "${MOBILE_TOKEN:?Set MOBILE_TOKEN in the production env file}"
       AUTH_SESSION_DAYS: "${AUTH_SESSION_DAYS:-30}"
       YOLO_MODEL_PATH: "${YOLO_MODEL_PATH:-/models/converted/yolo11n_640.onnx}"
       REQUIRE_YOLO_MODEL: "${REQUIRE_YOLO_MODEL:-false}"

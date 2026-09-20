@@ -188,6 +188,8 @@ def _credential(request: Request) -> str | None:
 
 
 def _legacy_user(request, required_role: str | None) -> CurrentUser | None:
+    if settings.deployment_env.strip().lower() != "development":
+        return None
     admin = request.headers.get("x-admin-token")
     mobile = request.headers.get("x-video-service-token")
     authorization = request.headers.get("authorization", "")

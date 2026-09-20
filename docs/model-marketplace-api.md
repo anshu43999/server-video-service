@@ -15,10 +15,10 @@
 
 ## 2. 鉴权与安全约束
 
-- 移动端请求使用 `X-Video-Service-Token: <device-token>`。
-- 管理后台或运维工具可使用 `Authorization: Bearer <admin-token>`；服务端部署可以按权限策略限制管理操作。
+- 移动端请求使用账号登录后签发的动态 Session，可通过 `X-Video-Service-Token: <access-token>` 兼容头传递。
+- 管理后台使用同源 HttpOnly Cookie，运维工具可使用 `Authorization: Bearer <access-token>`。
 - 令牌只能出现在请求头，**不得放入 query、path、下载 URL 或日志**。
-- 未配置令牌的开发环境可保持兼容模式；生产环境必须启用鉴权。
+- 开发环境可配置静态 `ADMIN_TOKEN`、`MOBILE_TOKEN` 简化测试；生产环境强制禁用静态客户端令牌并使用动态账号 Session。
 - `modelId` 和 `artifactId` 只允许作为 URL path segment 使用，客户端应进行 percent-encoding。
 - 响应中的路径必须是 API URL 或相对下载地址，不得泄露服务器本机绝对路径。
 
@@ -171,7 +171,7 @@ JSON 错误统一为：
 
 - `GET /api/models` 支持可选的 `scenario` 精确匹配过滤；未知场景返回空数组而不是错误。
 - `GET /api/models/{modelId}` 返回与列表项相同的公开字段，并保留完整 `artifacts` 数组。
-- 目录查询在配置 `ADMIN_TOKEN` 或 `MOBILE_TOKEN` 后必须携带匹配令牌；管理工具可使用 `X-Admin-Token` 或 `Authorization: Bearer`，移动端使用 `X-Video-Service-Token`。
+- 目录查询必须携带有效账号 Session；管理工具使用 Cookie 或 `Authorization: Bearer`，移动端可使用 `X-Video-Service-Token` 兼容头传递动态 Session。静态令牌只在开发环境可用。
 - 服务端从注册表读取文件并执行存在性/哈希检查，但查询响应只返回下载 API URL、大小和 SHA-256，不返回 `models/` 下的本机路径、Manifest 路径或其他本地文件定位信息。
 
 ## 8. 下载实现与运行时保护（M09-T04）
@@ -180,4 +180,4 @@ JSON 错误统一为：
 - 开始传输前再次读取文件大小并计算 SHA-256；文件缺失、大小变化或摘要不一致返回 `409 model_not_available`，不会发送不符合目录契约的字节。
 - 成功响应设置 `Content-Length`、安全的 `Content-Disposition` 文件名和 `X-Model-SHA256`。客户端仍应自行计算下载文件的大小与 SHA-256。
 - 每个服务进程默认最多并发下载 2 个、每个客户端 60 秒最多 10 次。超限返回 `429 rate_limited` 和 `Retry-After`；可通过 `MODEL_DOWNLOAD_MAX_CONCURRENT`、`MODEL_DOWNLOAD_RATE_LIMIT`、`MODEL_DOWNLOAD_RATE_WINDOW_SECONDS`、`MODEL_DOWNLOAD_CHUNK_SIZE` 调整。
-- 令牌只从 `X-Video-Service-Token`、`X-Admin-Token` 或 Bearer 请求头读取，下载 URL 与服务日志不包含令牌。多 worker 部署仍应在反向代理层配置全局带宽/并发限额。
+- Session 可从 Cookie、`X-Video-Service-Token`、`X-Admin-Token` 或 Bearer 请求头读取；生产环境只接受动态 Session。下载 URL 与服务日志不包含令牌。多 worker 部署仍应在反向代理层配置全局带宽/并发限额。

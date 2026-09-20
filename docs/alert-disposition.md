@@ -10,9 +10,9 @@
 
 ## 权限
 
-- `GET /api/alerts`、`GET /api/alerts/{eventId}` 和误报导出允许 `X-Admin-Token` 或
-  `X-Video-Service-Token`，用于后台和移动端只读查看。
-- `POST` 处置接口只允许 `X-Admin-Token`。操作人从 `X-Operator-Id`（兼容
+- `GET /api/alerts`、`GET /api/alerts/{eventId}` 和误报导出允许管理员或操作员动态 Session，
+  移动端可通过 `X-Video-Service-Token` 兼容头传递动态访问令牌。
+- `POST` 处置接口只允许管理员动态 Session。操作人从 `X-Operator-Id`（兼容
   `X-Actor`）读取，不接受请求体中的 actor，避免伪造审计身份。
 
 ## 管理后台告警中心

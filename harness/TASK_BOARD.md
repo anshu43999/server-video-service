@@ -1,7 +1,7 @@
 # Harness任务板
 
 > 本文件由`python harness/harness.py render`生成，请勿手工修改。  
-> 更新时间：2026-09-20T11:31:45+08:00
+> 更新时间：2026-09-20T13:25:06+08:00
 
 状态：`[ ] pending`、`[~] in_progress`、`[!] blocked`、`[x] completed`、`[-] superseded`。
 
@@ -25,6 +25,8 @@
 | [x] | M00-T07 | 部署独立模型转换容器 | 无 | CentOS Compose 可同时启动 video-service、model-converter、PostgreSQL 与 MediaMTX；转换服务实现既有 /v1 转换协议、Bearer 鉴权、幂等提交、异步执行、取消、产物完整性和持久化；视频服务可通过内部网络调用并在下载后本地复验；资源限制、健康检查、配置文档和自动化测试齐全 |
 | [x] | M00-T08 | 随代码分发转换后模型资产 | 无 | Git 仓库仅包含当前转换后的 ONNX、TFLite 与对应 Manifest；任何 PT 源权重、转换任务数据库、缓存、密钥和日志均不进入版本库；资产大小与哈希可验证，许可证状态不提升为生产可发布 |
 | [x] | M00-T09 | 统一跨 Linux Docker Compose 部署 | 无 | 项目只保留一套标准 compose.yml 编排 video-service、model-converter、PostgreSQL 与 MediaMTX；根目录提供统一 .env.example，deploy/deploy.sh 作为通用部署入口；CentOS/RHEL 差异仅保留在宿主机说明中；旧 compose.centos.yml、docker-compose.yml 与 deploy/centos 部署文件不再作为独立编排；自动化测试和文档引用全部更新 |
+| [-] | M00-T10 | 移除静态客户端令牌并启用动态 Session 鉴权 | 无 | 生产部署不再要求或注入 ADMIN_TOKEN、MOBILE_TOKEN；服务端不接受静态客户端令牌；管理端和移动端仅使用账号登录签发的动态 Session；CONVERTER_TOKEN 保持容器间鉴权；测试与部署文档通过 |
+| [x] | M00-T11 | 限制静态客户端令牌仅供开发环境使用 | 无 | 开发环境可继续使用 ADMIN_TOKEN、MOBILE_TOKEN 进行便捷测试；DEPLOYMENT_ENV=production 时静态客户端令牌不可用于 HTTP 或 WebSocket 鉴权且生产 Compose 不注入这两项；动态账号 Session 与 CONVERTER_TOKEN 服务间鉴权保持可用；测试和部署文档通过 |
 
 ## [x] M01 移动端联调协议与真实视频链路
 
@@ -63,6 +65,7 @@
 | [x] | M03-T01 | 实现管理后台鉴权与权限边界 | 无 | 查看、控制、删除和模型配置权限分离，未授权请求被拒绝 |
 | [x] | M03-T02 | 增加服务指标与诊断日志 | M02-T03 | 管理页面或指标端点可查看流状态、延迟、FPS、丢帧、CPU/内存/GPU 和错误 |
 | [x] | M03-T03 | 完成 TLS、限流和消息大小保护 | M03-T01 | 控制接口、WebSocket 输入和输出具备超时、大小、并发和速率限制 |
+| [-] | M03-T04 | 移除静态客户端令牌兼容鉴权 | 无 | 生产部署不再要求或注入 ADMIN_TOKEN、MOBILE_TOKEN；管理端和移动端仅使用账号登录产生的动态 Session；CONVERTER_TOKEN 服务间鉴权保持不变；相关测试和部署文档通过 |
 
 ## [~] M04 生产传输协议与多流扩展
 

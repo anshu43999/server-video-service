@@ -13,14 +13,14 @@
 
 `stream_id`、会话状态和 YOLO 控制语义在 v1 与 v2 之间保持一致。
 
-## 2. 连接与鉴权占位
+## 2. 连接与鉴权
 
 - HTTP 基础地址（控制面）：`http(s)://<server-host>:8080`
 - WebSocket 基础地址（推流与元数据）：`ws(s)://<server-host>:8080`
 - 媒体基础地址（播放）：WHEP `http(s)://<media-host>:8889`、LL-HLS `http(s)://<media-host>:8888`、RTSP `rtsp://<media-host>:8554`
-- 移动端业务接口预留请求头：`X-Video-Service-Token: <device-token>`
-- 管理员接口预留：`Authorization: Bearer <admin-token>`
-- 设置 `ADMIN_TOKEN` 和/或 `MOBILE_TOKEN` 后服务端启用对应鉴权；留空时保持兼容模式。
+- 管理员与移动端先通过账号登录获得动态 Session；管理端可使用 HttpOnly Cookie 或 `Authorization: Bearer <access-token>`。
+- 移动端可通过 `Authorization: Bearer <access-token>`，也可为兼容既有客户端通过 `X-Video-Service-Token: <access-token>` 传递同一个动态 Session。
+- `ADMIN_TOKEN`、`MOBILE_TOKEN` 只允许在 `DEPLOYMENT_ENV=development` 的本机测试中作为静态便捷凭据；生产环境不接受这两个静态 Token。
 - 令牌不得出现在 URL、日志或视频帧中。
 
 ## 3. 编码、尺寸和帧率

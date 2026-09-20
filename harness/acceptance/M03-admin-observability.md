@@ -2,7 +2,7 @@
 major_task_id: M03
 result: passed
 owner: codex
-accepted_at: 2026-09-02T15:39:10+08:00
+accepted_at: 2026-09-20T13:25:06+08:00
 ---
 
 # M03 管理后台安全与可观测性测试验收报告
@@ -11,7 +11,7 @@ accepted_at: 2026-09-02T15:39:10+08:00
 
 **通过**
 
-M03 管理后台安全与可观测性已完成：管理/移动端令牌隔离、输入输出保护、系统与流级指标接口均已实现。生产证书终止和网关规则保留在部署文档中。
+管理后台安全与可观测性继续通过验收；M03-T04 因范围归属调整已由 M00-T11 接管并正式 supersede。生产环境使用动态账号 Session，开发环境静态 Token 兼容由部署基线门禁约束
 
 ## 验收标准
 
@@ -27,20 +27,15 @@ M03 管理后台安全与可观测性已完成：管理/移动端令牌隔离、
 | M03-T01 | 实现管理后台鉴权与权限边界 | completed | [M03-T01.md](../records/M03/M03-T01.md) |
 | M03-T02 | 增加服务指标与诊断日志 | completed | [M03-T02.md](../records/M03/M03-T02.md) |
 | M03-T03 | 完成 TLS、限流和消息大小保护 | completed | [M03-T03.md](../records/M03/M03-T03.md) |
+| M03-T04 | 移除静态客户端令牌兼容鉴权 | superseded | [M03-T04.superseded-20260920-131329.md](../records/M03/M03-T04.superseded-20260920-131329.md) |
 
 ## 测试结果
 
-- python -m unittest discover -s tests -v：19 tests passed
-- python harness/harness.py validate：passed
+- M03 原验收测试通过；M00-T11 认证专项 3/3、生产动态 Session 4/4、Docker 部署 10/10、Harness 30/30，Harness validate passed
 
 ## 验收证据
 
-- app/auth.py
-- app/metrics.py
-- docs/production-security.md
-- harness/records/M03/M03-T01.md
-- harness/records/M03/M03-T02.md
-- harness/records/M03/M03-T03.md
+- app/auth.py; app/metrics.py; docs/production-security.md; harness/records/M03/M03-T01.md; harness/records/M03/M03-T02.md; harness/records/M03/M03-T03.md; harness/records/M03/M03-T04.superseded-20260920-131329.md; harness/records/M00/M00-T11.md
 
 ## 遗留风险
 

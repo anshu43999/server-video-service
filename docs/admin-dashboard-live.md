@@ -4,10 +4,10 @@
 
 ```http
 GET /api/dashboard/stats?range=today
-X-Admin-Token: <ADMIN_TOKEN>
+Authorization: Bearer <dynamic-access-token>
 ```
 
-`range` 支持 `today`、`7d` 和 `30d`。配置了 `ADMIN_TOKEN` 时必须通过 `X-Admin-Token` 携带管理员令牌；接口不会把令牌写入 URL 或响应。
+`range` 支持 `today`、`7d` 和 `30d`。管理页面同源访问时使用登录后的 HttpOnly Session Cookie，运维工具也可通过 Bearer 携带动态访问令牌；接口不会把令牌写入 URL 或响应。开发环境仍可使用 `X-Admin-Token` 携带静态测试令牌。
 
 ## 统计口径
 

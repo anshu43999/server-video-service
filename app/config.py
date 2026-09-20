@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    deployment_env: str = "development"
     host: str = "0.0.0.0"
     port: int = 8080
     yolo_model_path: str = "models/yolo11n.pt"

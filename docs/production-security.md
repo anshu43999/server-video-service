@@ -15,8 +15,20 @@ App -- HTTPS/WSS --> TLS reverse proxy -- HTTP/WS --> video-service:8080
 - `MAX_INPUT_FPS` 默认 30，超过后丢弃当前帧并记录错误；
 - 单帧消息最大 5 MiB，最大有效尺寸 1920×1080；
 - `MAX_OUTPUT_SUBSCRIBERS` 默认 4，超过后 HTTP 返回 429 或 WebSocket 关闭码 4429；
-- 生产环境设置 `ADMIN_TOKEN`、`MOBILE_TOKEN`，并通过网关限制来源 IP、请求速率和连接时长；
+- 生产环境使用账号登录签发的动态 Session；不得设置开发专用的 `ADMIN_TOKEN`、`MOBILE_TOKEN`，并通过网关限制来源 IP、请求速率和连接时长；
 - 不把令牌放在 URL，日志中不得输出令牌和完整 RTSP 凭据。
+
+## 开发环境静态令牌
+
+本机联调可显式使用以下配置，便于脚本和 WebSocket 测试：
+
+```dotenv
+DEPLOYMENT_ENV=development
+ADMIN_TOKEN=development-admin-token
+MOBILE_TOKEN=development-mobile-token
+```
+
+静态值只在 `DEPLOYMENT_ENV=development` 时参与鉴权。`DEPLOYMENT_ENV=production` 时服务端会忽略静态客户端令牌，生产容器入口还会拒绝携带这两个变量启动；模型转换容器使用的 `CONVERTER_TOKEN` 不受此规则影响。
 
 ## 反向代理示例（Nginx）
 

@@ -27,8 +27,9 @@
   和 delivery IDs，仅负责排队。
 - `GET /api/alerts/delivery/status`（管理令牌）返回通道订阅数、待处理数和最近
   回执；不返回凭据。
-- 管理页 WebSocket 需要 `X-Admin-Token`（当服务配置了 `ADMIN_TOKEN` 时）。
-- App WebSocket 需要 `X-Video-Service-Token`（当服务配置了 `MOBILE_TOKEN` 时）。
+- 管理页 WebSocket 使用管理员动态 Session（同源 Cookie 或 Bearer）。
+- App WebSocket 使用操作员动态 Session，可通过 `X-Video-Service-Token` 兼容头传递该动态访问令牌。
+- 静态 `ADMIN_TOKEN`、`MOBILE_TOKEN` 仅用于开发环境测试，生产环境不接受。
 
 WebSocket 事件形态为：
 

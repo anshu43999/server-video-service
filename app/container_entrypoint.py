@@ -39,8 +39,8 @@ def validate_environment(environ: Mapping[str, str]) -> list[str]:
         errors.append("DATABASE_URL must be a PostgreSQL URL")
 
     for name in ("ADMIN_TOKEN", "MOBILE_TOKEN"):
-        if len(environ.get(name, "")) < 24:
-            errors.append(f"{name} must contain at least 24 characters")
+        if environ.get(name, "").strip():
+            errors.append(f"{name} must not be set in production; use account sessions")
 
     if not _enabled(environ.get("MEDIAMTX_ENABLED"), default=False):
         errors.append("MEDIAMTX_ENABLED must be true")

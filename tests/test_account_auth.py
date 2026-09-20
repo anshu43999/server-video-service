@@ -16,6 +16,7 @@ TEST_DIRECTORY = Path(__file__).resolve().parent
 class AccountAuthApiTests(unittest.TestCase):
     def setUp(self):
         self.old_database_url = database.url
+        self.old_deployment_env = settings.deployment_env
         self.old_admin_token = settings.admin_token
         self.old_mobile_token = settings.mobile_token
         temporary_database = tempfile.NamedTemporaryFile(suffix=".db", dir=TEST_DIRECTORY, delete=False)
@@ -26,6 +27,7 @@ class AccountAuthApiTests(unittest.TestCase):
         Base.metadata.create_all(database.engine)
         settings.admin_token = None
         settings.mobile_token = None
+        settings.deployment_env = "production"
         reset_memory_auth_for_tests()
         self.client = TestClient(app)
 
@@ -34,6 +36,7 @@ class AccountAuthApiTests(unittest.TestCase):
         database.close()
         database.url = self.old_database_url
         self.temp_database_path.unlink(missing_ok=True)
+        settings.deployment_env = self.old_deployment_env
         settings.admin_token = self.old_admin_token
         settings.mobile_token = self.old_mobile_token
 

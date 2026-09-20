@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "server-video-service",
-  "updatedAt": "2026-09-20T11:31:45+08:00",
+  "updatedAt": "2026-09-20T13:25:06+08:00",
   "majorTasks": [
     {
       "id": "M00",
@@ -106,6 +106,30 @@
           "owner": "codex",
           "startedAt": "2026-09-20T11:26:04+08:00",
           "completedAt": "2026-09-20T11:31:45+08:00"
+        },
+        {
+          "id": "M00-T10",
+          "title": "移除静态客户端令牌并启用动态 Session 鉴权",
+          "status": "superseded",
+          "dependsOn": [],
+          "acceptance": "生产部署不再要求或注入 ADMIN_TOKEN、MOBILE_TOKEN；服务端不接受静态客户端令牌；管理端和移动端仅使用账号登录签发的动态 Session；CONVERTER_TOKEN 保持容器间鉴权；测试与部署文档通过",
+          "record": "harness/records/M00/M00-T10.md",
+          "owner": "codex",
+          "startedAt": "2026-09-20T13:13:29+08:00",
+          "supersededReason": "用户明确要求开发环境保留静态 Token，仅在生产环境禁用；原任务的全局移除范围不再适用",
+          "supersededAt": "2026-09-20T13:15:54+08:00",
+          "supersededBy": "M00-T11"
+        },
+        {
+          "id": "M00-T11",
+          "title": "限制静态客户端令牌仅供开发环境使用",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "开发环境可继续使用 ADMIN_TOKEN、MOBILE_TOKEN 进行便捷测试；DEPLOYMENT_ENV=production 时静态客户端令牌不可用于 HTTP 或 WebSocket 鉴权且生产 Compose 不注入这两项；动态账号 Session 与 CONVERTER_TOKEN 服务间鉴权保持可用；测试和部署文档通过",
+          "record": "harness/records/M00/M00-T11.md",
+          "owner": "codex",
+          "startedAt": "2026-09-20T13:15:54+08:00",
+          "completedAt": "2026-09-20T13:22:53+08:00"
         }
       ]
     },
@@ -316,10 +340,22 @@
           "owner": "codex",
           "startedAt": "2026-09-02T15:23:41+08:00",
           "completedAt": "2026-09-02T15:25:43+08:00"
+        },
+        {
+          "id": "M03-T04",
+          "title": "移除静态客户端令牌兼容鉴权",
+          "status": "superseded",
+          "dependsOn": [],
+          "acceptance": "生产部署不再要求或注入 ADMIN_TOKEN、MOBILE_TOKEN；管理端和移动端仅使用账号登录产生的动态 Session；CONVERTER_TOKEN 服务间鉴权保持不变；相关测试和部署文档通过",
+          "record": "harness/records/M03/M03-T04.md",
+          "owner": "codex",
+          "supersededReason": "该改动直接影响统一 Docker 部署基线，改由 M00-T10 接管，避免 M03 父任务的历史 M00 验收依赖阻止执行",
+          "supersededAt": "2026-09-20T13:13:29+08:00",
+          "supersededBy": "M00-T10"
         }
       ],
       "startedAt": "2026-09-02T15:21:34+08:00",
-      "completedAt": "2026-09-02T15:39:10+08:00"
+      "completedAt": "2026-09-20T13:25:06+08:00"
     },
     {
       "id": "M04",

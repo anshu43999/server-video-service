@@ -29,7 +29,7 @@ chmod 0600 .env
 编辑 `.env`，必须替换全部 `CHANGE_ME`：
 
 - `POSTGRES_PASSWORD` 与 `DATABASE_URL` 中的密码必须一致；URL 中的保留字符需要百分号编码。
-- `ADMIN_TOKEN`、`MOBILE_TOKEN` 使用不同的随机值，至少 24 字符，建议用 `openssl rand -hex 32` 分别生成。
+- 不要在生产 `.env` 中设置 `ADMIN_TOKEN` 或 `MOBILE_TOKEN`。生产环境通过 `/api/auth/setup`、`/api/auth/login` 签发动态账号 Session；容器入口会拒绝误配置的静态客户端令牌。
 - `MEDIA_PUBLIC_HOST` 填 App 实际可访问的服务器 DNS 名或 IP，不能填 `127.0.0.1`。
 - `MODEL_MOUNT_PATH` 默认 `./models`，容器内以只读方式挂载到 `/models`。
 - `YOLO_MODEL_PATH` 预留为转换后的 ONNX 路径；当前运行镜像未安装 ONNX Runtime，因此默认 `REQUIRE_YOLO_MODEL=false`。需要服务器 ONNX 推理时先补充 `requirements-onnx.txt`，再改为 `true`。
@@ -66,11 +66,11 @@ sudo firewall-cmd --permanent --add-port=8189/udp
 sudo firewall-cmd --reload
 ```
 
-公网部署必须在 8080 前配置 Nginx/Caddy/负载均衡器，启用 HTTPS、鉴权、限流和访问日志。WHEP/LL-HLS 也应通过 MediaMTX 原生 TLS 或独立媒体反向代理启用 HTTPS；在 TLS 完成前只应在受信任内网使用 `MEDIA_PUBLIC_SCHEME=http`。跨 NAT 的公网 WebRTC 还需要按实际拓扑部署 STUN/TURN，当前 Compose 不宣称已解决 NAT 穿透。
+公网部署必须在 8080 前配置 Nginx/Caddy/负载均衡器，启用 HTTPS、动态账号 Session 鉴权、限流和访问日志。WHEP/LL-HLS 也应通过 MediaMTX 原生 TLS 或独立媒体反向代理启用 HTTPS；在 TLS 完成前只应在受信任内网使用 `MEDIA_PUBLIC_SCHEME=http`。跨 NAT 的公网 WebRTC 还需要按实际拓扑部署 STUN/TURN，当前 Compose 不宣称已解决 NAT 穿透。
 
 ## 4. 启动和验收
 
-部署脚本会先执行 `docker compose config --quiet`，不会把展开后的密钥打印到终端；后端入口会再次校验数据库、令牌、公共播放地址、模型和转换接线，然后运行 Alembic 迁移。转换容器会校验独立令牌，并以单 Worker、单转换任务串行执行。
+部署脚本会先执行 `docker compose config --quiet`，不会把展开后的密钥打印到终端；后端入口会再次校验数据库、公共播放地址、模型和转换接线，并确认生产环境未启用开发静态客户端令牌，然后运行 Alembic 迁移。转换容器会校验独立的 `CONVERTER_TOKEN`，并以单 Worker、单转换任务串行执行。
 
 ```bash
 cd /opt/aiyolo/server-video-service

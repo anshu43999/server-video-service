@@ -23,6 +23,10 @@ if grep -q 'CHANGE_ME' "${ENV_FILE}"; then
   echo "the environment file still contains CHANGE_ME placeholders" >&2
   exit 1
 fi
+if grep -Eq '^[[:space:]]*(ADMIN_TOKEN|MOBILE_TOKEN)[[:space:]]*=' "${ENV_FILE}"; then
+  echo "ADMIN_TOKEN and MOBILE_TOKEN are development-only and must be removed from the production environment file" >&2
+  exit 1
+fi
 
 compose() {
   docker compose \
