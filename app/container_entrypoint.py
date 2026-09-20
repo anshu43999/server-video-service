@@ -7,6 +7,8 @@ import sys
 from typing import Mapping
 from urllib.parse import urlparse
 
+from .model_seed import ModelSeedError, seed_model_catalog
+
 
 TRUE_VALUES = {"1", "true", "yes", "on"}
 
@@ -73,6 +75,23 @@ def main() -> None:
         for error in errors:
             print(f"configuration error: {error}", file=sys.stderr)
         raise SystemExit(78)
+
+    seed_path = os.environ.get("MODEL_SEED_PATH", "").strip()
+    if seed_path:
+        try:
+            result = seed_model_catalog(
+                Path(seed_path),
+                Path(__file__).resolve().parents[1] / "models",
+            )
+        except ModelSeedError as exc:
+            print(f"model seed error: {exc}", file=sys.stderr)
+            raise SystemExit(78) from exc
+        print(
+            "model seed synchronized: "
+            f"imported={result.imported_models} "
+            f"preserved={result.preserved_models} "
+            f"copied_files={result.copied_files}"
+        )
 
     if os.environ.get("DATABASE_URL") and _enabled(
         os.environ.get("RUN_DATABASE_MIGRATIONS"), default=True

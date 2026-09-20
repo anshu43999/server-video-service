@@ -42,6 +42,8 @@ chmod 0600 .env
 
 Dockerfile 不复制 `.env`、密钥、校准数据或历史日志。模型市场数据和上传产物写入 `model-data` 卷；仓库中的转换资产和外部交付模型通过 `/models` 只读挂载。
 
+视频服务每次启动都会校验 `/models/registry.json`，并将尚未登记的 Git 模型及其已校验产物增量导入 `model-data` 卷。导入以 `modelId` 为键，已有模型、文件和当前激活选择不会被覆盖；同一路径存在不同内容时服务会拒绝启动并报告冲突。该流程对已有 `model-data` 卷同样生效，因此升级时不需要也不应删除模型卷。自备模型目录没有注册表时跳过导入，不影响仅提供原始视频的部署。
+
 部分仍使用旧版 Docker Engine 默认 seccomp 配置的 CentOS/RHEL 主机会阻止 PostgreSQL 16 创建 `postmaster.pid` 或 WAL 临时文件，并返回 `Operation not permitted`。统一 Compose 仅对不发布宿主机端口、只连接内部 `control` 网络的 `postgres` 容器设置 `seccomp=unconfined` 兼容项，同时保留 `no-new-privileges`。视频服务、转换服务和 MediaMTX 继续使用默认 seccomp。该配置避免不同 Linux 主机首次初始化数据库时出现环境相关失败；主机仍应及时升级内核和 Docker Engine。
 
 ## 3. 网络和防火墙

@@ -41,6 +41,7 @@ class DockerDeploymentTests(unittest.TestCase):
         catalog = ModelCatalog(registry)
         catalog.validate_startup()
         self.assertEqual([], catalog.list_models())
+        self.assertIn("MODEL_SEED_PATH: /models", self.compose)
 
     def test_compose_has_database_media_and_application_health_gates(self) -> None:
         for service in ("postgres:", "mediamtx:", "model-converter:", "video-service:"):
