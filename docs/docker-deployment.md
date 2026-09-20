@@ -50,7 +50,7 @@ Dockerfile 不复制 `.env`、密钥、校准数据或历史日志。模型市�
 
 | 端口 | 协议 | 用途 | 默认暴露 |
 |---|---|---|---|
-| 8080 | TCP | FastAPI/管理后台 | 仅 `127.0.0.1`，由 TLS 网关反代 |
+| 18080 | TCP | FastAPI/管理后台 | `.env.example` 直接 HTTP 部署时对外监听，必须用安全组或防火墙限制来源 |
 | 8889 | TCP | WebRTC/WHEP 信令 | 对 App 网络开放 |
 | 8189 | UDP | WebRTC 媒体 | 对 App 网络开放 |
 | 8888 | TCP | LL-HLS 回退 | 对 App 网络开放 |
@@ -59,11 +59,12 @@ Dockerfile 不复制 `.env`、密钥、校准数据或历史日志。模型市�
 | 9997 | TCP | MediaMTX API | 不发布到主机 |
 | 8090 | TCP | 模型转换 HTTP API | 仅 Compose 内部网络，不发布到主机 |
 
-如果宿主机的 `127.0.0.1:8080` 已被其他服务占用，只修改 `.env` 中的 `CONTROL_PORT`（例如 `18080`），无需改 Compose；反向代理上游同步指向新的本机端口。媒体端口冲突时同理修改对应的 `MEDIA_*_PORT`，但必须同步更新防火墙和客户端地址。
+`.env.example` 面向当前直接 HTTP 联调场景，使用 `CONTROL_BIND_ADDRESS=0.0.0.0` 和 `CONTROL_PORT=18080`。如果部署了 Nginx/Caddy/TLS 网关，应将控制面改回仅本机绑定，并让网关上游指向该端口。媒体端口冲突时修改对应的 `MEDIA_*_PORT`，同时更新防火墙和客户端地址。未提供 `.env` 覆盖时，Compose 仍使用仅本机 `8080` 作为安全回退值。
 
-按实际来源网段收紧防火墙；下面示例只展示需要放行的媒体端口：
+按实际来源网段收紧防火墙；下面示例展示直接 HTTP 联调需要放行的端口：
 
 ```bash
+sudo firewall-cmd --permanent --add-port=18080/tcp
 sudo firewall-cmd --permanent --add-port=8889/tcp
 sudo firewall-cmd --permanent --add-port=8888/tcp
 sudo firewall-cmd --permanent --add-port=8189/udp
@@ -86,7 +87,7 @@ bash deploy/deploy.sh status
 预期四个服务最终均为 `healthy`。从服务器本机验证：
 
 ```bash
-curl --fail http://127.0.0.1:8080/healthz
+curl --fail http://127.0.0.1:18080/healthz
 docker compose --env-file .env -f compose.yml ps
 ```
 

@@ -125,6 +125,14 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertTrue(placeholder_lines)
         self.assertTrue(all(not line.lstrip().startswith("#") for line in placeholder_lines))
 
+    def test_example_is_ready_for_direct_http_deployment(self) -> None:
+        self.assertIn("CONTROL_BIND_ADDRESS=0.0.0.0", self.env_example)
+        self.assertIn("CONTROL_PORT=18080", self.env_example)
+        self.assertIn("MEDIA_BIND_ADDRESS=0.0.0.0", self.env_example)
+        self.assertNotIn("127.0.0.1", self.env_example)
+        self.assertNotIn("DIAGNOSTIC_BIND_ADDRESS=", self.env_example)
+        self.assertNotIn("SRT_BIND_ADDRESS=", self.env_example)
+
 
 if __name__ == "__main__":
     unittest.main()
