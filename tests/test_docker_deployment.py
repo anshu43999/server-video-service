@@ -80,6 +80,10 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertNotIn("9997:9997", self.compose)
         self.assertIn("read_only: true", self.compose)
         self.assertIn("no-new-privileges:true", self.compose)
+        postgres_block = self.compose.split("  postgres:", 1)[1].split("\n  mediamtx:", 1)[0]
+        self.assertIn("seccomp=unconfined", postgres_block)
+        self.assertIn("no-new-privileges:true", postgres_block)
+        self.assertEqual(1, self.compose.count("seccomp=unconfined"))
         self.assertIn('max-size: "20m"', self.compose)
 
     def test_production_environment_rejects_missing_security_settings(self) -> None:

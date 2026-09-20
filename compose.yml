@@ -25,6 +25,10 @@ services:
     stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true
+      # Older Docker Engine seccomp profiles can block PostgreSQL 16 file
+      # syscalls with EPERM during initdb. Scope the compatibility exception
+      # to this internal-only database container.
+      - seccomp=unconfined
     logging: *default-logging
     networks:
       - control

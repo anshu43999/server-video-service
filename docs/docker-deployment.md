@@ -42,6 +42,8 @@ chmod 0600 .env
 
 Dockerfile 不复制 `.env`、密钥、校准数据或历史日志。模型市场数据和上传产物写入 `model-data` 卷；仓库中的转换资产和外部交付模型通过 `/models` 只读挂载。
 
+部分仍使用旧版 Docker Engine 默认 seccomp 配置的 CentOS/RHEL 主机会阻止 PostgreSQL 16 创建 `postmaster.pid` 或 WAL 临时文件，并返回 `Operation not permitted`。统一 Compose 仅对不发布宿主机端口、只连接内部 `control` 网络的 `postgres` 容器设置 `seccomp=unconfined` 兼容项，同时保留 `no-new-privileges`。视频服务、转换服务和 MediaMTX 继续使用默认 seccomp。该配置避免不同 Linux 主机首次初始化数据库时出现环境相关失败；主机仍应及时升级内核和 Docker Engine。
+
 ## 3. 网络和防火墙
 
 默认端口策略：
@@ -56,6 +58,8 @@ Dockerfile 不复制 `.env`、密钥、校准数据或历史日志。模型市�
 | 5432 | TCP | PostgreSQL | 不发布到主机 |
 | 9997 | TCP | MediaMTX API | 不发布到主机 |
 | 8090 | TCP | 模型转换 HTTP API | 仅 Compose 内部网络，不发布到主机 |
+
+如果宿主机的 `127.0.0.1:8080` 已被其他服务占用，只修改 `.env` 中的 `CONTROL_PORT`（例如 `18080`），无需改 Compose；反向代理上游同步指向新的本机端口。媒体端口冲突时同理修改对应的 `MEDIA_*_PORT`，但必须同步更新防火墙和客户端地址。
 
 按实际来源网段收紧防火墙；下面示例只展示需要放行的媒体端口：
 

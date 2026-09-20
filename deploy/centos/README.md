@@ -11,6 +11,8 @@ CentOS/RHEL 系宿主机仅需额外处理以下事项：
 3. 保持 Compose 挂载中的 `:Z`，让 Docker 为 bind mount 设置 SELinux 标签；
 4. 通过 systemd 启用 Docker：`sudo systemctl enable --now docker`。
 
+旧版 Docker Engine 的默认 seccomp 配置可能让 PostgreSQL 16 初始化时对 `postmaster.pid` 或 `pg_wal` 写入返回 `Operation not permitted`。根目录统一 `compose.yml` 已将 `seccomp=unconfined` 例外限制在不发布 5432、只加入内部控制网络的 PostgreSQL 容器，并保留 `no-new-privileges`；其他服务仍使用默认 seccomp。该兼容项不能替代主机 Docker Engine 与内核升级。
+
 CentOS Stream 9 / Rocky Linux 9 / AlmaLinux 9 安装示例：
 
 ```bash

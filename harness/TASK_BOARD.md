@@ -1,7 +1,7 @@
 # Harness任务板
 
 > 本文件由`python harness/harness.py render`生成，请勿手工修改。  
-> 更新时间：2026-09-20T13:25:06+08:00
+> 更新时间：2026-09-20T14:12:10+08:00
 
 状态：`[ ] pending`、`[~] in_progress`、`[!] blocked`、`[x] completed`、`[-] superseded`。
 
@@ -27,6 +27,7 @@
 | [x] | M00-T09 | 统一跨 Linux Docker Compose 部署 | 无 | 项目只保留一套标准 compose.yml 编排 video-service、model-converter、PostgreSQL 与 MediaMTX；根目录提供统一 .env.example，deploy/deploy.sh 作为通用部署入口；CentOS/RHEL 差异仅保留在宿主机说明中；旧 compose.centos.yml、docker-compose.yml 与 deploy/centos 部署文件不再作为独立编排；自动化测试和文档引用全部更新 |
 | [-] | M00-T10 | 移除静态客户端令牌并启用动态 Session 鉴权 | 无 | 生产部署不再要求或注入 ADMIN_TOKEN、MOBILE_TOKEN；服务端不接受静态客户端令牌；管理端和移动端仅使用账号登录签发的动态 Session；CONVERTER_TOKEN 保持容器间鉴权；测试与部署文档通过 |
 | [x] | M00-T11 | 限制静态客户端令牌仅供开发环境使用 | 无 | 开发环境可继续使用 ADMIN_TOKEN、MOBILE_TOKEN 进行便捷测试；DEPLOYMENT_ENV=production 时静态客户端令牌不可用于 HTTP 或 WebSocket 鉴权且生产 Compose 不注入这两项；动态账号 Session 与 CONVERTER_TOKEN 服务间鉴权保持可用；测试和部署文档通过 |
+| [x] | M00-T12 | 兼容旧版 Docker seccomp 的 PostgreSQL 部署 | 无 | 统一 compose.yml 在旧版 CentOS/Docker 默认 seccomp 阻止 PostgreSQL 16 初始化时仍可启动；兼容例外仅作用于 postgres，保留 no-new-privileges、内部网络和不发布 5432；部署测试、文档和 Harness 校验通过 |
 
 ## [x] M01 移动端联调协议与真实视频链路
 
