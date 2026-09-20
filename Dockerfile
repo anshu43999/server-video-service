@@ -16,12 +16,13 @@ RUN apt-get update \
     && groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --home-dir /app --no-create-home app
 
-COPY requirements-yolo.txt ./
-RUN pip install --no-cache-dir -r requirements-yolo.txt
+COPY requirements.txt requirements-yolo.txt requirements-verifier.txt ./
+RUN pip install --no-cache-dir -r requirements-yolo.txt -r requirements-verifier.txt
 
 COPY --chown=app:app app ./app
 COPY --chown=app:app alembic ./alembic
 COPY --chown=app:app alembic.ini run.py ./
+COPY --chown=app:app tools/conversion_worker.py ./tools/conversion_worker.py
 COPY --chown=app:app deploy/container-models ./models
 RUN mkdir -p /app/evidence && chown app:app /app/evidence
 

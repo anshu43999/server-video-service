@@ -122,7 +122,7 @@ docker compose up --build
 
 ## CentOS 服务器部署
 
-CentOS Stream 9 / RHEL 9 兼容服务器使用独立生产编排 `compose.centos.yml`，包含后端、PostgreSQL 和 MediaMTX，并启用配置门禁、自动数据库迁移、健康检查、持久卷、只读模型挂载、非 root 后端进程和日志轮转。部署前先阅读 [CentOS Docker 部署说明](docs/centos-docker-deployment.md)：
+CentOS Stream 9 / RHEL 9 兼容服务器使用独立生产编排 `compose.centos.yml`，包含后端、独立模型转换服务、PostgreSQL 和 MediaMTX，并启用配置门禁、自动数据库迁移、健康检查、持久卷、只读模型/校准集挂载、非 root 进程、转换资源限制和日志轮转。部署前先阅读 [CentOS Docker 部署说明](docs/centos-docker-deployment.md)：
 
 ```bash
 cp deploy/centos/.env.example deploy/centos/.env

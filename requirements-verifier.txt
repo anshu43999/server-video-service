@@ -1,0 +1,2 @@
+# The video service verifies downloaded LiteRT artifacts but does not export them.
+ai-edge-litert==2.1.6; platform_system != "Windows"

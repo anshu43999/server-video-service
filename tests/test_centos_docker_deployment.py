@@ -14,6 +14,7 @@ class CentOSDockerDeploymentTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.compose = (ROOT / "compose.centos.yml").read_text(encoding="utf-8")
         cls.dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+        cls.converter_dockerfile = (ROOT / "Dockerfile.converter").read_text(encoding="utf-8")
         cls.env_example = (ROOT / "deploy" / "centos" / ".env.example").read_text(encoding="utf-8")
 
     def test_runtime_image_is_non_root_and_self_checking(self) -> None:
@@ -32,15 +33,32 @@ class CentOSDockerDeploymentTests(unittest.TestCase):
         self.assertEqual([], catalog.list_models())
 
     def test_compose_has_database_media_and_application_health_gates(self) -> None:
-        for service in ("postgres:", "mediamtx:", "video-service:"):
+        for service in ("postgres:", "mediamtx:", "model-converter:", "video-service:"):
             self.assertIn(service, self.compose)
         self.assertIn("image: postgres:16-alpine", self.compose)
         self.assertIn("image: bluenviron/mediamtx:1.20.1", self.compose)
         self.assertIn('test: ["CMD", "/mediamtx", "--version"]', self.compose)
-        self.assertGreaterEqual(self.compose.count("condition: service_healthy"), 2)
+        self.assertGreaterEqual(self.compose.count("condition: service_healthy"), 3)
         self.assertIn("postgres-data:/var/lib/postgresql/data", self.compose)
         self.assertIn("model-data:/app/models", self.compose)
         self.assertIn("evidence-data:/app/evidence", self.compose)
+        self.assertIn("converter-data:/data", self.compose)
+
+    def test_converter_is_internal_isolated_and_resource_bounded(self) -> None:
+        self.assertIn("dockerfile: Dockerfile.converter", self.compose)
+        self.assertIn('CONVERSION_REMOTE_ENDPOINT: "http://model-converter:8090"', self.compose)
+        self.assertIn("AIYOLO_REMOTE_CONVERSION_TOKEN", self.compose)
+        self.assertIn("CONVERTER_TOKEN", self.compose)
+        self.assertIn("CALIBRATION_MOUNT_PATH", self.compose)
+        self.assertIn("mem_limit:", self.compose)
+        self.assertIn("cpus:", self.compose)
+        self.assertNotIn("8090:8090", self.compose)
+        self.assertIn("USER converter", self.converter_dockerfile)
+        self.assertIn("requirements-converter-service.txt", self.converter_dockerfile)
+        self.assertIn("converter_service.healthcheck", self.converter_dockerfile)
+        self.assertNotIn("requirements-convert.txt", self.dockerfile)
+        self.assertIn("requirements-verifier.txt", self.dockerfile)
+        self.assertIn("COPY requirements.txt requirements-yolo.txt requirements-verifier.txt", self.dockerfile)
 
     def test_compose_hardens_mounts_ports_and_logs(self) -> None:
         self.assertIn(":/models:ro,Z", self.compose)
@@ -77,7 +95,7 @@ class CentOSDockerDeploymentTests(unittest.TestCase):
         self.assertEqual([], errors)
 
     def test_example_requires_operator_owned_values(self) -> None:
-        for field in ("POSTGRES_PASSWORD", "DATABASE_URL", "ADMIN_TOKEN", "MOBILE_TOKEN", "MEDIA_PUBLIC_HOST"):
+        for field in ("POSTGRES_PASSWORD", "DATABASE_URL", "ADMIN_TOKEN", "MOBILE_TOKEN", "CONVERTER_TOKEN", "MEDIA_PUBLIC_HOST", "CALIBRATION_MOUNT_PATH", "CONVERSION_CALIBRATION_DATA"):
             self.assertIn(f"{field}=", self.env_example)
         self.assertNotIn("ADMIN_TOKEN=admin", self.env_example)
         placeholder_lines = [line for line in self.env_example.splitlines() if "CHANGE_ME" in line]

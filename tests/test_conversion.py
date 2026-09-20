@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from app.conversion import ConversionConfig, ConversionPreflightError, ConversionService, ProcessRunner
+from app.conversion import ConversionConfig, ConversionPreflightError, ConversionService, ProcessRunner, environment_conversion_config
 
 
 class ConversionTests(unittest.TestCase):
@@ -159,6 +159,29 @@ class ConversionTests(unittest.TestCase):
             remote_verifier_mode="local",
         )
         self.assertEqual(config.remote_endpoint, "http://127.0.0.1:9000")
+
+    def test_container_environment_bootstraps_remote_config_without_persisting_secret(self):
+        values = {
+            "CONVERSION_REMOTE_ENDPOINT": "http://model-converter:8090",
+            "CONVERSION_REMOTE_ALLOW_INSECURE_HTTP": "true",
+            "CONVERSION_VERIFIER_PYTHON": sys.executable,
+            "CONVERSION_CALIBRATION_DATA": "dataset.yaml",
+            "CONVERSION_INPUT_SIZE": "416",
+            "CONVERSION_TIMEOUT_SECONDS": "1200",
+            "CONVERSION_AUTO_CONVERT": "true",
+            "CONVERSION_REMOTE_TOKEN_ENV": "AIYOLO_REMOTE_CONVERSION_TOKEN",
+            "AIYOLO_REMOTE_CONVERSION_TOKEN": "secret-not-part-of-config",
+        }
+        with patch.dict("os.environ", values, clear=True):
+            config = environment_conversion_config()
+            fresh = ConversionService(self.service.root / "environment-only").config()
+        self.assertIsNotNone(config)
+        assert config is not None
+        self.assertEqual("remote", config.mode)
+        self.assertEqual(416, config.input_size)
+        self.assertTrue(config.auto_convert)
+        self.assertEqual(config, fresh)
+        self.assertNotIn("secret-not-part-of-config", json.dumps(config.model_dump()))
 
 
 

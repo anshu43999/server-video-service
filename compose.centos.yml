@@ -60,6 +60,42 @@ services:
       - control
       - media
 
+  model-converter:
+    image: "${MODEL_CONVERTER_IMAGE:-aiyolo-model-converter:local}"
+    build:
+      context: .
+      dockerfile: Dockerfile.converter
+    environment:
+      CONVERTER_HOST: 0.0.0.0
+      CONVERTER_PORT: "8090"
+      CONVERTER_TOKEN: "${CONVERTER_TOKEN:?Set CONVERTER_TOKEN in the production env file}"
+      CONVERTER_ROOT: /data
+      CONVERTER_CALIBRATION_ROOT: /calibration
+      CONVERTER_MAX_UPLOAD_BYTES: "${CONVERTER_MAX_UPLOAD_BYTES:-536870912}"
+      CONVERTER_MAX_QUEUED_JOBS: "${CONVERTER_MAX_QUEUED_JOBS:-20}"
+      CONVERTER_TIMEOUT_SECONDS: "${CONVERTER_TIMEOUT_SECONDS:-3600}"
+    expose:
+      - "8090"
+    volumes:
+      - converter-data:/data
+      - "${CALIBRATION_MOUNT_PATH:?Set CALIBRATION_MOUNT_PATH to the calibration dataset directory}:/calibration:ro,Z"
+    tmpfs:
+      - /tmp:size=${CONVERTER_TMPFS_SIZE:-4g},mode=1777
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    cpus: "${CONVERTER_CPUS:-2.0}"
+    mem_limit: "${CONVERTER_MEMORY_LIMIT:-8g}"
+    shm_size: "${CONVERTER_SHM_SIZE:-1g}"
+    restart: unless-stopped
+    stop_grace_period: 45s
+    logging: *default-logging
+    networks:
+      - control
+      - media
+
   video-service:
     image: "${VIDEO_SERVICE_IMAGE:-aiyolo-video-service:local}"
     build:
@@ -94,6 +130,16 @@ services:
       MEDIAMTX_VIDEO_ENCODER: "${MEDIAMTX_VIDEO_ENCODER:-auto}"
       MODEL_SIGNING_KEY_ID: "${MODEL_SIGNING_KEY_ID:-}"
       MODEL_SIGNING_PRIVATE_KEY_PATH: "${MODEL_SIGNING_PRIVATE_KEY_PATH:-}"
+      AIYOLO_REMOTE_CONVERSION_TOKEN: "${CONVERTER_TOKEN:?Set CONVERTER_TOKEN in the production env file}"
+      CONVERSION_REMOTE_ENDPOINT: "http://model-converter:8090"
+      CONVERSION_REMOTE_TOKEN_ENV: AIYOLO_REMOTE_CONVERSION_TOKEN
+      CONVERSION_REMOTE_ALLOW_INSECURE_HTTP: "true"
+      CONVERSION_REMOTE_POLL_INTERVAL_SECONDS: "${CONVERSION_REMOTE_POLL_INTERVAL_SECONDS:-2}"
+      CONVERSION_VERIFIER_PYTHON: /usr/local/bin/python
+      CONVERSION_CALIBRATION_DATA: "${CONVERSION_CALIBRATION_DATA:?Set CONVERSION_CALIBRATION_DATA to a YAML path relative to the calibration mount}"
+      CONVERSION_INPUT_SIZE: "${CONVERSION_INPUT_SIZE:-640}"
+      CONVERSION_TIMEOUT_SECONDS: "${CONVERTER_TIMEOUT_SECONDS:-3600}"
+      CONVERSION_AUTO_CONVERT: "${CONVERSION_AUTO_CONVERT:-false}"
     ports:
       - "${CONTROL_BIND_ADDRESS:-127.0.0.1}:${CONTROL_PORT:-8080}:8080"
     volumes:
@@ -112,6 +158,8 @@ services:
         condition: service_healthy
       mediamtx:
         condition: service_healthy
+      model-converter:
+        condition: service_healthy
     restart: unless-stopped
     stop_grace_period: 30s
     logging: *default-logging
@@ -123,6 +171,7 @@ volumes:
   postgres-data:
   model-data:
   evidence-data:
+  converter-data:
 
 networks:
   control:

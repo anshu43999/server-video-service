@@ -40,7 +40,7 @@ case "${action}" in
     ;;
   up)
     compose config --quiet
-    compose build --pull video-service
+    compose build --pull video-service model-converter
     compose up -d --remove-orphans
     compose ps
     ;;

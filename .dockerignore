@@ -14,7 +14,8 @@ backups
 harness
 tests
 docs
-tools
+tools/*
+!tools/conversion_worker.py
 tmp*
 .test-*
 models

@@ -8,6 +8,7 @@ import os
 import re
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -63,6 +64,33 @@ class ConversionConfig(BaseModel):
         if not self.python_path:
             raise ValueError("远程转换必须配置 local/WSL Python 用于本地复验")
         return self
+
+
+def environment_conversion_config() -> ConversionConfig | None:
+    endpoint = os.environ.get("CONVERSION_REMOTE_ENDPOINT", "").strip()
+    if not endpoint:
+        return None
+    return ConversionConfig(
+        mode="remote",
+        python_path=os.environ.get("CONVERSION_VERIFIER_PYTHON", sys.executable),
+        input_size=int(os.environ.get("CONVERSION_INPUT_SIZE", "640")),
+        calibration_data=os.environ.get("CONVERSION_CALIBRATION_DATA", ""),
+        timeout_seconds=int(os.environ.get("CONVERSION_TIMEOUT_SECONDS", "3600")),
+        auto_convert=os.environ.get("CONVERSION_AUTO_CONVERT", "false").strip().lower()
+        in {"1", "true", "yes", "on"},
+        remote_endpoint=endpoint,
+        remote_token_env=os.environ.get(
+            "CONVERSION_REMOTE_TOKEN_ENV", "AIYOLO_REMOTE_CONVERSION_TOKEN"
+        ),
+        remote_allow_insecure_http=os.environ.get(
+            "CONVERSION_REMOTE_ALLOW_INSECURE_HTTP", "false"
+        ).strip().lower()
+        in {"1", "true", "yes", "on"},
+        remote_poll_interval_seconds=float(
+            os.environ.get("CONVERSION_REMOTE_POLL_INTERVAL_SECONDS", "2")
+        ),
+        remote_verifier_mode="local",
+    )
 
 
 class ConversionPreflightError(ValueError):
@@ -454,7 +482,9 @@ class ConversionService:
                 if row is not None:
                     return ConversionConfig.model_validate(row.payload)
         path = self.root / "config.json"
-        return ConversionConfig.model_validate_json(path.read_text(encoding="utf-8")) if path.exists() else ConversionConfig()
+        if path.exists():
+            return ConversionConfig.model_validate_json(path.read_text(encoding="utf-8"))
+        return environment_conversion_config() or ConversionConfig()
 
     def configure(self, config: ConversionConfig) -> ConversionConfig:
         # Validate the executable argument now; dependency availability is checked asynchronously.

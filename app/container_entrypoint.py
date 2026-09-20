@@ -52,6 +52,18 @@ def validate_environment(environ: Mapping[str, str]) -> list[str]:
         model_path = Path(environ.get("YOLO_MODEL_PATH", ""))
         if not model_path.is_file():
             errors.append("YOLO_MODEL_PATH must reference a readable model file")
+    converter_endpoint = environ.get("CONVERSION_REMOTE_ENDPOINT", "").strip()
+    if converter_endpoint:
+        token_name = environ.get(
+            "CONVERSION_REMOTE_TOKEN_ENV", "AIYOLO_REMOTE_CONVERSION_TOKEN"
+        )
+        if len(environ.get(token_name, "")) < 24:
+            errors.append(f"{token_name} must contain at least 24 characters")
+        verifier = Path(environ.get("CONVERSION_VERIFIER_PYTHON", ""))
+        if not verifier.is_file():
+            errors.append("CONVERSION_VERIFIER_PYTHON must reference the verifier Python")
+        if not environ.get("CONVERSION_CALIBRATION_DATA", "").strip():
+            errors.append("CONVERSION_CALIBRATION_DATA is required")
     return errors
 
 

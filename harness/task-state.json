@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "server-video-service",
-  "updatedAt": "2026-09-20T09:42:38+08:00",
+  "updatedAt": "2026-09-20T10:16:19+08:00",
   "majorTasks": [
     {
       "id": "M00",
@@ -73,6 +73,17 @@
           "owner": "codex",
           "startedAt": "2026-09-20T09:28:42+08:00",
           "completedAt": "2026-09-20T09:42:38+08:00"
+        },
+        {
+          "id": "M00-T07",
+          "title": "部署独立模型转换容器",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "CentOS Compose 可同时启动 video-service、model-converter、PostgreSQL 与 MediaMTX；转换服务实现既有 /v1 转换协议、Bearer 鉴权、幂等提交、异步执行、取消、产物完整性和持久化；视频服务可通过内部网络调用并在下载后本地复验；资源限制、健康检查、配置文档和自动化测试齐全",
+          "record": "harness/records/M00/M00-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-09-20T09:58:48+08:00",
+          "completedAt": "2026-09-20T10:16:19+08:00"
         }
       ]
     },

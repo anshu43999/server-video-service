@@ -1,7 +1,7 @@
 # Harness任务板
 
 > 本文件由`python harness/harness.py render`生成，请勿手工修改。  
-> 更新时间：2026-09-20T09:42:38+08:00
+> 更新时间：2026-09-20T10:16:19+08:00
 
 状态：`[ ] pending`、`[~] in_progress`、`[!] blocked`、`[x] completed`、`[-] superseded`。
 
@@ -22,6 +22,7 @@
 | [x] | M00-T04 | 实现轻量级 Web 管理后台 | M00-T02, M00-T03 | 管理页面可查看流、实时预览、开关 YOLO、调整参数、创建和删除会话 |
 | [x] | M00-T05 | 建立服务器项目 Harness 与任务看板 | 无 | Harness CLI、任务状态、任务板、测试和验收文档均可校验 |
 | [x] | M00-T06 | CentOS Docker 后端部署 | 无 | CentOS 服务器可通过 Docker Compose 启动 FastAPI、PostgreSQL 与 MediaMTX；具备生产配置校验、非 root 运行、只读模型挂载、业务数据持久化、健康检查、日志轮转、明确端口策略，以及安装、启动、备份、升级和回滚文档；自动化配置测试通过 |
+| [x] | M00-T07 | 部署独立模型转换容器 | 无 | CentOS Compose 可同时启动 video-service、model-converter、PostgreSQL 与 MediaMTX；转换服务实现既有 /v1 转换协议、Bearer 鉴权、幂等提交、异步执行、取消、产物完整性和持久化；视频服务可通过内部网络调用并在下载后本地复验；资源限制、健康检查、配置文档和自动化测试齐全 |
 
 ## [x] M01 移动端联调协议与真实视频链路
 

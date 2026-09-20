@@ -43,7 +43,7 @@ COCO 仅用作用户功能测试模型，不代表业务精度。训练好的 `.
 
 执行方式支持 `wsl`、`local` 和 `remote`。remote 模式的 endpoint、令牌环境变量名、HTTP 开发开关、轮询间隔和本地复验方式可在同一后台页面配置；真实 Bearer 令牌只由服务进程环境提供，页面与配置 API 不接收令牌值。远程协议和部署约束见 `docs/remote-model-conversion.md`。
 
-配置字段 `mode` 目前只有 `wsl` 和 `local`；远程 HTTP 转换服务没有实现，不应填写 URL 冒充 Python 路径。执行器与任务协议已分离，后续可以增加远程适配器。
+配置字段 `mode` 支持 `wsl`、`local` 和 `remote`。CentOS Docker 部署已提供独立 `model-converter` 容器；视频服务通过冻结的远程 HTTP 协议提交任务、轮询、下载并在自身容器中再次执行 LiteRT 张量复验。跨主机部署仍必须配置 HTTPS。
 
 ## 双端产物与当前边界
 
@@ -60,4 +60,4 @@ MODEL_SIGNING_PRIVATE_KEY_PATH=D:/secrets/aiyolo-model-ed25519.pem
 
 私钥必须是未加密 PKCS#8 PEM 格式的 Ed25519 私钥，并位于仓库外的受控路径。未配置或配置无效时，PT 服务端推理和 TFLite 转换仍可完成，但模型保持 `signatureStatus=unsigned`、`androidReady=false`，App 必须拒绝安装。完整协议见 `docs/model-signing-publish.md`。所有新模型仍默认 `releaseEligible=false`；COCO 仅作为内部功能测试模型。
 
-本次不修改 App，也不实现远程转换服务、业务精度验收、正式签名分发或全量设备验证。
+M26 当时不修改 App，也未实现远程转换服务、业务精度验收、正式签名分发或全量设备验证；其中远程转换服务端已由后续 M00-T07 补齐，其余边界不变。
