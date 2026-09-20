@@ -1,0 +1,2 @@
+models/*.json text eol=lf
+models/**/*.json text eol=lf

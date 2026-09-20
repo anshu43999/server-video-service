@@ -605,8 +605,8 @@
           "format": "json",
           "platform": "android",
           "path": "models/local-conversion/c571978fef8b49769da7251d77215e7c/1/android-manifest.json",
-          "sizeBytes": 2299,
-          "sha256": "AA0AD01DF44BD8ECAEA35449CA4E125D3E8F9092E590F245247BF305F5B2E9DA",
+          "sizeBytes": 2171,
+          "sha256": "6914CFB7B600758F13D1D04E9C749E840E7C82EBF72EE1834CE3E03EC7B5B619",
           "contentType": "application/json"
         }
       ],
@@ -693,8 +693,8 @@
           "format": "json",
           "platform": "android",
           "path": "models/local-conversion/504f6437bf584631be14a318474c93bf/4/android-manifest.json",
-          "sizeBytes": 2232,
-          "sha256": "6F7F21A4E6987C754D729DDDBEBFA93A5B8D697397CE265838E67BF6AD8C366B",
+          "sizeBytes": 2135,
+          "sha256": "29C3925E92180EA24A9BB167F82F19D93D3AA9B43673D8A6A79817506EC278DB",
           "contentType": "application/json"
         }
       ],
@@ -783,8 +783,8 @@
           "format": "json",
           "platform": "android",
           "path": "models/local-conversion/4f7ab3b1740f40fd80ca753151ea1710/1/android-manifest.json",
-          "sizeBytes": 2534,
-          "sha256": "D6B5D51DC3C2BC83F09FE29D02FCD4A31BE61A26B03FD7DCDB8BE8BD1A0C32F0",
+          "sizeBytes": 2431,
+          "sha256": "9C191B8D551087FDC7F88DCDCF2D6F58D288A40F5E1BE5C280336A7844A1513E",
           "contentType": "application/json"
         }
       ],
@@ -865,8 +865,8 @@
           "format": "json",
           "platform": "android",
           "path": "models/local-conversion/b90380d250864c7cbb753fe33cf0c0b9/1/android-manifest.json",
-          "sizeBytes": 2402,
-          "sha256": "7DDFE1A85BC573382FCADBF4F47B2040C5A9007EA8AC8594E6D0BE2D3D65D28B",
+          "sizeBytes": 2307,
+          "sha256": "E3BF8352E6E65FEA6E3158DBD393AA6C4925F6270013C5E1502F031ADE7EFB89",
           "contentType": "application/json"
         }
       ],

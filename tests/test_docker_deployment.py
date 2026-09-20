@@ -1,4 +1,7 @@
 from pathlib import Path
+import hashlib
+import json
+import subprocess
 import tempfile
 import unittest
 
@@ -42,6 +45,25 @@ class DockerDeploymentTests(unittest.TestCase):
         catalog.validate_startup()
         self.assertEqual([], catalog.list_models())
         self.assertIn("MODEL_SEED_PATH: /models", self.compose)
+
+    def test_checked_in_seed_artifacts_match_registry(self) -> None:
+        registry = json.loads((ROOT / "models" / "registry.json").read_text(encoding="utf-8"))
+        attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
+        self.assertIn("models/**/*.json text eol=lf", attributes)
+        for model in registry["models"]:
+            for artifact in model["artifacts"]:
+                path = artifact["path"]
+                with self.subTest(path=path):
+                    committed = subprocess.run(
+                        ["git", "show", f"HEAD:{path}"],
+                        cwd=ROOT,
+                        check=True,
+                        capture_output=True,
+                    ).stdout
+                    self.assertEqual(artifact["sizeBytes"], len(committed))
+                    self.assertEqual(
+                        artifact["sha256"].lower(), hashlib.sha256(committed).hexdigest()
+                    )
 
     def test_compose_has_database_media_and_application_health_gates(self) -> None:
         for service in ("postgres:", "mediamtx:", "model-converter:", "video-service:"):
