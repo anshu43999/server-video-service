@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "registryType": "server-video-service-models",
   "updatedAt": "2026-09-17",
-  "activeServerModel": "uploaded-7051800b60ad4c7080d6693367d9c0a9",
+  "activeServerModel": "ultralytics-yolo11n-coco-dev-onnx",
   "models": [
     {
-      "modelId": "ultralytics-yolo11n-coco-dev-pt",
-      "name": "YOLO11n COCO development PT",
+      "modelId": "ultralytics-yolo11n-coco-dev-onnx",
+      "name": "YOLO11n COCO development ONNX",
       "version": "2026.08.20-dev",
       "scenario": "general-detection",
-      "runtime": "server-pt",
+      "runtime": "server-onnx",
       "labels": [
         "person",
         "bicycle",
@@ -95,24 +95,24 @@
       "compatibleDevices": [],
       "artifacts": [
         {
-          "artifactId": "server-pt",
-          "format": "pt",
+          "artifactId": "server-onnx",
+          "format": "onnx",
           "platform": "server",
-          "path": "models/yolo11n.pt",
-          "sizeBytes": 5613764,
-          "sha256": "0EBBC80D4A7680D14987A577CD21342B65ECFD94632BD9A8DA63AE6417644EE1",
+          "path": "models/converted/yolo11n_640.onnx",
+          "sizeBytes": 10701977,
+          "sha256": "F38A71BC93A8D07B9AF5E2082AF665B8B034E8746F096F46345854BBD892B1BB",
           "contentType": "application/octet-stream"
         }
       ],
       "purpose": "development",
-      "format": "pt",
-      "path": "models/yolo11n.pt",
-      "sizeBytes": 5613764,
-      "sha256": "0EBBC80D4A7680D14987A577CD21342B65ECFD94632BD9A8DA63AE6417644EE1",
+      "format": "onnx",
+      "path": "models/converted/yolo11n_640.onnx",
+      "sizeBytes": 10701977,
+      "sha256": "F38A71BC93A8D07B9AF5E2082AF665B8B034E8746F096F46345854BBD892B1BB",
       "inputSize": 640,
       "classCount": 80,
       "labelsPath": "docs/models/yolo11n-coco-labels.txt",
-      "source": "mobile-app/local-models/yolo11n.pt",
+      "source": "models/converted/yolo11n_640_manifest.json",
       "releaseEligible": false,
       "licenseStatus": "internal-development-chain-validation-only",
       "license": {
@@ -498,11 +498,11 @@
       "version": "2026.09.08",
       "scenario": "functional-test",
       "purpose": "development",
-      "format": "pt",
-      "path": "models/local-conversion/uploads/02f1f4d17030499281daa395652e2924/source.pt",
-      "sizeBytes": 5613764,
-      "sha256": "0EBBC80D4A7680D14987A577CD21342B65ECFD94632BD9A8DA63AE6417644EE1",
-      "runtime": "paired-server-pt-android-tflite",
+      "format": "tflite",
+      "path": "models/local-conversion/c571978fef8b49769da7251d77215e7c/1/android.tflite",
+      "sizeBytes": 3085717,
+      "sha256": "98BFD388BC7AD1045BBBA8FE9183253EF2F3D632C0A75D6F55E58F3CFDC6C807",
+      "runtime": "android-tflite",
       "labels": [
         "person",
         "bicycle",
@@ -592,15 +592,6 @@
       ],
       "artifacts": [
         {
-          "artifactId": "server-pt",
-          "format": "pt",
-          "platform": "server",
-          "path": "models/local-conversion/uploads/02f1f4d17030499281daa395652e2924/source.pt",
-          "sizeBytes": 5613764,
-          "sha256": "0EBBC80D4A7680D14987A577CD21342B65ECFD94632BD9A8DA63AE6417644EE1",
-          "contentType": "application/octet-stream"
-        },
-        {
           "artifactId": "android-int8",
           "format": "tflite",
           "platform": "android",
@@ -624,7 +615,7 @@
       "sourceSha256": "0EBBC80D4A7680D14987A577CD21342B65ECFD94632BD9A8DA63AE6417644EE1",
       "source": "administrator-upload",
       "upstreamVersion": "8.4.138",
-      "serverReady": true,
+      "serverReady": false,
       "androidReady": true,
       "androidContract": {
         "input": {
@@ -664,11 +655,11 @@
       "version": "1.0.0",
       "scenario": "PPE",
       "purpose": "business",
-      "format": "pt",
-      "path": "models/local-conversion/uploads/a62acf95d53f4079b1192cebadbf360a/source.pt",
-      "sizeBytes": 5484947,
-      "sha256": "8928D7B8CDDDA7D2DBB146CA53A9B1C18FB90F5FCEF63905ACE720145B7AC5EC",
-      "runtime": "paired-server-pt-android-tflite",
+      "format": "tflite",
+      "path": "models/local-conversion/504f6437bf584631be14a318474c93bf/4/android.tflite",
+      "sizeBytes": 3043670,
+      "sha256": "9F17AF51F33489F865DB1F7C4E31723B78332B2BADE3E82260D335FB3943D53C",
+      "runtime": "android-tflite",
       "labels": [
         "helmet",
         "gloves",
@@ -688,15 +679,6 @@
         "API 27+ (device validation pending)"
       ],
       "artifacts": [
-        {
-          "artifactId": "server-pt",
-          "format": "pt",
-          "platform": "server",
-          "path": "models/local-conversion/uploads/a62acf95d53f4079b1192cebadbf360a/source.pt",
-          "sizeBytes": 5484947,
-          "sha256": "8928D7B8CDDDA7D2DBB146CA53A9B1C18FB90F5FCEF63905ACE720145B7AC5EC",
-          "contentType": "application/octet-stream"
-        },
         {
           "artifactId": "android-int8",
           "format": "tflite",
@@ -721,7 +703,7 @@
       "sourceSha256": "8928D7B8CDDDA7D2DBB146CA53A9B1C18FB90F5FCEF63905ACE720145B7AC5EC",
       "source": "administrator-upload",
       "upstreamVersion": "8.4.138",
-      "serverReady": true,
+      "serverReady": false,
       "androidReady": false,
       "androidConverted": true,
       "signatureStatus": "unsigned",
@@ -763,11 +745,11 @@
       "version": "1.0.0",
       "scenario": "PPE  签名验证",
       "purpose": "business",
-      "format": "pt",
-      "path": "models/local-conversion/uploads/244febd8d11a49da9473fb695bba7bdc/source.pt",
-      "sizeBytes": 5484947,
-      "sha256": "8928D7B8CDDDA7D2DBB146CA53A9B1C18FB90F5FCEF63905ACE720145B7AC5EC",
-      "runtime": "paired-server-pt-android-tflite",
+      "format": "tflite",
+      "path": "models/local-conversion/4f7ab3b1740f40fd80ca753151ea1710/1/android.tflite",
+      "sizeBytes": 3043670,
+      "sha256": "D2CEF780D1097E62CE02A6967DEF4015058A43E314DEF4A43FA646FD21415F11",
+      "runtime": "android-tflite",
       "labels": [
         "helmet",
         "gloves",
@@ -787,15 +769,6 @@
         "API 27+ (device validation pending)"
       ],
       "artifacts": [
-        {
-          "artifactId": "server-pt",
-          "format": "pt",
-          "platform": "server",
-          "path": "models/local-conversion/uploads/244febd8d11a49da9473fb695bba7bdc/source.pt",
-          "sizeBytes": 5484947,
-          "sha256": "8928D7B8CDDDA7D2DBB146CA53A9B1C18FB90F5FCEF63905ACE720145B7AC5EC",
-          "contentType": "application/octet-stream"
-        },
         {
           "artifactId": "android-int8",
           "format": "tflite",
@@ -820,7 +793,7 @@
       "sourceSha256": "8928D7B8CDDDA7D2DBB146CA53A9B1C18FB90F5FCEF63905ACE720145B7AC5EC",
       "source": "administrator-upload",
       "upstreamVersion": "8.4.138",
-      "serverReady": true,
+      "serverReady": false,
       "androidReady": true,
       "androidConverted": true,
       "signatureStatus": "signed",
@@ -862,11 +835,11 @@
       "version": "1.0.0",
       "scenario": "helmet 验证",
       "purpose": "business",
-      "format": "pt",
-      "path": "models/local-conversion/uploads/7051800b60ad4c7080d6693367d9c0a9/source.pt",
-      "sizeBytes": 5480410,
-      "sha256": "E0BA612BBC198E730D29FAF4483B81357447E1C6E1A41A34C196DE6CE26C1D5D",
-      "runtime": "paired-server-pt-android-tflite",
+      "format": "tflite",
+      "path": "models/local-conversion/b90380d250864c7cbb753fe33cf0c0b9/1/android.tflite",
+      "sizeBytes": 3042378,
+      "sha256": "2A99EA63772356DC73596B9611264205BCFEA57421367DAF0C579CCF0E3FC79B",
+      "runtime": "android-tflite",
       "labels": [
         "head",
         "helmet",
@@ -878,15 +851,6 @@
         "API 27+ (device validation pending)"
       ],
       "artifacts": [
-        {
-          "artifactId": "server-pt",
-          "format": "pt",
-          "platform": "server",
-          "path": "models/local-conversion/uploads/7051800b60ad4c7080d6693367d9c0a9/source.pt",
-          "sizeBytes": 5480410,
-          "sha256": "E0BA612BBC198E730D29FAF4483B81357447E1C6E1A41A34C196DE6CE26C1D5D",
-          "contentType": "application/octet-stream"
-        },
         {
           "artifactId": "android-int8",
           "format": "tflite",
@@ -911,7 +875,7 @@
       "sourceSha256": "E0BA612BBC198E730D29FAF4483B81357447E1C6E1A41A34C196DE6CE26C1D5D",
       "source": "administrator-upload",
       "upstreamVersion": "8.4.138",
-      "serverReady": true,
+      "serverReady": false,
       "androidReady": true,
       "androidConverted": true,
       "signatureStatus": "signed",

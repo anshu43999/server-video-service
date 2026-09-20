@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "server-video-service",
-  "updatedAt": "2026-09-20T10:16:19+08:00",
+  "updatedAt": "2026-09-20T11:04:24+08:00",
   "majorTasks": [
     {
       "id": "M00",
@@ -84,6 +84,17 @@
           "owner": "codex",
           "startedAt": "2026-09-20T09:58:48+08:00",
           "completedAt": "2026-09-20T10:16:19+08:00"
+        },
+        {
+          "id": "M00-T08",
+          "title": "随代码分发转换后模型资产",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "Git 仓库仅包含当前转换后的 ONNX、TFLite 与对应 Manifest；任何 PT 源权重、转换任务数据库、缓存、密钥和日志均不进入版本库；资产大小与哈希可验证，许可证状态不提升为生产可发布",
+          "record": "harness/records/M00/M00-T08.md",
+          "owner": "codex",
+          "startedAt": "2026-09-20T10:55:59+08:00",
+          "completedAt": "2026-09-20T11:04:24+08:00"
         }
       ]
     },

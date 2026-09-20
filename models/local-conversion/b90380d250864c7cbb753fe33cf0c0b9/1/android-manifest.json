@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 1,
+  "modelId": "uploaded-7051800b60ad4c7080d6693367d9c0a9",
+  "version": "1.0.0",
+  "purpose": "business",
+  "runtime": {
+    "name": "LiteRT",
+    "version": "2.1.6"
+  },
+  "modelFile": {
+    "repositoryPath": "models/uploaded-7051800b60ad4c7080d6693367d9c0a9/1.0.0/android.tflite",
+    "sizeBytes": 3042378,
+    "sha256": "2a99ea63772356dc73596b9611264205bcfea57421367daf0c579ccf0e3fc79b"
+  },
+  "input": {
+    "width": 640,
+    "height": 640,
+    "layout": "NCHW",
+    "dataType": "float32",
+    "colorOrder": "RGB",
+    "valueRange": [
+      0.0,
+      1.0
+    ],
+    "tensor": {
+      "name": "serving_default_args_0",
+      "shape": [
+        1,
+        3,
+        640,
+        640
+      ],
+      "dataType": "float32",
+      "quantization": [
+        0.0,
+        0
+      ]
+    }
+  },
+  "output": {
+    "layout": "batch,channels,candidates",
+    "boxFormat": "center_x,center_y,width,height",
+    "coordinateSpace": "normalized-input",
+    "classCount": 3,
+    "classScoreRange": [
+      4,
+      6
+    ],
+    "hasObjectnessChannel": false,
+    "requiresNms": true,
+    "decoderVersion": "yolo-v1",
+    "tensor": {
+      "name": "serving_default_output_0_output_dequant",
+      "shape": [
+        1,
+        7,
+        8400
+      ],
+      "dataType": "float32",
+      "quantization": [
+        0.0,
+        0
+      ]
+    }
+  },
+  "labels": [
+    "head",
+    "helmet",
+    "person"
+  ],
+  "labelSha256": "55f9ed59a733a5c0812470b6e7df0d4c03bee5481479127eefd8d7256024ad4f",
+  "quantization": {
+    "scheme": "int8",
+    "inputScale": 0.0,
+    "inputZeroPoint": 0,
+    "outputScale": 0.0,
+    "outputZeroPoint": 0
+  },
+  "license": {
+    "model": "administrator-supplied-review-required",
+    "data": "administrator-supplied-review-required",
+    "distribution": "requires-review"
+  },
+  "source": {
+    "repository": "administrator-upload",
+    "revision": "e0ba612bbc198e730d29faf4483b81357447e1c6e1a41a34c196de6ce26c1d5d"
+  },
+  "minAppVersion": "0.1.0",
+  "releaseEligible": false,
+  "signature": {
+    "algorithm": "Ed25519",
+    "keyId": "internal-dev-2026-01",
+    "signatureBase64": "TsfH4yd3lYJFkGGeRmniFcBbiuPlXhuX1YlaA8rBYa7vtd+FEnMs19VmWniwCbXGCQHigePb3+K3rMkzZE/CBw==",
+    "signedPayloadSha256": "b8bdbfe0b5f5da67533373be67a7f92d5b3ce9104e80d280969ac128fc87b6e2"
+  }
+}
