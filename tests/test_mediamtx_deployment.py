@@ -17,6 +17,8 @@ class MediaMTXDeploymentTests(unittest.TestCase):
         self.assertIn("image: bluenviron/mediamtx:1.20.1", self.compose)
         self.assertGreaterEqual(self.compose.count("restart: unless-stopped"), 2)
         self.assertIn("healthcheck:", self.compose)
+        self.assertIn('test: ["CMD", "/mediamtx", "--version"]', self.compose)
+        self.assertNotIn("wget", self.compose)
         self.assertIn("condition: service_healthy", self.compose)
 
     def test_control_and_media_ports_are_separate(self):

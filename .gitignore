@@ -5,6 +5,8 @@ __pycache__/
 .pytest_cache/
 .test-db/
 .env
+deploy/centos/.env
+backups/
 models/*.pt
 models/*.onnx
 models/*.tflite

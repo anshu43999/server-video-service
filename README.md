@@ -120,6 +120,19 @@ python tools/convert_model.py --weights models/yolo11n.pt --format all --imgsz 6
 docker compose up --build
 ```
 
+## CentOS 服务器部署
+
+CentOS Stream 9 / RHEL 9 兼容服务器使用独立生产编排 `compose.centos.yml`，包含后端、PostgreSQL 和 MediaMTX，并启用配置门禁、自动数据库迁移、健康检查、持久卷、只读模型挂载、非 root 后端进程和日志轮转。部署前先阅读 [CentOS Docker 部署说明](docs/centos-docker-deployment.md)：
+
+```bash
+cp deploy/centos/.env.example deploy/centos/.env
+# 编辑 deploy/centos/.env，替换全部 CHANGE_ME
+bash deploy/centos/deploy.sh config
+bash deploy/centos/deploy.sh up
+```
+
+CentOS Linux 7 已停止维护，不作为生产支持目标。当前开发机没有可用的 Docker CLI 时，只能完成静态配置和单元测试；镜像构建与真实三容器健康检查必须在安装了 Docker Engine/Compose 的 CentOS 服务器执行。
+
 ## API 示例
 
 创建一个等待移动端推送的会话：

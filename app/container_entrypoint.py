@@ -1,0 +1,78 @@
+from __future__ import annotations
+
+import os
+from pathlib import Path
+import subprocess
+import sys
+from typing import Mapping
+from urllib.parse import urlparse
+
+
+TRUE_VALUES = {"1", "true", "yes", "on"}
+
+
+def _enabled(value: str | None, *, default: bool = False) -> bool:
+    if value is None:
+        return default
+    return value.strip().lower() in TRUE_VALUES
+
+
+def _public_http_url(value: str | None) -> bool:
+    if not value:
+        return False
+    parsed = urlparse(value)
+    return (
+        parsed.scheme in {"http", "https"}
+        and bool(parsed.hostname)
+        and parsed.hostname not in {"127.0.0.1", "localhost", "mediamtx"}
+    )
+
+
+def validate_environment(environ: Mapping[str, str]) -> list[str]:
+    """Return production configuration errors without exposing secret values."""
+    if environ.get("DEPLOYMENT_ENV", "development").strip().lower() != "production":
+        return []
+
+    errors: list[str] = []
+    database_url = environ.get("DATABASE_URL", "").strip()
+    if not database_url.startswith(("postgresql://", "postgresql+psycopg://")):
+        errors.append("DATABASE_URL must be a PostgreSQL URL")
+
+    for name in ("ADMIN_TOKEN", "MOBILE_TOKEN"):
+        if len(environ.get(name, "")) < 24:
+            errors.append(f"{name} must contain at least 24 characters")
+
+    if not _enabled(environ.get("MEDIAMTX_ENABLED"), default=False):
+        errors.append("MEDIAMTX_ENABLED must be true")
+    for name in ("MEDIAMTX_WHEP_URL", "MEDIAMTX_LLHLS_URL"):
+        if not _public_http_url(environ.get(name)):
+            errors.append(f"{name} must be a client-reachable public HTTP(S) origin")
+
+    if _enabled(environ.get("REQUIRE_YOLO_MODEL"), default=True):
+        model_path = Path(environ.get("YOLO_MODEL_PATH", ""))
+        if not model_path.is_file():
+            errors.append("YOLO_MODEL_PATH must reference a readable model file")
+    return errors
+
+
+def main() -> None:
+    errors = validate_environment(os.environ)
+    if errors:
+        for error in errors:
+            print(f"configuration error: {error}", file=sys.stderr)
+        raise SystemExit(78)
+
+    if os.environ.get("DATABASE_URL") and _enabled(
+        os.environ.get("RUN_DATABASE_MIGRATIONS"), default=True
+    ):
+        subprocess.run(
+            [sys.executable, "-m", "alembic", "upgrade", "head"],
+            check=True,
+        )
+
+    command = sys.argv[1:] or [sys.executable, "run.py"]
+    os.execvp(command[0], command)
+
+
+if __name__ == "__main__":
+    main()

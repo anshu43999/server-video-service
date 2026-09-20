@@ -20,12 +20,13 @@ services:
       - ./models:/models:ro
     depends_on:
       mediamtx:
-        # Publisher reconnect logic handles the small startup race; health is
-        # still exposed for orchestration/monitoring but is not a hard gate.
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - control
+      # External RTSP/HTTP sources remain reachable through this non-internal
+      # network; host port publication is still controlled above.
+      - media
 
   # Media plane: WHEP/LL-HLS are public playback entry points, while RTSP is
   # intentionally bound to the diagnostic address. The control API remains
@@ -46,7 +47,9 @@ services:
       # generated file for production; deploy/mediamtx/*.yml is gitignored.
       - "${MEDIAMTX_CONFIG:-./deploy/mediamtx/mediamtx.yml.example}:/mediamtx.yml:ro"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9997/v3/paths/list >/dev/null 2>&1 || exit 1"]
+      # The standard image is minimal. Probe its own binary without requiring
+      # a shell or an HTTP client inside the container.
+      test: ["CMD", "/mediamtx", "--version"]
       interval: 10s
       timeout: 3s
       retries: 6

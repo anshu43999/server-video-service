@@ -1,0 +1,130 @@
+name: aiyolo
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-aiyolo}"
+      POSTGRES_USER: "${POSTGRES_USER:-aiyolo}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the production env file}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - control
+
+  mediamtx:
+    image: bluenviron/mediamtx:1.20.1
+    command: ["/mediamtx.yml"]
+    environment:
+      MTX_WEBRTCADDITIONALHOSTS: "${MEDIA_PUBLIC_HOST:?Set MEDIA_PUBLIC_HOST to the server DNS name or public IP}"
+      MTX_WEBRTCALLOWORIGINS: "${MEDIA_ALLOW_ORIGINS:-*}"
+      MTX_HLSALLOWORIGINS: "${MEDIA_ALLOW_ORIGINS:-*}"
+    ports:
+      - "${MEDIA_BIND_ADDRESS:-0.0.0.0}:${MEDIA_WHEP_PORT:-8889}:8889"
+      - "${MEDIA_BIND_ADDRESS:-0.0.0.0}:${MEDIA_WEBRTC_UDP_PORT:-8189}:8189/udp"
+      - "${MEDIA_BIND_ADDRESS:-0.0.0.0}:${MEDIA_LLHLS_PORT:-8888}:8888"
+      - "${DIAGNOSTIC_BIND_ADDRESS:-127.0.0.1}:${DIAGNOSTIC_RTSP_PORT:-8554}:8554"
+    expose:
+      - "9997"
+    volumes:
+      - ./deploy/mediamtx/mediamtx.yml.example:/mediamtx.yml:ro,Z
+    healthcheck:
+      test: ["CMD", "/mediamtx", "--version"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - control
+      - media
+
+  video-service:
+    image: "${VIDEO_SERVICE_IMAGE:-aiyolo-video-service:local}"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DEPLOYMENT_ENV: production
+      HOST: 0.0.0.0
+      PORT: "8080"
+      DATABASE_URL: "${DATABASE_URL:?Set DATABASE_URL in the production env file}"
+      DATABASE_CONNECT_TIMEOUT_SECONDS: "${DATABASE_CONNECT_TIMEOUT_SECONDS:-10}"
+      RUN_DATABASE_MIGRATIONS: "${RUN_DATABASE_MIGRATIONS:-true}"
+      ADMIN_TOKEN: "${ADMIN_TOKEN:?Set ADMIN_TOKEN in the production env file}"
+      MOBILE_TOKEN: "${MOBILE_TOKEN:?Set MOBILE_TOKEN in the production env file}"
+      AUTH_SESSION_DAYS: "${AUTH_SESSION_DAYS:-30}"
+      YOLO_MODEL_PATH: "${YOLO_MODEL_PATH:-/models/best.pt}"
+      REQUIRE_YOLO_MODEL: "${REQUIRE_YOLO_MODEL:-true}"
+      YOLO_CONFIDENCE: "${YOLO_CONFIDENCE:-0.25}"
+      YOLO_IMGSZ: "${YOLO_IMGSZ:-640}"
+      YOLO_DEVICE: "${YOLO_DEVICE:-auto}"
+      YOLO_CLASSES: "${YOLO_CLASSES:-}"
+      MAX_FPS: "${MAX_FPS:-20}"
+      MAX_INPUT_FPS: "${MAX_INPUT_FPS:-30}"
+      MAX_OUTPUT_SUBSCRIBERS: "${MAX_OUTPUT_SUBSCRIBERS:-4}"
+      RTSP_TRANSPORT: tcp
+      MEDIAMTX_ENABLED: "true"
+      MEDIAMTX_RTSP_URL: "rtsp://mediamtx:8554"
+      MEDIAMTX_API_URL: "http://mediamtx:9997"
+      MEDIAMTX_WHEP_URL: "${MEDIA_PUBLIC_SCHEME:-http}://${MEDIA_PUBLIC_HOST}:${MEDIA_WHEP_PORT:-8889}"
+      MEDIAMTX_LLHLS_URL: "${MEDIA_PUBLIC_SCHEME:-http}://${MEDIA_PUBLIC_HOST}:${MEDIA_LLHLS_PORT:-8888}"
+      MEDIAMTX_HTTP_SCHEME: "${MEDIA_PUBLIC_SCHEME:-http}"
+      MEDIAMTX_VIDEO_ENCODER: "${MEDIAMTX_VIDEO_ENCODER:-auto}"
+      MODEL_SIGNING_KEY_ID: "${MODEL_SIGNING_KEY_ID:-}"
+      MODEL_SIGNING_PRIVATE_KEY_PATH: "${MODEL_SIGNING_PRIVATE_KEY_PATH:-}"
+    ports:
+      - "${CONTROL_BIND_ADDRESS:-127.0.0.1}:${CONTROL_PORT:-8080}:8080"
+    volumes:
+      - model-data:/app/models
+      - evidence-data:/app/evidence
+      - "${MODEL_MOUNT_PATH:-./models}:/models:ro,Z"
+    tmpfs:
+      - /tmp:size=1g,mode=1777
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mediamtx:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
+    logging: *default-logging
+    networks:
+      - control
+      - media
+
+volumes:
+  postgres-data:
+  model-data:
+  evidence-data:
+
+networks:
+  control:
+    internal: true
+  media:
