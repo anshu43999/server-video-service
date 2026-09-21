@@ -6,6 +6,7 @@ do not edit managed upload assets by hand. Uploaded dataset contents are
 intentionally ignored by Git, and Docker deployments store them in the
 `calibration-data` named volume.
 
-`builtin/dev8` is the only checked-in exception. It contains project-generated
-synthetic images used to prove that the production converter can complete an
-offline INT8 export. It is not representative data for a business model.
+`builtin/dev8` is the only checked-in exception. It contains the real
+Ultralytics COCO8 smoke-test dataset, including its images, labels and license.
+It proves that the production converter can complete an offline INT8 export,
+but it is not representative data for a business model.

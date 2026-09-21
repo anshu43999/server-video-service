@@ -12,7 +12,7 @@
 - `remote_verifier_mode`: 下载后的复验方式，`wsl` 或 `local`。
 - `python_path`、`distribution`: 复验虚拟环境；即使转换发生在远端也必须配置，避免信任远端自报的 tensor 元数据。
 - `timeout_seconds`: 整个提交、排队、转换和下载流程的总截止时间。
-- `input_size`: 与本机转换含义一致。`calibration_data` 是后台根据校准集 ID 解析出的受控相对 YAML 路径，不由浏览器或普通客户端直接填写；兼容别名 `coco8.yaml` 在转换服务内部解析为镜像自带、带完整性清单的 8 图冒烟测试集，不访问任意路径，也不下载 COCO 图片。
+- `input_size`: 与本机转换含义一致。`calibration_data` 是后台根据校准集 ID 解析出的受控相对 YAML 路径，不由浏览器或普通客户端直接填写；别名 `coco8.yaml` 在转换服务内部解析为镜像自带、带完整性清单的真实 Ultralytics COCO8，不访问任意路径，也不下载数据。
 
 配置文件、任务快照、日志与 API 只保存环境变量名，不保存或回显令牌值。endpoint 禁止 URL 内凭据、query 和 fragment。跨主机生产环境不得开启明文 HTTP。同一 `compose.yml` 中的调用使用不发布宿主机端口的内部网络和独立 Bearer Token，允许显式开启内部 HTTP；一旦转换服务跨主机或端口被发布，必须改为 HTTPS。
 

@@ -33,7 +33,7 @@ chmod 0600 .env
 - `MODEL_MOUNT_PATH` 默认 `./models`，容器内以只读方式挂载到 `/models`。
 - `YOLO_MODEL_PATH` 预留为转换后的 ONNX 路径；当前运行镜像未安装 ONNX Runtime，因此默认 `REQUIRE_YOLO_MODEL=false`。需要服务器 ONNX 推理时先补充 `requirements-onnx.txt`，再改为 `true`。
 - `CONVERTER_TOKEN` 使用第三个独立随机值，只在 Compose 内部网络用于视频服务调用转换服务。
-- `CONVERSION_DEFAULT_CALIBRATION_DATASET_ID` 默认 `coco8-dev`（兼容 ID），对应转换镜像内置的 8 张项目自生成图片，只用于离线验证转换链路。它不是 COCO 图片，也不是业务代表数据。正式模型应先在“模型资产 → 校准集”上传业务图片 ZIP，再到“上传与处理”为转换任务选择对应档案。
+- `CONVERSION_DEFAULT_CALIBRATION_DATASET_ID` 默认 `coco8-dev`，对应转换镜像内置的真实 Ultralytics COCO8（4 张训练图、4 张验证图及标签），只用于离线验证转换链路。镜像保留随数据集提供的许可证；正式模型应先在“模型资产 → 校准集”上传业务图片 ZIP，再到“上传与处理”为转换任务选择对应档案。
 - 校准集元数据写入 PostgreSQL，图片、生成的 YAML 和内容哈希写入 `calibration-data` 命名卷。视频服务读写该卷，转换容器只读挂载到 `/calibration`，无需在宿主机手工创建 `dataset.yaml`。
 - `CALIBRATION_MAX_UPLOAD_BYTES`、`CALIBRATION_MAX_EXPANDED_BYTES` 和 `CALIBRATION_MAX_FILES` 分别限制 ZIP 大小、解压后总量和文件数。
 - `CONVERTER_CPUS`、`CONVERTER_MEMORY_LIMIT`、`CONVERTER_TMPFS_SIZE` 按服务器资源和模型大小调整，避免转换挤占实时视频推理。

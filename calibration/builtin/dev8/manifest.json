@@ -1,56 +1,110 @@
 {
   "schemaVersion": 1,
   "datasetId": "coco8-dev",
-  "name": "内置 8 图转换测试",
-  "license": "Project-generated test fixture; not derived from COCO images",
+  "name": "Ultralytics COCO8 功能测试",
+  "version": "ultralytics-v1",
+  "source": "https://github.com/ultralytics/assets/releases/download/v0.0.0/coco8.zip",
+  "license": "See LICENSE; review Ultralytics and COCO terms before redistribution",
   "purpose": "conversion-smoke-test-only",
-  "contentSha256": "f889fd83d2d7a73b3a4f228ff4739dccbf489e05699b98df3bd97cdcfe9f4937",
+  "imageCount": 8,
+  "sizeBytes": 465139,
+  "contentSha256": "44d2581b3b7e3ba9fae34b030621b9e1bab1ab37c9650ad096682a2ecc4886b0",
   "yamlPath": "dataset.yaml",
   "files": [
     {
+      "path": "LICENSE",
+      "sizeBytes": 35126,
+      "sha256": "c3bc1fd94148c28485e8bab1d5a28edbc8e3870f2bd9be7127c68c8b7a0ea5df"
+    },
+    {
+      "path": "README.md",
+      "sizeBytes": 1145,
+      "sha256": "58b17d7f659684373a07cc86cd5f6d304fccca88ef1fce6e752e58d4854df4bf"
+    },
+    {
       "path": "dataset.yaml",
-      "sizeBytes": 158,
-      "sha256": "9a0557d5b2289f3ad1ddcc2d5e206e4f09cc3545ecb4036daf42088473672ba9"
+      "sizeBytes": 1392,
+      "sha256": "527b2aaad58ec49bdfd64427668358a6b7609ff5f52b83665b12f740f1851038"
     },
     {
-      "path": "images/000001.png",
-      "sizeBytes": 246680,
-      "sha256": "c9bf9a451869ae7600a7e81fb17d38e70828c10516de0042d985709ed18d49fe"
+      "path": "images/train/000000000009.jpg",
+      "sizeBytes": 45073,
+      "sha256": "be0ecc9cacc0150f0a84f6dc098f3e5c526ac85f8a14c1a0d16c2a4eb3d305a6"
     },
     {
-      "path": "images/000002.png",
-      "sizeBytes": 240758,
-      "sha256": "3af2636351a2576fa21667bd2aa58dd2e9c36a9927bbcd0aa2c6721e4e88ceab"
+      "path": "images/train/000000000025.jpg",
+      "sizeBytes": 64972,
+      "sha256": "f7ddff65077bd4e362a890ed13b1cd931fd38882d49bae9e7e53e369e4b4d028"
     },
     {
-      "path": "images/000003.png",
-      "sizeBytes": 218068,
-      "sha256": "baed54428a08e48ef3b83d23e8dc16a770b8b224c9ed26d45d2d8658928d3727"
+      "path": "images/train/000000000030.jpg",
+      "sizeBytes": 22329,
+      "sha256": "52a12b6af76049a23192320610a316b6c1ea8e7d12e083f15c18e1690c506e66"
     },
     {
-      "path": "images/000004.png",
-      "sizeBytes": 228168,
-      "sha256": "22d98d98df3a8c241dfa2a1ec671ebc13467bb22f56d8cf7419768e57c58d1cc"
+      "path": "images/train/000000000034.jpg",
+      "sizeBytes": 72598,
+      "sha256": "8d5334f6c8d3e8b77d50726625eecc6896597f063d3801f1993ffcb9e6b05acb"
     },
     {
-      "path": "images/000005.png",
-      "sizeBytes": 243132,
-      "sha256": "d29307854c841e00dcef47067248e22056486508ef82c35146947fa7c3f901a2"
+      "path": "images/val/000000000036.jpg",
+      "sizeBytes": 49262,
+      "sha256": "4c28394898302bef227834d63498a0fc54e4295f11c590c8a8ebcba51347bc03"
     },
     {
-      "path": "images/000006.png",
-      "sizeBytes": 247801,
-      "sha256": "6ae9aebd533c8b2b1383e316f1654955172c2b1d008d9754f368c4ffdfe3b863"
+      "path": "images/val/000000000042.jpg",
+      "sizeBytes": 42264,
+      "sha256": "c87afb6dfe55db1cada52479ed939a231e030d64f5e3c3eaf7eb1544591f853a"
     },
     {
-      "path": "images/000007.png",
-      "sizeBytes": 241308,
-      "sha256": "0937415dd854db5fffafb51107132ac265b01a7f338154c9011748a2a9125e29"
+      "path": "images/val/000000000049.jpg",
+      "sizeBytes": 30297,
+      "sha256": "86b46022d382f67b0934147fe515e1c3c3f5c04db45045516214b5e3092148e3"
     },
     {
-      "path": "images/000008.png",
-      "sizeBytes": 247456,
-      "sha256": "4adc4734e4691f2afcd29c14f028909276369395e33a112b58c9b6b21183190d"
+      "path": "images/val/000000000061.jpg",
+      "sizeBytes": 99547,
+      "sha256": "6460e4a7cc80e34815aba8910a23152a16a24a416fa598138bd9231cccd413e2"
+    },
+    {
+      "path": "labels/train/000000000009.txt",
+      "sizeBytes": 312,
+      "sha256": "91e0c22ffeffd27ae1c176c38fc534ff4de980c20fafb32922f01dcd407b920e"
+    },
+    {
+      "path": "labels/train/000000000025.txt",
+      "sizeBytes": 78,
+      "sha256": "73e4d0a58416a5814ad3e9d58b6927b3a4898c5a4fa18341d333261ddb215b86"
+    },
+    {
+      "path": "labels/train/000000000030.txt",
+      "sizeBytes": 72,
+      "sha256": "1defb5823f183ade62575a6b4398f2609a4d9cabd428147c887b95e610a831d9"
+    },
+    {
+      "path": "labels/train/000000000034.txt",
+      "sizeBytes": 39,
+      "sha256": "252857cf07883c38308b12ec978323222813ffd0fb9a98bbfe350b44ee1a62e7"
+    },
+    {
+      "path": "labels/val/000000000036.txt",
+      "sizeBytes": 77,
+      "sha256": "638773d69e1348c8d213cc0fdaf4107d170df7811af56f2cce372ca245556149"
+    },
+    {
+      "path": "labels/val/000000000042.txt",
+      "sizeBytes": 35,
+      "sha256": "c0e1ac95cf47310a3de9692cf0505fbf1ddcabceed575a3ecfac3c87f184f168"
+    },
+    {
+      "path": "labels/val/000000000049.txt",
+      "sizeBytes": 328,
+      "sha256": "0c0973cfb10a591266b92769e7cd43686133ea12faaa9d583702bf1c55e126e3"
+    },
+    {
+      "path": "labels/val/000000000061.txt",
+      "sizeBytes": 193,
+      "sha256": "d7988d745a68480c7331b323adeec29adb1b0a4df53b072ed45d9650893eb812"
     }
   ]
 }

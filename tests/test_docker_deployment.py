@@ -103,8 +103,12 @@ class DockerDeploymentTests(unittest.TestCase):
         manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual("coco8-dev", manifest["datasetId"])
         self.assertEqual("conversion-smoke-test-only", manifest["purpose"])
+        self.assertIn("Ultralytics COCO8", manifest["name"])
+        self.assertIn("LICENSE", {item["path"] for item in manifest["files"]})
         images = [item for item in manifest["files"] if item["path"].startswith("images/")]
+        labels = [item for item in manifest["files"] if item["path"].startswith("labels/")]
         self.assertEqual(8, len(images))
+        self.assertEqual(8, len(labels))
         fingerprint = hashlib.sha256()
         for item in manifest["files"]:
             path = root / item["path"]

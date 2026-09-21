@@ -24,8 +24,8 @@ from .database import CalibrationDatasetRecord, DatabaseManager
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 BUILTIN_DATASET_ID = "coco8-dev"
 BUILTIN_YAML = "coco8.yaml"
-BUILTIN_HASH = "f889fd83d2d7a73b3a4f228ff4739dccbf489e05699b98df3bd97cdcfe9f4937"
-BUILTIN_SIZE_BYTES = 1_913_529
+BUILTIN_HASH = "44d2581b3b7e3ba9fae34b030621b9e1bab1ab37c9650ad096682a2ecc4886b0"
+BUILTIN_SIZE_BYTES = 465_139
 
 
 class CalibrationDatasetError(ValueError):
@@ -60,8 +60,8 @@ class CalibrationDatasetCatalog:
     def builtin() -> dict[str, Any]:
         return {
             "datasetId": BUILTIN_DATASET_ID,
-            "name": "内置 8 图转换测试",
-            "version": "project-v1",
+            "name": "Ultralytics COCO8 功能测试",
+            "version": "ultralytics-v1",
             "scenario": "development-only",
             "imageCount": 8,
             "sizeBytes": BUILTIN_SIZE_BYTES,

@@ -172,7 +172,8 @@ class ConverterServiceTests(unittest.TestCase):
         self.assertTrue(runtime.is_file())
         self.assertTrue(runtime.is_relative_to(self.root / "data" / "builtin-calibration"))
         self.assertNotIn("__AIYOLO_BUILTIN_CALIBRATION_ROOT__", runtime.read_text(encoding="utf-8"))
-        self.assertEqual(8, len(list((runtime.parent / "images").glob("*.png"))))
+        self.assertEqual(8, len(list((runtime.parent / "images").glob("**/*.jpg"))))
+        self.assertEqual(8, len(list((runtime.parent / "labels").glob("**/*.txt"))))
         with self.assertRaisesRegex(ValueError, "calibration_data_not_found"):
             self.store.validate_calibration("other-built-in.yaml")
 
