@@ -76,6 +76,7 @@ services:
       CONVERTER_TOKEN: "${CONVERTER_TOKEN:?Set CONVERTER_TOKEN in the production env file}"
       CONVERTER_ROOT: /data
       CONVERTER_CALIBRATION_ROOT: /calibration
+      CONVERTER_BUILTIN_CALIBRATION_MANIFEST: /app/calibration-builtin/manifest.json
       CONVERTER_MAX_UPLOAD_BYTES: "${CONVERTER_MAX_UPLOAD_BYTES:-536870912}"
       CONVERTER_MAX_QUEUED_JOBS: "${CONVERTER_MAX_QUEUED_JOBS:-20}"
       CONVERTER_TIMEOUT_SECONDS: "${CONVERTER_TIMEOUT_SECONDS:-3600}"
@@ -83,7 +84,7 @@ services:
       - "8090"
     volumes:
       - converter-data:/data
-      - "${CALIBRATION_MOUNT_PATH:?Set CALIBRATION_MOUNT_PATH to the calibration dataset directory}:/calibration:ro,Z"
+      - calibration-data:/calibration:ro
     tmpfs:
       - /tmp:size=${CONVERTER_TMPFS_SIZE:-4g},mode=1777
     read_only: true
@@ -140,15 +141,20 @@ services:
       CONVERSION_REMOTE_ALLOW_INSECURE_HTTP: "true"
       CONVERSION_REMOTE_POLL_INTERVAL_SECONDS: "${CONVERSION_REMOTE_POLL_INTERVAL_SECONDS:-2}"
       CONVERSION_VERIFIER_PYTHON: /usr/local/bin/python
-      CONVERSION_CALIBRATION_DATA: "${CONVERSION_CALIBRATION_DATA:?Set CONVERSION_CALIBRATION_DATA to a YAML path relative to the calibration mount}"
+      CONVERSION_DEFAULT_CALIBRATION_DATASET_ID: "${CONVERSION_DEFAULT_CALIBRATION_DATASET_ID:-coco8-dev}"
       CONVERSION_INPUT_SIZE: "${CONVERSION_INPUT_SIZE:-640}"
       CONVERSION_TIMEOUT_SECONDS: "${CONVERTER_TIMEOUT_SECONDS:-3600}"
       CONVERSION_AUTO_CONVERT: "${CONVERSION_AUTO_CONVERT:-false}"
+      CALIBRATION_ROOT: /app/calibration
+      CALIBRATION_MAX_UPLOAD_BYTES: "${CALIBRATION_MAX_UPLOAD_BYTES:-536870912}"
+      CALIBRATION_MAX_EXPANDED_BYTES: "${CALIBRATION_MAX_EXPANDED_BYTES:-2147483648}"
+      CALIBRATION_MAX_FILES: "${CALIBRATION_MAX_FILES:-5000}"
     ports:
       - "${CONTROL_BIND_ADDRESS:-127.0.0.1}:${CONTROL_PORT:-8080}:8080"
     volumes:
       - model-data:/app/models
       - evidence-data:/app/evidence
+      - calibration-data:/app/calibration
       - "${MODEL_MOUNT_PATH:-./models}:/models:ro,Z"
     tmpfs:
       - /tmp:size=1g,mode=1777
@@ -176,6 +182,7 @@ volumes:
   model-data:
   evidence-data:
   converter-data:
+  calibration-data:
 
 networks:
   control:

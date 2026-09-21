@@ -159,6 +159,7 @@ def build_android_manifest(model_id: str, metadata: dict[str, Any], result: dict
             "outputScale": output_quantization[0],
             "outputZeroPoint": output_quantization[1],
         },
+        "calibrationDataset": result.get("calibration_dataset"),
         "license": {
             "model": "administrator-supplied-review-required",
             "data": "administrator-supplied-review-required",

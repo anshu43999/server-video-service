@@ -12,8 +12,10 @@ COCO 仅用作用户功能测试模型，不代表业务精度。训练好的 `.
 4. 上传 Ultralytics 常规目标检测 PT，填写名称、版本、场景与用途。当前不支持分类、分割、姿态和端到端/NMS 内置检测模型。每次上传创建独立模型 ID；名称、版本与两端原始标签保持一致。
 5. PT 验证任务通过后，目录显示模型，按流绑定下拉框可以选择它。可设为**新流默认模型**，已有流不自动切换。
 6. 点击任务上的“生成移动端模型”，或者在配置中开启自动转换。第一版采用已验证的 INT8 导出链，输入支持 640、416、320。已上传版本的输入尺寸固定，修改默认尺寸只影响新上传。
-7. INT8 必须填写校准数据 YAML：COCO 功能测试可使用 `coco8.yaml`，自定义业务模型应提供有代表性的校准图片及 YAML。路径以转换环境为准。首次导出可能需要联网下载校准集或导出依赖。
+7. INT8 必须选择校准集档案。兼容 ID `coco8-dev` 在生产转换镜像中对应项目自生成的内置 8 图冒烟测试集，不依赖下载 COCO 图片；它只验证转换链路，不代表业务数据分布。业务模型应在后台上传包含代表性图片的 ZIP，系统生成 YAML、版本和内容哈希。任务只保存校准集 ID 与不可变快照，不接受任意服务器路径。
 8. 转换完成后验证实际 TFLite 输入、输出和一次预热，再登记 Android 产物与 Manifest。任务失败可查看日志并按当前配置重试。已发布版本不允许覆盖不同内容，应重新上传新版本。
+
+上传过程显示真实的已上传字节百分比。上传完成后，后台任务列表每 4 秒刷新一次：排队任务显示队列位置和等待时长；本地、WSL 与远程任务显示当前阶段、最近活动、已运行时长和状态。导出器无法提供可靠百分比时使用流动的“不确定进度”提示，不伪造数值；远程服务能提供真实上传/下载百分比时才显示具体百分比。
 
 ## 任务与进程
 
@@ -32,10 +34,12 @@ COCO 仅用作用户功能测试模型，不代表业务精度。训练好的 `.
 | 方法与路径 | 功能 |
 |---|---|
 | GET /api/conversion/config | 配置、工作目录与能力 |
-| PUT /api/conversion/config | 保存执行方式、发行版、Python、校准集、输入尺寸、超时和自动转换 |
+| PUT /api/conversion/config | 保存执行方式、发行版、Python、默认校准集、输入尺寸、超时和自动转换 |
+| GET/POST /api/conversion/calibration-datasets | 列出校准集或上传图片 ZIP |
+| GET/DELETE /api/conversion/calibration-datasets/{id} | 查看或安全删除未被引用的校准集版本 |
 | POST /api/conversion/check | 返回 202 与环境检测任务 |
 | POST /api/conversion/uploads?filename=best.pt&name=模型&version=1.0.0&scenario=场景&purpose=development | 二进制 PT 上传，返回 202 与 PT 验证任务 |
-| POST /api/conversion/uploads/{upload_id}/mobile | 创建移动端转换任务 |
+| POST /api/conversion/uploads/{upload_id}/mobile?calibrationDatasetId={id} | 使用指定校准集创建移动端转换任务 |
 | GET /api/conversion/jobs | 最近 100 个任务 |
 | GET /api/conversion/jobs/{id} | 任务状态、结果与错误 |
 | POST /api/conversion/jobs/{id}/retry | 失败/中断任务按当前配置重试 |

@@ -297,8 +297,8 @@ function renderModels(){
   document.querySelectorAll('[data-model-uninstall]').forEach(button=>button.onclick=event=>{event.stopPropagation();requestModelUninstall(button.dataset.modelUninstall);});
   document.querySelectorAll('[data-model-open]').forEach(card=>card.addEventListener('click',event=>{if(event.target.closest('button,select,a'))return;openModelDetails(card.dataset.modelOpen);}));
 }
-function showModelPane(pane){
-  state.modelPane=pane==='upload'?'upload':'catalog';
+  function showModelPane(pane){
+    state.modelPane=['catalog','calibration','upload'].includes(pane)?pane:'catalog';
   document.querySelectorAll('.model-tab').forEach(button=>{
     const on=button.dataset.modelTab===state.modelPane;
     button.classList.toggle('is-active',on);

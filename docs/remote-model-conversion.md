@@ -12,11 +12,11 @@
 - `remote_verifier_mode`: 下载后的复验方式，`wsl` 或 `local`。
 - `python_path`、`distribution`: 复验虚拟环境；即使转换发生在远端也必须配置，避免信任远端自报的 tensor 元数据。
 - `timeout_seconds`: 整个提交、排队、转换和下载流程的总截止时间。
-- `input_size`、`calibration_data`: 与本机转换含义一致。
+- `input_size`: 与本机转换含义一致。`calibration_data` 是后台根据校准集 ID 解析出的受控相对 YAML 路径，不由浏览器或普通客户端直接填写；兼容别名 `coco8.yaml` 在转换服务内部解析为镜像自带、带完整性清单的 8 图冒烟测试集，不访问任意路径，也不下载 COCO 图片。
 
 配置文件、任务快照、日志与 API 只保存环境变量名，不保存或回显令牌值。endpoint 禁止 URL 内凭据、query 和 fragment。跨主机生产环境不得开启明文 HTTP。同一 `compose.yml` 中的调用使用不发布宿主机端口的内部网络和独立 Bearer Token，允许显式开启内部 HTTP；一旦转换服务跨主机或端口被发布，必须改为 HTTPS。
 
-仓库内的提供方实现位于 `converter_service/`，镜像定义为 `Dockerfile.converter`。服务持久化任务、源 PT 与产物到 `converter-data` 卷，校准集通过只读目录挂载；默认单 Worker 串行执行，避免多个导出进程争用内存。API 不返回本机路径、日志或堆栈。
+仓库内的提供方实现位于 `converter_service/`，镜像定义为 `Dockerfile.converter`。服务持久化任务、源 PT 和产物到 `converter-data` 卷；业务校准集由视频服务写入独立 `calibration-data` 卷，转换容器只读挂载；内置冒烟测试集固定在镜像 `/app/calibration-builtin`，不会被该卷遮蔽。默认单 Worker 串行执行，避免多个导出进程争用内存。API 不返回本机路径、日志或堆栈。
 
 ## API
 
@@ -38,14 +38,20 @@
 - `X-Source-SHA256`: 源 PT SHA-256
 - body: 原始 `.pt` 字节流
 
-返回 `202` 或命中幂等记录时返回 `200`：`{"jobId":"...","status":"queued|running|succeeded|failed|cancelled"}`。相同 Idempotency-Key 与不同源哈希组合必须返回 `409 idempotency_conflict`。
+返回 `202` 或命中幂等记录时返回 `200`。响应除 `jobId` 和 `status` 外，还包含 `stage`、`stageLabel`、`message`、`progress`、`queuePosition`、`createdAt`、`startedAt`、`updatedAt`；`progress` 在服务无法计算真实百分比时为 `null`，调用方应显示不确定进度，不得自行估算：
+
+```json
+{"jobId":"...","status":"queued","stage":"queued","stageLabel":"等待远程转换服务","message":"任务已进入单 worker 队列","progress":null,"queuePosition":2}
+```
+
+相同 Idempotency-Key 与不同源哈希组合必须返回 `409 idempotency_conflict`。状态接口会在 `queued`、`running` 期间返回最新阶段和活动时间；远程服务只能在有可靠依据时返回百分比。
 
 ### 状态与取消
 
 - `GET /v1/conversions/{jobId}`
 - `DELETE /v1/conversions/{jobId}`
 
-成功状态必须包含 `result`：标签顺序、输入/输出 tensor 名称、shape、dataType、quantization、TFLite 大小和 SHA-256，以及相对产物 URL。失败包含稳定错误码与 `retryable`。取消为幂等操作。
+成功状态必须包含 `result`：标签顺序、输入/输出 tensor 名称、shape、dataType、quantization、TFLite 大小和 SHA-256，以及相对产物 URL；终态将 `stage` 设为 `completed`、`progress` 设为 `100`。失败包含稳定错误码与 `retryable`，并保留失败阶段。取消为幂等操作。
 
 ### 产物下载
 

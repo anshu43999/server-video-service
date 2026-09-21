@@ -12,6 +12,7 @@ class ConverterSettings(BaseSettings):
     token: str = ""
     root: Path = Path("/data")
     calibration_root: Path = Path("/calibration")
+    builtin_calibration_manifest: Path = Path("/app/calibration-builtin/manifest.json")
     max_upload_bytes: int = Field(default=512 * 1024 * 1024, ge=1)
     max_queued_jobs: int = Field(default=20, ge=1, le=1000)
     timeout_seconds: int = Field(default=3600, ge=30, le=14400)

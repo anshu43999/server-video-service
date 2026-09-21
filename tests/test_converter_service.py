@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from pathlib import Path
+import shutil
 import tempfile
 import threading
 import time
@@ -17,6 +19,8 @@ from converter_service.main import create_app
 TOKEN = "converter-test-token-32-characters"
 SOURCE = b"fake-ultralytics-pt-weights"
 ARTIFACT = b"fake-int8-tflite-artifact"
+ROOT = Path(__file__).resolve().parents[1]
+BUILTIN_MANIFEST = ROOT / "calibration" / "builtin" / "dev8" / "manifest.json"
 
 
 def completed_executor(directory: Path, input_size: int, calibration_data: str, timeout: int) -> dict:
@@ -45,10 +49,12 @@ class ConverterServiceTests(unittest.TestCase):
         (self.calibration / "dataset.yaml").write_text("path: images\n", encoding="utf-8")
         self.store = JobStore(
             self.root / "data", self.calibration,
+            builtin_calibration_manifest=BUILTIN_MANIFEST,
             timeout_seconds=30, max_queued_jobs=4, executor=completed_executor,
         )
         config = ConverterSettings(
             token=TOKEN, root=self.root / "data", calibration_root=self.calibration,
+            builtin_calibration_manifest=BUILTIN_MANIFEST,
             timeout_seconds=30, max_queued_jobs=4,
         )
         self.client_context = TestClient(create_app(self.store, token=TOKEN, config=config))
@@ -111,9 +117,23 @@ class ConverterServiceTests(unittest.TestCase):
         self.assertEqual(job_id, replay.json()["jobId"])
         reloaded = JobStore(
             self.root / "data", self.calibration,
+            builtin_calibration_manifest=BUILTIN_MANIFEST,
             timeout_seconds=30, max_queued_jobs=4, executor=completed_executor,
         )
         self.assertEqual("succeeded", reloaded.get(job_id)["status"])
+
+    def test_public_status_exposes_stage_and_progress_fields(self) -> None:
+        response = self.client.post(
+            "/v1/conversions?inputSize=640&calibrationData=dataset.yaml",
+            content=SOURCE, headers=self.headers(key="e" * 64),
+        )
+        body = response.json()
+        self.assertIn(body["stage"], {"queued", "starting", "loading_model", "validating_model", "completed"})
+        self.assertIn("queuePosition", body)
+        completed = self.wait_for_terminal(body["jobId"])
+        self.assertEqual("completed", completed["stage"])
+        self.assertEqual(100, completed["progress"])
+        self.assertIsNotNone(completed["startedAt"])
 
     def test_hash_mismatch_and_idempotency_conflict_are_rejected(self) -> None:
         bad = self.headers()
@@ -146,6 +166,38 @@ class ConverterServiceTests(unittest.TestCase):
         self.assertEqual("invalid_calibration", response.json()["code"])
         self.assertNotIn(str(self.root), response.text)
 
+    def test_builtin_coco8_alias_is_allowed_without_an_arbitrary_path(self) -> None:
+        resolved = self.store._resolve_calibration("coco8.yaml")
+        runtime = Path(resolved)
+        self.assertTrue(runtime.is_file())
+        self.assertTrue(runtime.is_relative_to(self.root / "data" / "builtin-calibration"))
+        self.assertNotIn("__AIYOLO_BUILTIN_CALIBRATION_ROOT__", runtime.read_text(encoding="utf-8"))
+        self.assertEqual(8, len(list((runtime.parent / "images").glob("*.png"))))
+        with self.assertRaisesRegex(ValueError, "calibration_data_not_found"):
+            self.store.validate_calibration("other-built-in.yaml")
+
+    def test_builtin_calibration_rejects_missing_or_tampered_assets(self) -> None:
+        copied = self.root / "builtin"
+        shutil.copytree(BUILTIN_MANIFEST.parent, copied)
+        store = JobStore(
+            self.root / "tamper-data", self.calibration,
+            builtin_calibration_manifest=copied / "manifest.json",
+            timeout_seconds=30, max_queued_jobs=1, executor=completed_executor,
+        )
+        store.validate_calibration("coco8.yaml")
+        manifest = json.loads((copied / "manifest.json").read_text(encoding="utf-8"))
+        image = copied / manifest["files"][1]["path"]
+        image.write_bytes(image.read_bytes() + b"tampered")
+        with self.assertRaisesRegex(ValueError, "builtin_calibration_invalid"):
+            store.validate_calibration("coco8.yaml")
+        missing = JobStore(
+            self.root / "missing-data", self.calibration,
+            builtin_calibration_manifest=self.root / "missing.json",
+            timeout_seconds=30, max_queued_jobs=1, executor=completed_executor,
+        )
+        with self.assertRaisesRegex(ValueError, "builtin_calibration_missing"):
+            missing.validate_calibration("coco8.yaml")
+
     def test_cancel_is_idempotent_and_hides_artifact(self) -> None:
         started = threading.Event()
 
@@ -158,10 +210,12 @@ class ConverterServiceTests(unittest.TestCase):
         self.client_context.__exit__(None, None, None)
         blocking_store = JobStore(
             self.root / "blocking-data", self.calibration,
+            builtin_calibration_manifest=BUILTIN_MANIFEST,
             timeout_seconds=30, max_queued_jobs=4, executor=blocking,
         )
         config = ConverterSettings(
             token=TOKEN, root=self.root / "blocking-data", calibration_root=self.calibration,
+            builtin_calibration_manifest=BUILTIN_MANIFEST,
             timeout_seconds=30,
         )
         self.client_context = TestClient(create_app(blocking_store, token=TOKEN, config=config))

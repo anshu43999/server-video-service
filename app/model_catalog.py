@@ -273,6 +273,15 @@ class ModelCatalog:
         registry = self._load()
         return [self.public_inspect(item, self._resolve_active_model_id(registry)) for item in registry.get("models", [])]
 
+    def calibration_references(self, dataset_id: str) -> list[str]:
+        registry = self._load()
+        return [
+            str(item.get("modelId"))
+            for item in registry.get("models", [])
+            if isinstance(item.get("calibrationDataset"), dict)
+            and item["calibrationDataset"].get("datasetId") == dataset_id
+        ]
+
     def get(self, model_id: str) -> dict[str, Any]:
         registry = self._load()
         for item in registry.get("models", []):
@@ -397,6 +406,17 @@ class ModelCatalog:
             }
             public_artifacts.append(allowed)
         primary = public_artifacts[0] if public_artifacts else {}
+        calibration = inspected.get("calibrationDataset")
+        public_calibration = None
+        if isinstance(calibration, dict):
+            public_calibration = {
+                key: calibration[key]
+                for key in (
+                    "datasetId", "name", "version", "scenario", "imageCount",
+                    "sizeBytes", "contentSha256", "yamlPath", "builtin",
+                )
+                if key in calibration
+            }
         result: dict[str, Any] = {
             "modelId": inspected.get("modelId"),
             "name": inspected.get("name", inspected.get("modelId")),
@@ -418,6 +438,7 @@ class ModelCatalog:
             "androidConverted": inspected.get("androidConverted", inspected.get("androidReady", False)),
             "signatureStatus": inspected.get("signatureStatus", "unsigned"),
             "androidContract": inspected.get("androidContract"),
+            "calibrationDataset": public_calibration,
             "placeholder": bool(inspected.get("placeholder", False)),
         }
         # Android M14 clients consume these aliases while newer clients use the
@@ -530,6 +551,7 @@ class ModelCatalog:
             item.update(runtime="paired-server-pt-android-tflite", androidConverted=True,
                         androidReady=signature_valid, signatureStatus=result.get("signatureStatus", "unsigned"),
                         compatibleDevices=["API 27+ (device validation pending)"],
-                        androidContract={key: result[key] for key in ("input", "output", "quantization", "input_size")})
+                        androidContract={key: result[key] for key in ("input", "output", "quantization", "input_size")},
+                        calibrationDataset=result.get("calibration_dataset"))
         self._save(registry)
         return self.get(model_id)

@@ -14,6 +14,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from .auth import require_admin
+from .calibration import CalibrationDatasetCatalog, CalibrationDatasetError
 from .conversion import ConversionConfig, ConversionPreflightError, ConversionService, atomic_json
 from .model_catalog import ModelCatalog
 from .model_signing import ModelManifestSigner, build_android_manifest
@@ -28,8 +29,10 @@ class UploadMetadata(BaseModel):
 
 
 class ModelJobs:
-    def __init__(self, service: ConversionService, catalog: ModelCatalog, signer: ModelManifestSigner):
-        self.service, self.catalog, self.signer = service, catalog, signer
+    def __init__(self, service: ConversionService, catalog: ModelCatalog,
+                 calibration_catalog: CalibrationDatasetCatalog, signer: ModelManifestSigner):
+        self.service, self.catalog = service, catalog
+        self.calibration_catalog, self.signer = calibration_catalog, signer
         service.handler = self.execute
 
     def upload_path(self, upload_id: str) -> Path:
@@ -39,7 +42,11 @@ class ModelJobs:
 
     def execute(self, job: dict, directory: Path, config: ConversionConfig) -> dict:
         if job["action"] == "check":
-            return self.service.runner.run(config, "check", directory, self.service._stop)
+            return self.service.run_action(job, config, "check", directory)
+        self.service.report_progress(job, {
+            "stage": "preparing",
+            "message": "正在校验并复制上传的 PT 文件",
+        })
         upload_id = job["metadata"]["upload_id"]
         upload_dir = self.upload_path(upload_id)
         metadata = json.loads((upload_dir / "metadata.json").read_text(encoding="utf-8"))
@@ -53,12 +60,22 @@ class ModelJobs:
         if action == "inspect":
             # PT must actually load in the server runtime, independent of WSL/export readiness.
             runtime = config.model_copy(update={"mode": "local", "python_path": sys.executable})
-            result = self.service.runner.run(runtime, "inspect", directory, self.service._stop)
+            result = self.service.run_action(job, runtime, "inspect", directory)
+            self.service.report_progress(job, {
+                "stage": "publishing",
+                "message": "PT 验证通过，正在登记服务端模型资产",
+            })
             self.catalog.publish_upload(model_id, metadata, result, original, "server")
             conversion_error = None
             if config.auto_convert:
                 try:
-                    self.service.submit("mobile", {"upload_id": upload_id})
+                    calibration = self.calibration_catalog.snapshot(
+                        config.default_calibration_dataset_id
+                    )
+                    self.service.submit("mobile", {
+                        "upload_id": upload_id,
+                        "calibration_dataset": calibration,
+                    })
                 except ValueError as exc:
                     conversion_error = str(exc)
             return {**result, "model_id": model_id, "server_ready": True,
@@ -69,8 +86,20 @@ class ModelJobs:
         if current.get("androidConverted"):
             raise ValueError("该版本已有移动端产物，无需重复转换")
         # Source labels and input size are frozen when PT validation succeeded.
-        config = config.model_copy(update={"input_size": current["inputSize"]})
-        result = self.service.runner.run(config, "mobile", directory, self.service._stop)
+        calibration = job["metadata"].get("calibration_dataset")
+        if not isinstance(calibration, dict):
+            raise ValueError("转换任务缺少校准集快照，请重新创建任务")
+        calibration_path = self.calibration_catalog.runtime_path(calibration, config.mode)
+        config = config.model_copy(update={
+            "input_size": current["inputSize"],
+            "calibration_data": calibration_path,
+        })
+        result = self.service.run_action(job, config, "mobile", directory)
+        result["calibration_dataset"] = calibration
+        self.service.report_progress(job, {
+            "stage": "publishing",
+            "message": "转换与复验通过，正在签名并登记移动端模型资产",
+        })
         manifest = build_android_manifest(model_id, metadata, result)
         signature_status = "unsigned"
         if self.signer.configured:
@@ -83,18 +112,35 @@ class ModelJobs:
                 "android_converted": True, "android_ready": signature_status == "signed",
                 "signature_status": signature_status}
 
+    def calibration_references(self, dataset_id: str) -> list[str]:
+        references = [
+            f"task:{job['id']}"
+            for job in self.service.jobs()
+            if isinstance(job.get("metadata", {}).get("calibration_dataset"), dict)
+            and job["metadata"]["calibration_dataset"].get("datasetId") == dataset_id
+        ]
+        references.extend(f"model:{model_id}" for model_id in self.catalog.calibration_references(dataset_id))
+        return references
+
 
 def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
                              max_upload_bytes: int = 512 * 1024 * 1024,
+                             calibration_catalog: CalibrationDatasetCatalog | None = None,
+                             max_calibration_upload_bytes: int = 512 * 1024 * 1024,
                              signer: ModelManifestSigner | None = None) -> APIRouter:
     router = APIRouter(prefix="/api/conversion", dependencies=[Depends(require_admin)], tags=["model conversion"])
     signer = signer or ModelManifestSigner(settings.model_signing_key_id, settings.model_signing_private_key_path)
-    pipeline = ModelJobs(service, catalog, signer)
+    calibration_catalog = calibration_catalog or CalibrationDatasetCatalog(
+        service.root.parents[1] / "calibration"
+    )
+    pipeline = ModelJobs(service, catalog, calibration_catalog, signer)
     uploading = asyncio.Semaphore(1)
+    calibration_uploading = asyncio.Semaphore(1)
 
     @router.get("/config")
     def get_config():
         return {"config": service.config().model_dump(), "max_upload_bytes": max_upload_bytes,
+                "max_calibration_upload_bytes": max_calibration_upload_bytes,
                 "concurrency": 1, "workspace": str(service.root.resolve()),
                 "supported_modes": ["wsl", "local", "remote"], "remote_service_supported": True}
 
@@ -149,6 +195,73 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
             handle.seek(max(0, log.stat().st_size - 32000))
             return handle.read(32000).decode("utf-8", errors="replace")
 
+    @router.get("/calibration-datasets")
+    def list_calibration_datasets():
+        return {
+            "datasets": calibration_catalog.list(),
+            "max_upload_bytes": max_calibration_upload_bytes,
+            "max_expanded_bytes": calibration_catalog.max_expanded_bytes,
+            "max_files": calibration_catalog.max_files,
+        }
+
+    @router.get("/calibration-datasets/{dataset_id}")
+    def get_calibration_dataset(dataset_id: str):
+        try:
+            return calibration_catalog.get(dataset_id)
+        except KeyError as exc:
+            raise HTTPException(404, "校准集不存在") from exc
+
+    @router.post("/calibration-datasets", status_code=201)
+    async def upload_calibration_dataset(
+        request: Request,
+        filename: str = Query(min_length=1, max_length=200),
+        name: str = Query(min_length=1, max_length=100),
+        version: str = Query(min_length=1, max_length=50),
+        scenario: str = Query(min_length=1, max_length=100),
+    ):
+        if Path(filename).suffix.lower() != ".zip":
+            raise HTTPException(422, "请上传包含校准图片的 ZIP 文件")
+        if calibration_uploading.locked():
+            raise HTTPException(429, "已有校准集正在上传，请稍后重试")
+        temporary = calibration_catalog.incoming_path()
+        async with calibration_uploading:
+            received = 0
+            try:
+                with temporary.open("wb") as handle:
+                    async with asyncio.timeout(300):
+                        async for chunk in request.stream():
+                            received += len(chunk)
+                            if received > max_calibration_upload_bytes:
+                                raise HTTPException(413, "校准集 ZIP 超过上传大小限制")
+                            await asyncio.to_thread(handle.write, chunk)
+                if not received:
+                    raise HTTPException(422, "校准集 ZIP 为空")
+                try:
+                    return await asyncio.to_thread(
+                        calibration_catalog.create_from_zip,
+                        temporary,
+                        name=name,
+                        version=version,
+                        scenario=scenario,
+                    )
+                except CalibrationDatasetError as exc:
+                    raise HTTPException(422, str(exc)) from exc
+            finally:
+                temporary.unlink(missing_ok=True)
+
+    @router.delete("/calibration-datasets/{dataset_id}")
+    def delete_calibration_dataset(dataset_id: str):
+        with service._guard:
+            references = pipeline.calibration_references(dataset_id)
+            if references:
+                raise HTTPException(409, f"校准集已被 {len(references)} 个模型或转换任务引用")
+            try:
+                return {"deleted": calibration_catalog.delete(dataset_id)}
+            except KeyError as exc:
+                raise HTTPException(404, "校准集不存在") from exc
+            except CalibrationDatasetError as exc:
+                raise HTTPException(409, str(exc)) from exc
+
     @router.post("/uploads", status_code=202)
     async def upload(request: Request, filename: str = Query(min_length=1, max_length=200),
                      name: str = Query(min_length=1, max_length=100), version: str = Query(default="1.0.0", min_length=1, max_length=50),
@@ -193,7 +306,10 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
                 raise
 
     @router.post("/uploads/{upload_id}/mobile", status_code=202)
-    def convert_mobile(upload_id: str):
+    def convert_mobile(
+        upload_id: str,
+        calibration_dataset_id: str | None = Query(default=None, alias="calibrationDatasetId"),
+    ):
         try:
             pipeline.upload_path(upload_id)
             model = catalog.get("uploaded-" + upload_id)
@@ -205,6 +321,18 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
             if any(job["metadata"].get("upload_id") == upload_id and job["action"] == "mobile" and
                    job["status"] in {"queued", "running"} for job in service.jobs()):
                 raise HTTPException(409, "该模型已有移动端转换任务")
-            return submit("mobile", {"upload_id": upload_id, "name": model["name"], "version": model["version"]})
+            selected = calibration_dataset_id or service.config().default_calibration_dataset_id
+            try:
+                calibration = calibration_catalog.snapshot(selected)
+            except KeyError as exc:
+                raise HTTPException(422, "请选择有效的校准集") from exc
+            except CalibrationDatasetError as exc:
+                raise HTTPException(422, str(exc)) from exc
+            return submit("mobile", {
+                "upload_id": upload_id,
+                "name": model["name"],
+                "version": model["version"],
+                "calibration_dataset": calibration,
+            })
 
     return router

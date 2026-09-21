@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     model_signing_private_key_path: str | None = None
     database_url: str | None = None
     database_connect_timeout_seconds: int = 5
+    calibration_root: str = "calibration"
+    calibration_max_upload_bytes: int = 512 * 1024 * 1024
+    calibration_max_expanded_bytes: int = 2 * 1024 * 1024 * 1024
+    calibration_max_files: int = 5000
     model_config = SettingsConfigDict(env_file=".env", env_prefix="", extra="ignore")
 
     @field_validator("database_url")

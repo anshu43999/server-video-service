@@ -16,7 +16,24 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
+
+
+def write_progress(directory: Path, stage: str, message: str, progress: int | None = None) -> None:
+    payload = {
+        "stage": stage,
+        "message": message,
+        "progress": progress,
+        "updatedAt": time.time(),
+    }
+    target = directory / "progress.json"
+    temporary = target.with_name(target.name + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        temporary.replace(target)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def environment() -> dict:
@@ -39,10 +56,12 @@ def environment() -> dict:
 
 def execute(action: str, directory: Path) -> dict:
     if action == "check":
+        write_progress(directory, "checking_environment", "正在检测 Python 与转换依赖")
         return environment()
     import numpy as np
     request = json.loads((directory / "request.json").read_text(encoding="utf-8"))
     if action == "verify":
+        write_progress(directory, "verifying_artifact", "正在本地复验移动端模型")
         from ai_edge_litert.interpreter import Interpreter
         target = directory / "android.tflite"
         if not target.is_file():
@@ -65,6 +84,7 @@ def execute(action: str, directory: Path) -> dict:
         interpreter.invoke()
         if not np.isfinite(interpreter.get_tensor(out["index"])).all():
             raise ValueError("远程 TFLite 本地预热产生非有限值")
+        write_progress(directory, "finalizing", "本地复验通过，正在整理结果")
         def tensor(detail):
             return {"name": detail["name"], "shape": detail["shape"].tolist(),
                     "dataType": "float32", "quantization": list(detail["quantization"])}
@@ -72,6 +92,7 @@ def execute(action: str, directory: Path) -> dict:
                 "input": tensor(inp), "output": tensor(out), "quantization": "int8",
                 "ultralytics": "remote-service"}
     from ultralytics import YOLO
+    write_progress(directory, "loading_model", "正在加载 PT 模型")
     model = YOLO(str(directory / "source.pt"))
     if model.task != "detect":
         raise ValueError("当前仅支持 Ultralytics 目标检测模型，不支持分类、分割或姿态模型")
@@ -82,23 +103,35 @@ def execute(action: str, directory: Path) -> dict:
         raise ValueError("模型没有有效的连续类别标签")
     size = request["input_size"]
     sample = np.zeros((size, size, 3), dtype=np.uint8)
+    write_progress(directory, "validating_model", "正在执行 PT 试推理与结构校验")
     prediction = model.predict(sample, imgsz=size, device="cpu", verbose=False)[0]
     if prediction.boxes is None or not np.isfinite(prediction.boxes.data.cpu().numpy()).all():
         raise ValueError("模型试推理返回无效检测输出")
     if action == "inspect":
+        write_progress(directory, "finalizing", "PT 验证通过，正在整理结果")
         return {"ok": True, "labels": labels, "input_size": size, "task": "detect",
                 "ultralytics": importlib.metadata.version("ultralytics"), "warmup": "passed"}
     if action == "mobile":
         if not request["calibration_data"]:
             raise ValueError("INT8 转换需要校准数据；COCO 功能测试可填 coco8.yaml，业务模型请提供代表性数据集 YAML")
+        if request["calibration_data"] == "coco8.yaml":
+            cache = os.environ.get("AIYOLO_CALIBRATION_CACHE_DIR", "").strip()
+            if cache:
+                from ultralytics import settings
+                cache_path = Path(cache).resolve()
+                cache_path.mkdir(parents=True, exist_ok=True)
+                settings.update({"datasets_dir": str(cache_path)})
+        write_progress(directory, "exporting", "后台服务正在导出 INT8 LiteRT 模型")
         result = model.export(format="litert", imgsz=size, quantize="int8",
                               data=request["calibration_data"], nms=False, batch=1, device="cpu")
+        write_progress(directory, "locating_artifact", "导出完成，正在定位并复制产物")
         source = Path(result)
         candidates = [source] if source.is_file() and source.suffix == ".tflite" else list(source.rglob("*_int8.tflite"))
         if len(candidates) != 1:
             raise ValueError("导出没有产生唯一 INT8 TFLite 文件")
         target = directory / "android.tflite"
         shutil.copyfile(candidates[0], target)
+        write_progress(directory, "verifying_artifact", "正在校验移动端张量与试运行结果")
         from ai_edge_litert.interpreter import Interpreter
         interpreter = Interpreter(model_path=str(target), num_threads=1)
         interpreter.allocate_tensors()
@@ -114,6 +147,7 @@ def execute(action: str, directory: Path) -> dict:
         interpreter.invoke()
         if not np.isfinite(interpreter.get_tensor(out["index"])).all():
             raise ValueError("TFLite 预热产生非有限值")
+        write_progress(directory, "finalizing", "移动端模型验证通过，正在生成结果")
         def tensor(detail):
             return {"name": detail["name"], "shape": detail["shape"].tolist(),
                     "dataType": "float32", "quantization": list(detail["quantization"])}

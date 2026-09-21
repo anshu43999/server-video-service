@@ -21,7 +21,6 @@ sudo docker compose version
 
 ```bash
 cd /opt/aiyolo/server-video-service
-mkdir -p calibration
 cp .env.example .env
 chmod 0600 .env
 ```
@@ -34,13 +33,14 @@ chmod 0600 .env
 - `MODEL_MOUNT_PATH` 默认 `./models`，容器内以只读方式挂载到 `/models`。
 - `YOLO_MODEL_PATH` 预留为转换后的 ONNX 路径；当前运行镜像未安装 ONNX Runtime，因此默认 `REQUIRE_YOLO_MODEL=false`。需要服务器 ONNX 推理时先补充 `requirements-onnx.txt`，再改为 `true`。
 - `CONVERTER_TOKEN` 使用第三个独立随机值，只在 Compose 内部网络用于视频服务调用转换服务。
-- `CALIBRATION_MOUNT_PATH` 默认 `./calibration`，转换容器以只读方式挂载到 `/calibration`。
-- `CONVERSION_CALIBRATION_DATA` 填相对于校准集目录的 YAML，例如 `dataset.yaml`；YAML 引用的图片也必须位于同一挂载目录中。
+- `CONVERSION_DEFAULT_CALIBRATION_DATASET_ID` 默认 `coco8-dev`（兼容 ID），对应转换镜像内置的 8 张项目自生成图片，只用于离线验证转换链路。它不是 COCO 图片，也不是业务代表数据。正式模型应先在“模型资产 → 校准集”上传业务图片 ZIP，再到“上传与处理”为转换任务选择对应档案。
+- 校准集元数据写入 PostgreSQL，图片、生成的 YAML 和内容哈希写入 `calibration-data` 命名卷。视频服务读写该卷，转换容器只读挂载到 `/calibration`，无需在宿主机手工创建 `dataset.yaml`。
+- `CALIBRATION_MAX_UPLOAD_BYTES`、`CALIBRATION_MAX_EXPANDED_BYTES` 和 `CALIBRATION_MAX_FILES` 分别限制 ZIP 大小、解压后总量和文件数。
 - `CONVERTER_CPUS`、`CONVERTER_MEMORY_LIMIT`、`CONVERTER_TMPFS_SIZE` 按服务器资源和模型大小调整，避免转换挤占实时视频推理。
 
-后端容器固定使用 UID/GID `10001`，转换容器固定使用 UID/GID `10002`。若另行放入受控模型或校准数据，需要为对应 UID/GID 提供只读权限；CentOS/RHEL 上 Compose 的 `:Z` 会设置 SELinux 挂载标签。
+后端容器固定使用 UID/GID `10001`，转换容器固定使用 UID/GID `10002`。外部模型仍需为对应 UID/GID 提供只读权限；CentOS/RHEL 上 Compose 的 `:Z` 会设置 SELinux 挂载标签。校准集由后台写入 Docker 命名卷，不依赖宿主机 SELinux 路径标签。
 
-Dockerfile 不复制 `.env`、密钥、校准数据或历史日志。模型市场数据和上传产物写入 `model-data` 卷；仓库中的转换资产和外部交付模型通过 `/models` 只读挂载。
+Dockerfile 不复制 `.env`、密钥、业务校准数据或历史日志。模型市场数据和上传产物写入 `model-data` 卷，校准图片写入 `calibration-data` 卷；仓库中的转换资产和外部交付模型通过 `/models` 只读挂载。
 
 视频服务每次启动都会校验 `/models/registry.json`，并将尚未登记的 Git 模型及其已校验产物增量导入 `model-data` 卷。导入以 `modelId` 为键，已有模型、文件和当前激活选择不会被覆盖；同一路径存在不同内容时服务会拒绝启动并报告冲突。该流程对已有 `model-data` 卷同样生效，因此升级时不需要也不应删除模型卷。自备模型目录没有注册表时跳过导入，不影响仅提供原始视频的部署。
 
@@ -95,7 +95,7 @@ docker compose --env-file .env -f compose.yml ps
 
 从 App 所在网络验证 `8889/tcp`、`8888/tcp` 和 `8189/udp`，再创建真实 RTSP 流检查 WHEP 首帧与 LL-HLS 回退。仅看到容器运行不等于视频链路验收通过。
 
-转换服务不对宿主机发布端口。管理后台首次读取转换配置时会从容器环境得到 `remote` 模式，地址为 `http://model-converter:8090`；这里的明文 HTTP 只允许用于不可从宿主机访问的 Compose 内部网络，并由独立 Bearer Token 保护。若数据库中已有 Windows/WSL 时代保存的转换配置，它会优先于环境默认值，需要在管理后台重新保存为 remote 模式。上传 PT 并执行一次真实移动端转换，检查任务成功、TFLite 下载后本地复验通过且模型目录登记成功。
+转换服务不对宿主机发布端口。管理后台首次读取转换配置时会从容器环境得到 `remote` 模式，地址为 `http://model-converter:8090`；这里的明文 HTTP 只允许用于不可从宿主机访问的 Compose 内部网络，并由独立 Bearer Token 保护。若数据库中已有 Windows/WSL 时代保存的转换配置，它会优先于环境默认值，需要在管理后台重新保存为 remote 模式。可先选择内置 `coco8-dev` 完成一次无需联网下载校准图片的转换冒烟测试；正式验收仍应上传业务校准图片 ZIP 和 PT，再选择该业务校准集执行真实移动端转换，检查任务保存的校准集版本与哈希、TFLite 下载后本地复验和模型目录登记均成功。
 
 ## 5. 日志、备份和恢复
 
@@ -113,7 +113,7 @@ bash deploy/deploy.sh logs model-converter
 bash deploy/deploy.sh backup-db
 ```
 
-备份文件写入项目的 `backups/`，应转存到独立存储并按组织策略加密。还需要单独备份 Docker 卷 `aiyolo_model-data`、`aiyolo_evidence-data`、`aiyolo_converter-data`，以及宿主机只读模型与校准集目录。恢复会覆盖业务状态，必须先停止写入并在隔离环境验证备份；不要在运行中的生产库上直接试恢复。
+备份文件写入项目的 `backups/`，应转存到独立存储并按组织策略加密。还需要单独备份 Docker 卷 `aiyolo_model-data`、`aiyolo_evidence-data`、`aiyolo_converter-data`、`aiyolo_calibration-data`，以及宿主机只读模型目录。恢复会覆盖业务状态，必须先停止写入并在隔离环境验证备份；校准集数据库记录与 `calibration-data` 卷必须按同一备份点恢复。
 
 ## 6. 升级和回滚
 
@@ -134,4 +134,4 @@ bash deploy/deploy.sh up
 bash deploy/deploy.sh stop
 ```
 
-不要使用 `docker compose down -v`，该命令会删除 PostgreSQL、模型市场、转换任务/产物和告警证据卷。
+不要使用 `docker compose down -v`，该命令会删除 PostgreSQL、模型市场、转换任务/产物、校准集图片和告警证据卷。

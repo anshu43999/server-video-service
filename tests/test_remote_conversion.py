@@ -105,8 +105,10 @@ class RemoteConversionTests(unittest.TestCase):
 
     @patch.dict(os.environ, {"TEST_REMOTE_TOKEN": "secret-token"})
     def test_streams_upload_polls_downloads_hashes_and_locally_verifies(self):
+        progress = []
         result = RemoteConversionRunner(FakeLocalVerifier()).run(
             self.config, "mobile", self.directory, threading.Event(),
+            progress_callback=progress.append,
         )
         self.assertEqual(RemoteHandler.uploaded, b"pt-weights")
         self.assertEqual(RemoteHandler.auth, "Bearer secret-token")
@@ -114,6 +116,8 @@ class RemoteConversionTests(unittest.TestCase):
         self.assertEqual((self.directory / "android.tflite").read_bytes(), ARTIFACT)
         self.assertEqual(result["labels"], ["person", "car"])
         self.assertEqual(result["remote_job_id"], "remote-1")
+        self.assertTrue(any(item["stage"] == "remote_running" for item in progress))
+        self.assertTrue(any(item["stage"] == "downloading" and item["progress"] == 100 for item in progress))
 
     @patch.dict(os.environ, {"TEST_REMOTE_TOKEN": "secret-token"})
     def test_hash_mismatch_is_rejected_and_partial_is_removed(self):

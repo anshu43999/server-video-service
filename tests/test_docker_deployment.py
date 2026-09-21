@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 from app.container_entrypoint import validate_environment
+from app.calibration import CalibrationDatasetCatalog
 from app.model_catalog import ModelCatalog
 
 
@@ -76,22 +77,49 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertIn("model-data:/app/models", self.compose)
         self.assertIn("evidence-data:/app/evidence", self.compose)
         self.assertIn("converter-data:/data", self.compose)
+        self.assertIn("calibration-data:/app/calibration", self.compose)
+        self.assertIn("calibration-data:/calibration:ro", self.compose)
 
     def test_converter_is_internal_isolated_and_resource_bounded(self) -> None:
         self.assertIn("dockerfile: Dockerfile.converter", self.compose)
         self.assertIn('CONVERSION_REMOTE_ENDPOINT: "http://model-converter:8090"', self.compose)
         self.assertIn("AIYOLO_REMOTE_CONVERSION_TOKEN", self.compose)
         self.assertIn("CONVERTER_TOKEN", self.compose)
-        self.assertIn("CALIBRATION_MOUNT_PATH", self.compose)
+        self.assertIn("CALIBRATION_ROOT: /app/calibration", self.compose)
+        self.assertIn("CONVERTER_BUILTIN_CALIBRATION_MANIFEST: /app/calibration-builtin/manifest.json", self.compose)
         self.assertIn("mem_limit:", self.compose)
         self.assertIn("cpus:", self.compose)
         self.assertNotIn("8090:8090", self.compose)
         self.assertIn("USER converter", self.converter_dockerfile)
         self.assertIn("requirements-converter-service.txt", self.converter_dockerfile)
         self.assertIn("converter_service.healthcheck", self.converter_dockerfile)
+        self.assertIn("COPY --chown=converter:converter calibration/builtin/dev8 /app/calibration-builtin", self.converter_dockerfile)
         self.assertNotIn("requirements-convert.txt", self.dockerfile)
         self.assertIn("requirements-verifier.txt", self.dockerfile)
         self.assertIn("COPY requirements.txt requirements-yolo.txt requirements-verifier.txt", self.dockerfile)
+
+    def test_converter_image_contains_verified_offline_calibration_fixture(self) -> None:
+        root = ROOT / "calibration" / "builtin" / "dev8"
+        manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual("coco8-dev", manifest["datasetId"])
+        self.assertEqual("conversion-smoke-test-only", manifest["purpose"])
+        images = [item for item in manifest["files"] if item["path"].startswith("images/")]
+        self.assertEqual(8, len(images))
+        fingerprint = hashlib.sha256()
+        for item in manifest["files"]:
+            path = root / item["path"]
+            content = path.read_bytes()
+            self.assertEqual(item["sizeBytes"], len(content))
+            actual = hashlib.sha256(content).hexdigest()
+            self.assertEqual(item["sha256"], actual)
+            fingerprint.update(item["path"].encode("utf-8") + b"\0")
+            fingerprint.update(actual.encode("ascii") + b"\0")
+        self.assertEqual(manifest["contentSha256"], fingerprint.hexdigest())
+        builtin = CalibrationDatasetCatalog.builtin()
+        self.assertEqual(manifest["contentSha256"], builtin["contentSha256"])
+        self.assertEqual(sum(item["sizeBytes"] for item in manifest["files"]), builtin["sizeBytes"])
+        dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+        self.assertIn("!calibration/builtin/**", dockerignore)
 
     def test_compose_hardens_mounts_ports_and_logs(self) -> None:
         self.assertIn(":/models:ro,Z", self.compose)
@@ -140,7 +168,11 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertEqual([], errors)
 
     def test_example_requires_operator_owned_values(self) -> None:
-        for field in ("POSTGRES_PASSWORD", "DATABASE_URL", "CONVERTER_TOKEN", "MEDIA_PUBLIC_HOST", "CALIBRATION_MOUNT_PATH", "CONVERSION_CALIBRATION_DATA"):
+        for field in (
+            "POSTGRES_PASSWORD", "DATABASE_URL", "CONVERTER_TOKEN", "MEDIA_PUBLIC_HOST",
+            "CONVERSION_DEFAULT_CALIBRATION_DATASET_ID", "CALIBRATION_MAX_UPLOAD_BYTES",
+            "CALIBRATION_MAX_EXPANDED_BYTES", "CALIBRATION_MAX_FILES",
+        ):
             self.assertIn(f"{field}=", self.env_example)
         self.assertNotIn("ADMIN_TOKEN=", self.env_example)
         self.assertNotIn("MOBILE_TOKEN=", self.env_example)

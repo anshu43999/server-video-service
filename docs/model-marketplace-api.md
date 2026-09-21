@@ -5,6 +5,8 @@
 
 2026-09-08 增补（M26）：新增独立 `/api/conversion/*` 管理接口负责上传、后台处理与环境配置，目录/下载路径保持兼容。成对产物条目以 PT 为主产物，App 必须从 `artifacts` 中选择 Android TFLite；新增 `serverReady`、`androidReady`、`androidContract`、`placeholder` 字段。`androidReady` 只代表转换与电脑端预热通过，不代表 App 安装已接通。详见 `local-model-conversion.md`。下文原 M09 范围保留为历史基线，签名仍未实现。
 
+2026-09-20 增补（M28）：INT8 移动端产物新增可选 `calibrationDataset` 快照，记录所选校准集的 ID、名称、版本、场景、图片数、大小、内容 SHA-256、受控 YAML 相对路径与内置标记。该字段用于审计和阻止误删，不代表客户端可以直接访问服务器文件路径；校准集管理与转换接口见 `local-model-conversion.md`。
+
 ## 1. 范围与边界
 
 模型市场是服务端提供、App 消费的场景化目录。MVP 只负责目录元数据和模型产物下载；不负责训练、格式转换、端侧推理或签名发布。
@@ -39,6 +41,7 @@
 | `license` | object | `spdx`（可选）、`status`、`sourceUrl`（可选） |
 | `artifacts` | object[] | 可下载产物，见下表 |
 | `releaseEligible` | boolean | 是否允许当前部署用于发布 |
+| `calibrationDataset` | object/null | 可选；INT8 转换使用的不可变校准集版本与内容哈希快照 |
 
 产物对象字段：
 

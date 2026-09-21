@@ -1,2 +1,5 @@
 models/*.json text eol=lf
 models/**/*.json text eol=lf
+calibration/builtin/**/*.yaml text eol=lf
+calibration/builtin/**/*.json text eol=lf
+calibration/builtin/**/*.png binary

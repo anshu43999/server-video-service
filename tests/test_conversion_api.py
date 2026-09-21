@@ -1,9 +1,11 @@
 import hashlib
+import io
 import json
 import sys
 import tempfile
 import time
 import unittest
+import zipfile
 from pathlib import Path
 
 from cryptography.hazmat.primitives import serialization
@@ -13,6 +15,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.config import settings
+from app.calibration import CalibrationDatasetCatalog
 from app.conversion import ConversionConfig, ConversionService, ProcessRunner
 from app.conversion_api import create_conversion_router
 from app.model_catalog import ModelCatalog
@@ -63,6 +66,9 @@ class ConversionApiTests(unittest.TestCase):
         (root / "models" / "registry.json").write_text(json.dumps({"models": []}), encoding="utf-8")
         self.catalog = ModelCatalog(root / "models" / "registry.json")
         self.service = ConversionService(root / "models" / "local-conversion", FakeRunner())
+        self.calibration_catalog = CalibrationDatasetCatalog(
+            root / "calibration", max_expanded_bytes=1024 * 1024, max_files=10
+        )
         self.service.configure(ConversionConfig(mode="local", python_path=sys.executable))
         self.private_key = Ed25519PrivateKey.generate()
         self.private_key_path = root / "test-signing-key.pem"
@@ -73,7 +79,11 @@ class ConversionApiTests(unittest.TestCase):
         ))
         app = FastAPI()
         self.signer = ModelManifestSigner("test-2026", self.private_key_path)
-        app.include_router(create_conversion_router(self.service, self.catalog, max_upload_bytes=128, signer=self.signer))
+        app.include_router(create_conversion_router(
+            self.service, self.catalog, max_upload_bytes=128,
+            calibration_catalog=self.calibration_catalog,
+            max_calibration_upload_bytes=4096, signer=self.signer,
+        ))
         self.client = TestClient(app)
         self.old_token = settings.admin_token
         settings.admin_token = "test-only"
@@ -89,6 +99,17 @@ class ConversionApiTests(unittest.TestCase):
     def upload(self, payload=b"custom-weights", filename="best.pt"):
         return self.client.post("/api/conversion/uploads", params={"filename": filename, "name": "安全帽", "version": "2.0"},
                                 content=payload, headers=self.headers)
+
+    @staticmethod
+    def calibration_zip(*, unsafe_name: str | None = None) -> bytes:
+        output = io.BytesIO()
+        # Valid 1x1 RGB PNG.
+        png = __import__("base64").b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+        )
+        with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as package:
+            package.writestr(unsafe_name or "camera/frame-001.png", png)
+        return output.getvalue()
 
     def wait(self, job):
         deadline = time.monotonic() + 5
@@ -136,6 +157,74 @@ class ConversionApiTests(unittest.TestCase):
         self.assertEqual(hashlib.sha256(payload).hexdigest(), manifest["signature"]["signedPayloadSha256"])
         self.assertEqual(self.client.post(f'/api/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers).status_code, 409)
 
+    def test_calibration_asset_is_versioned_selected_and_reference_protected(self):
+        datasets = self.client.get("/api/conversion/calibration-datasets", headers=self.headers).json()["datasets"]
+        self.assertEqual(["coco8-dev"], [item["datasetId"] for item in datasets])
+        created = self.client.post(
+            "/api/conversion/calibration-datasets",
+            params={"filename": "site.zip", "name": "工地巡检", "version": "1.0", "scenario": "construction"},
+            content=self.calibration_zip(), headers={**self.headers, "Content-Type": "application/zip"},
+        )
+        self.assertEqual(201, created.status_code, created.text)
+        dataset = created.json()
+        self.assertEqual(1, dataset["imageCount"])
+        self.assertEqual(64, len(dataset["contentSha256"]))
+        self.assertTrue((self.calibration_catalog.root / dataset["yamlPath"]).is_file())
+
+        upload = self.upload().json()
+        self.wait(upload["job"])
+        mobile = self.client.post(
+            f'/api/conversion/uploads/{upload["upload_id"]}/mobile',
+            params={"calibrationDatasetId": dataset["datasetId"]}, headers=self.headers,
+        ).json()
+        completed = self.wait(mobile)
+        self.assertEqual("succeeded", completed["status"])
+        self.assertEqual(dataset["contentSha256"], completed["result"]["calibration_dataset"]["contentSha256"])
+        model = self.catalog.get(upload["model_id"])
+        self.assertIn("calibrationDataset", model, model)
+        self.assertEqual(dataset["datasetId"], model["calibrationDataset"]["datasetId"])
+        blocked = self.client.delete(
+            f'/api/conversion/calibration-datasets/{dataset["datasetId"]}', headers=self.headers
+        )
+        self.assertEqual(409, blocked.status_code)
+
+        image = next((self.calibration_catalog.root / dataset["yamlPath"]).parent.joinpath("images").iterdir())
+        image.write_bytes(b"changed-after-registration")
+        inspected = self.client.get(
+            f'/api/conversion/calibration-datasets/{dataset["datasetId"]}', headers=self.headers
+        )
+        self.assertEqual(200, inspected.status_code)
+        self.assertEqual("invalid", inspected.json()["status"])
+
+    def test_unreferenced_calibration_asset_can_be_deleted(self):
+        created = self.client.post(
+            "/api/conversion/calibration-datasets",
+            params={"filename": "temporary.zip", "name": "临时校准集", "version": "1", "scenario": "test"},
+            content=self.calibration_zip(), headers={**self.headers, "Content-Type": "application/zip"},
+        )
+        self.assertEqual(201, created.status_code, created.text)
+        dataset = created.json()
+        directory = (self.calibration_catalog.root / dataset["yamlPath"]).parent
+        self.assertTrue(directory.is_dir())
+        deleted = self.client.delete(
+            f'/api/conversion/calibration-datasets/{dataset["datasetId"]}', headers=self.headers
+        )
+        self.assertEqual(200, deleted.status_code, deleted.text)
+        self.assertFalse(directory.exists())
+        self.assertEqual(404, self.client.get(
+            f'/api/conversion/calibration-datasets/{dataset["datasetId"]}', headers=self.headers
+        ).status_code)
+
+    def test_calibration_upload_rejects_path_traversal(self):
+        response = self.client.post(
+            "/api/conversion/calibration-datasets",
+            params={"filename": "bad.zip", "name": "bad", "version": "1", "scenario": "test"},
+            content=self.calibration_zip(unsafe_name="../escape.png"),
+            headers={**self.headers, "Content-Type": "application/zip"},
+        )
+        self.assertEqual(422, response.status_code)
+        self.assertFalse((self.calibration_catalog.root.parent / "escape.png").exists())
+
     def test_mobile_failure_preserves_server_and_retry_recovers(self):
         upload = self.upload().json()
         self.wait(upload["job"])
@@ -167,6 +256,19 @@ class ConversionApiTests(unittest.TestCase):
         mobile = next(job for job in self.service.jobs() if job["action"] == "mobile")
         self.assertEqual(self.wait(mobile)["status"], "succeeded")
 
+    def test_jobs_expose_stage_activity_and_terminal_progress(self):
+        upload = self.upload().json()
+        queued = self.client.get("/api/conversion/jobs", headers=self.headers).json()["jobs"]
+        current = next(job for job in queued if job["id"] == upload["job"]["id"])
+        self.assertIn(current["stage"], {"queued", "starting", "preparing", "loading_model", "validating_model", "completed"})
+        self.assertIn("activity_at", current)
+        completed = self.wait(upload["job"])
+        self.assertEqual("succeeded", completed["status"])
+        self.assertEqual("completed", completed["stage"])
+        self.assertEqual(100, completed["progress"])
+        self.assertIsNotNone(completed["started_at"])
+        self.assertIsNotNone(completed["completed_at"])
+
     def test_changed_upload_and_placeholder_are_rejected(self):
         uploaded = self.upload().json()
         self.wait(uploaded["job"])
@@ -192,6 +294,8 @@ class ConversionApiTests(unittest.TestCase):
         app = FastAPI()
         app.include_router(create_conversion_router(
             self.service, self.catalog, max_upload_bytes=128,
+            calibration_catalog=self.calibration_catalog,
+            max_calibration_upload_bytes=4096,
             signer=ModelManifestSigner(None, None),
         ))
         self.client.close()

@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import hashlib
 import http.client
+import inspect
 import os
 import re
 import sqlite3
@@ -26,13 +27,39 @@ from .database import ConversionConfigRecord, ConversionJobRecord, DatabaseManag
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+STAGE_LABELS = {
+    "queued": "等待后台服务",
+    "starting": "正在启动任务",
+    "preparing": "正在准备模型文件",
+    "checking_environment": "正在检测转换环境",
+    "loading_model": "正在加载 PT 模型",
+    "validating_model": "正在验证 PT 模型",
+    "exporting": "正在导出移动端模型",
+    "locating_artifact": "正在整理导出产物",
+    "verifying_artifact": "正在验证移动端模型",
+    "publishing": "正在登记模型资产",
+    "remote_connecting": "正在连接远程服务",
+    "remote_uploading": "正在上传至远程服务",
+    "remote_queued": "等待远程转换服务",
+    "remote_running": "远程服务正在转换",
+    "downloading": "正在下载转换产物",
+    "local_verification": "正在本地复验产物",
+    "finalizing": "正在整理处理结果",
+    "completed": "处理完成",
+    "failed": "处理失败",
+    "interrupted": "处理已中断",
+}
+
 
 class ConversionConfig(BaseModel):
     mode: Literal["wsl", "local", "remote"] = "wsl"
     distribution: str = Field(default="Ubuntu", min_length=1, max_length=100)
     python_path: str = Field(default="", max_length=512)
     input_size: Literal[320, 416, 640] = 640
+    # Legacy execution argument. New jobs replace it with a path resolved from
+    # an immutable calibration dataset snapshot.
     calibration_data: str = Field(default="", max_length=512)
+    default_calibration_dataset_id: str = Field(default="coco8-dev", min_length=1, max_length=64)
     timeout_seconds: int = Field(default=1800, ge=30, le=7200)
     auto_convert: bool = False
     remote_endpoint: str = Field(default="", max_length=512)
@@ -41,7 +68,10 @@ class ConversionConfig(BaseModel):
     remote_poll_interval_seconds: float = Field(default=2.0, ge=0.5, le=30.0)
     remote_verifier_mode: Literal["wsl", "local"] = "wsl"
 
-    @field_validator("distribution", "python_path", "calibration_data", "remote_endpoint", "remote_token_env")
+    @field_validator(
+        "distribution", "python_path", "calibration_data", "default_calibration_dataset_id",
+        "remote_endpoint", "remote_token_env",
+    )
     @classmethod
     def safe_argument(cls, value: str) -> str:
         value = value.strip()
@@ -74,7 +104,9 @@ def environment_conversion_config() -> ConversionConfig | None:
         mode="remote",
         python_path=os.environ.get("CONVERSION_VERIFIER_PYTHON", sys.executable),
         input_size=int(os.environ.get("CONVERSION_INPUT_SIZE", "640")),
-        calibration_data=os.environ.get("CONVERSION_CALIBRATION_DATA", ""),
+        default_calibration_dataset_id=os.environ.get(
+            "CONVERSION_DEFAULT_CALIBRATION_DATASET_ID", "coco8-dev"
+        ),
         timeout_seconds=int(os.environ.get("CONVERSION_TIMEOUT_SECONDS", "3600")),
         auto_convert=os.environ.get("CONVERSION_AUTO_CONVERT", "false").strip().lower()
         in {"1", "true", "yes", "on"},
@@ -186,17 +218,25 @@ class ProcessRunner:
         return [str(executable), str(script), "--directory", str(directory.resolve()), *args]
 
     def run(self, config: ConversionConfig, action: str, directory: Path,
-            stopping: threading.Event) -> dict:
+            stopping: threading.Event,
+            progress_callback: Callable[[dict], None] | None = None) -> dict:
         if config.mode == "remote":
-            return RemoteConversionRunner(self).run(config, action, directory, stopping)
-        return self.run_worker(config, action, directory, stopping)
+            return RemoteConversionRunner(self).run(
+                config, action, directory, stopping, progress_callback=progress_callback
+            )
+        return self.run_worker(
+            config, action, directory, stopping, progress_callback=progress_callback
+        )
 
     def run_worker(self, config: ConversionConfig, action: str, directory: Path,
-                   stopping: threading.Event, request: dict | None = None) -> dict:
+                   stopping: threading.Event, request: dict | None = None,
+                   progress_callback: Callable[[dict], None] | None = None) -> dict:
         directory.mkdir(parents=True, exist_ok=True)
         atomic_json(directory / "request.json", request or config.model_dump())
         result_path = directory / "result.json"
+        progress_path = directory / "progress.json"
         result_path.unlink(missing_ok=True)
+        progress_path.unlink(missing_ok=True)
         (directory / "cancel").unlink(missing_ok=True)
         command = self.command(config, action, directory)
         deadline = time.monotonic() + (60 if action == "check" else config.timeout_seconds) + 20
@@ -204,7 +244,11 @@ class ProcessRunner:
             process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT,
                                        cwd=PROJECT_ROOT, shell=False,
                                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            last_progress = ""
             while process.poll() is None:
+                last_progress = self._emit_worker_progress(
+                    progress_path, progress_callback, last_progress
+                )
                 if stopping.wait(0.2):
                     (directory / "cancel").touch()
                     try:
@@ -218,6 +262,7 @@ class ProcessRunner:
                     process.kill()
                     process.wait()
                     raise RuntimeError("转换进程超时，请检查环境或增加超时时间")
+            self._emit_worker_progress(progress_path, progress_callback, last_progress)
         if not result_path.is_file():
             # Detailed logs remain private to administrators; no stdout is returned to clients.
             raise RuntimeError(f"转换进程未返回结果（退出码 {process.returncode}），请查看任务日志")
@@ -225,6 +270,34 @@ class ProcessRunner:
         if not result.get("ok") or process.returncode:
             raise RuntimeError(str(result.get("error", "转换进程失败"))[:2000])
         return result
+
+    @staticmethod
+    def _emit_worker_progress(
+        path: Path,
+        callback: Callable[[dict], None] | None,
+        previous: str,
+    ) -> str:
+        if callback is None or not path.is_file():
+            return previous
+        try:
+            raw = path.read_text(encoding="utf-8")
+            if raw == previous:
+                return previous
+            payload = json.loads(raw)
+            stage = str(payload.get("stage", ""))
+            if not re.fullmatch(r"[a-z0-9_]{1,64}", stage):
+                return previous
+            progress = payload.get("progress")
+            if progress is not None and not isinstance(progress, (int, float)):
+                progress = None
+            callback({
+                "stage": stage,
+                "message": str(payload.get("message", ""))[:300],
+                "progress": None if progress is None else max(0, min(100, round(progress))),
+            })
+            return raw
+        except (OSError, ValueError, json.JSONDecodeError):
+            return previous
 
 
 class RemoteConversionRunner:
@@ -234,15 +307,28 @@ class RemoteConversionRunner:
         self.local_runner = local_runner
 
     def run(self, config: ConversionConfig, action: str, directory: Path,
-            stopping: threading.Event) -> dict:
+            stopping: threading.Event,
+            progress_callback: Callable[[dict], None] | None = None) -> dict:
+        def emit(stage: str, message: str, progress: int | None = None,
+                 stage_label: str | None = None) -> None:
+            if progress_callback is not None:
+                progress_callback({
+                    "stage": stage,
+                    "stage_label": stage_label or STAGE_LABELS.get(stage, stage),
+                    "message": message,
+                    "progress": progress,
+                })
+
         token = os.environ.get(config.remote_token_env, "")
         if not token or any(ord(character) < 33 for character in token):
             raise ValueError(f"远程转换令牌环境变量 {config.remote_token_env} 未配置或格式无效")
         if action == "check":
+            emit("remote_connecting", "正在检测远程转换服务")
             health = self._json_request(config, token, "GET", "/v1/health")
             if health.get("status") != "ok" or health.get("protocolVersion") != 1:
                 raise RuntimeError("远程转换服务协议不兼容")
             verifier_config = config.model_copy(update={"mode": config.remote_verifier_mode})
+            emit("local_verification", "远程服务可用，正在检测本地复验环境")
             verifier = self.local_runner.run_worker(verifier_config, "check", directory, stopping)
             return {"ok": True, "remote_available": True, "mobile_available": verifier.get("mobile_available", False),
                     "protocolVersion": 1, "verifier": verifier}
@@ -257,13 +343,18 @@ class RemoteConversionRunner:
             f"{local_job_id}:{source_hash}:{config.input_size}:{config.calibration_data}".encode("utf-8")
         ).hexdigest()
         query = urlencode({"inputSize": config.input_size, "calibrationData": config.calibration_data})
+        emit("remote_uploading", "正在向远程转换服务上传 PT", 0)
         submitted = self._json_request(
             config, token, "POST", f"/v1/conversions?{query}", source=source,
             extra_headers={"Idempotency-Key": idempotency_key, "X-Source-SHA256": source_hash},
+            transfer_callback=lambda value: emit(
+                "remote_uploading", "正在向远程转换服务上传 PT", value
+            ),
         )
         remote_job_id = self._remote_job_id(submitted)
         deadline = time.monotonic() + config.timeout_seconds
         current = submitted
+        self._emit_remote_progress(current, progress_callback)
         while current.get("status") in {"queued", "running"}:
             if stopping.wait(config.remote_poll_interval_seconds):
                 self._cancel(config, token, remote_job_id)
@@ -272,6 +363,7 @@ class RemoteConversionRunner:
                 self._cancel(config, token, remote_job_id)
                 raise RuntimeError("远程转换超时，任务已请求取消")
             current = self._json_request(config, token, "GET", f"/v1/conversions/{remote_job_id}")
+            self._emit_remote_progress(current, progress_callback)
         if current.get("status") != "succeeded":
             code = str(current.get("error", {}).get("code", "remote_failed")) if isinstance(current.get("error"), dict) else "remote_failed"
             raise RuntimeError(f"远程转换失败（{code[:100]}）")
@@ -289,8 +381,13 @@ class RemoteConversionRunner:
         if not isinstance(artifact_url, str) or not artifact_url.startswith("/") or artifact_url.startswith("//"):
             raise RuntimeError("远程转换产物 URL 必须是同源绝对路径")
         target = directory / "android.tflite"
-        self._download(config, token, artifact_url, target, expected_size, expected_hash)
+        emit("downloading", "正在下载远程转换产物", 0)
+        self._download(
+            config, token, artifact_url, target, expected_size, expected_hash,
+            progress_callback=lambda value: emit("downloading", "正在下载远程转换产物", value),
+        )
         verifier_config = config.model_copy(update={"mode": config.remote_verifier_mode})
+        emit("local_verification", "下载完成，正在本地复验移动端模型")
         verified = self.local_runner.run_worker(
             verifier_config, "verify", directory, stopping,
             request={"input_size": config.input_size, "expected_labels": labels},
@@ -309,7 +406,8 @@ class RemoteConversionRunner:
         return connection, base
 
     def _json_request(self, config: ConversionConfig, token: str, method: str, path: str,
-                      source: Path | None = None, extra_headers: dict[str, str] | None = None) -> dict:
+                      source: Path | None = None, extra_headers: dict[str, str] | None = None,
+                      transfer_callback: Callable[[int], None] | None = None) -> dict:
         connection, base = self._connection(config)
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/json", **(extra_headers or {})}
         try:
@@ -321,9 +419,14 @@ class RemoteConversionRunner:
                 for name, value in headers.items():
                     connection.putheader(name, value)
                 connection.endheaders()
+                total = source.stat().st_size
+                sent = 0
                 with source.open("rb") as handle:
                     for block in iter(lambda: handle.read(1024 * 1024), b""):
                         connection.send(block)
+                        sent += len(block)
+                        if transfer_callback is not None:
+                            transfer_callback(round(sent / total * 100))
             response = connection.getresponse()
             payload = response.read(1024 * 1024 + 1)
             if len(payload) > 1024 * 1024:
@@ -341,7 +444,8 @@ class RemoteConversionRunner:
             connection.close()
 
     def _download(self, config: ConversionConfig, token: str, path: str, target: Path,
-                  expected_size: int, expected_hash: str) -> None:
+                  expected_size: int, expected_hash: str,
+                  progress_callback: Callable[[int], None] | None = None) -> None:
         connection, base = self._connection(config)
         partial = target.with_suffix(".tflite.part")
         digest = hashlib.sha256()
@@ -364,6 +468,8 @@ class RemoteConversionRunner:
                         raise RuntimeError("远程转换产物超过声明大小")
                     digest.update(block)
                     output.write(block)
+                    if progress_callback is not None:
+                        progress_callback(round(received / expected_size * 100))
                 output.flush()
                 os.fsync(output.fileno())
             if received != expected_size or digest.hexdigest().lower() != expected_hash.lower():
@@ -372,6 +478,33 @@ class RemoteConversionRunner:
         finally:
             connection.close()
             partial.unlink(missing_ok=True)
+
+    @staticmethod
+    def _emit_remote_progress(
+        remote: dict, callback: Callable[[dict], None] | None
+    ) -> None:
+        if callback is None:
+            return
+        status = str(remote.get("status", "running"))
+        remote_stage = str(remote.get("stage") or status)
+        stage = "remote_queued" if status == "queued" else "remote_running"
+        label = str(remote.get("stageLabel") or (
+            "等待远程转换服务" if status == "queued" else "远程服务正在转换"
+        ))[:100]
+        queue_position = remote.get("queuePosition")
+        message = str(remote.get("message") or label)[:300]
+        if status == "queued" and isinstance(queue_position, int) and queue_position > 0:
+            message = f"远程队列第 {queue_position} 位 · {message}"
+        progress = remote.get("progress")
+        if progress is not None and not isinstance(progress, (int, float)):
+            progress = None
+        callback({
+            "stage": stage,
+            "stage_label": f"远程服务 · {label}",
+            "message": message,
+            "progress": None if progress is None else max(0, min(100, round(progress))),
+            "remote_stage": remote_stage[:64],
+        })
 
     def _cancel(self, config: ConversionConfig, token: str, remote_job_id: str) -> None:
         try:
@@ -504,17 +637,19 @@ class ConversionService:
 
     def _save(self, job: dict) -> dict:
         job["updated_at"] = time.time()
+        persisted_job = json.loads(json.dumps(job, ensure_ascii=False))
+        persisted_job.pop("queue_position", None)
         if self._database is not None:
             self._import_legacy_once()
             with self._database.session() as session:
                 row = session.get(ConversionJobRecord, job["id"])
                 values = {
-                    "action": str(job.get("action") or "inspect"),
-                    "status": str(job.get("status") or "failed"),
-                    "attempt": max(1, int(job.get("attempt", 1))),
-                    "created_epoch": float(job.get("created_at", time.time())),
+                    "action": str(persisted_job.get("action") or "inspect"),
+                    "status": str(persisted_job.get("status") or "failed"),
+                    "attempt": max(1, int(persisted_job.get("attempt", 1))),
+                    "created_epoch": float(persisted_job.get("created_at", time.time())),
                     "updated_epoch": float(job["updated_at"]),
-                    "payload": json.loads(json.dumps(job, ensure_ascii=False)),
+                    "payload": persisted_job,
                 }
                 if row is None:
                     session.add(ConversionJobRecord(job_id=job["id"], **values))
@@ -523,8 +658,33 @@ class ConversionService:
                         setattr(row, key, value)
             return job
         with self._db() as db:
-            db.execute("INSERT OR REPLACE INTO jobs VALUES (?, ?)", (job["id"], json.dumps(job, ensure_ascii=False)))
+            db.execute(
+                "INSERT OR REPLACE INTO jobs VALUES (?, ?)",
+                (job["id"], json.dumps(persisted_job, ensure_ascii=False)),
+            )
         return job
+
+    @staticmethod
+    def _decorate_jobs(jobs: list[dict]) -> list[dict]:
+        views = [json.loads(json.dumps(job, ensure_ascii=False)) for job in jobs]
+        queued = sorted(
+            (job for job in views if job.get("status") == "queued"),
+            key=lambda item: float(item.get("created_at", 0)),
+        )
+        positions = {job["id"]: index + 1 for index, job in enumerate(queued)}
+        for job in views:
+            status = str(job.get("status", "queued"))
+            stage = str(job.get("stage") or (
+                "completed" if status == "succeeded" else status
+            ))
+            job["stage"] = stage
+            job["stage_label"] = str(
+                job.get("stage_label") or STAGE_LABELS.get(stage, "正在处理")
+            )
+            job.setdefault("progress", 100 if status == "succeeded" else None)
+            job.setdefault("progress_message", job["stage_label"])
+            job["queue_position"] = positions.get(job.get("id"))
+        return views
 
     def jobs(self) -> list[dict]:
         if self._database is not None:
@@ -533,10 +693,15 @@ class ConversionService:
                 rows = session.scalars(select(ConversionJobRecord).order_by(
                     ConversionJobRecord.created_epoch.desc()
                 )).all()
-                return [json.loads(json.dumps(row.payload, ensure_ascii=False)) for row in rows]
+                return self._decorate_jobs([
+                    json.loads(json.dumps(row.payload, ensure_ascii=False)) for row in rows
+                ])
         with self._guard, self._db() as db:
-            return sorted((json.loads(row[0]) for row in db.execute("SELECT payload FROM jobs")),
-                          key=lambda job: job["created_at"], reverse=True)
+            jobs = sorted(
+                (json.loads(row[0]) for row in db.execute("SELECT payload FROM jobs")),
+                key=lambda job: job["created_at"], reverse=True,
+            )
+            return self._decorate_jobs(jobs)
 
     def get(self, job_id: str) -> dict:
         if self._database is not None:
@@ -545,12 +710,14 @@ class ConversionService:
                 row = session.get(ConversionJobRecord, job_id)
                 if row is None:
                     raise KeyError(job_id)
-                return json.loads(json.dumps(row.payload, ensure_ascii=False))
+                return self._decorate_jobs([
+                    json.loads(json.dumps(row.payload, ensure_ascii=False))
+                ])[0]
         with self._guard, self._db() as db:
             row = db.execute("SELECT payload FROM jobs WHERE id = ?", (job_id,)).fetchone()
             if row is None:
                 raise KeyError(job_id)
-            return json.loads(row[0])
+            return self._decorate_jobs([json.loads(row[0])])[0]
 
     def submit(self, action: str, metadata: dict | None = None) -> dict:
         with self._guard:
@@ -561,9 +728,25 @@ class ConversionService:
                 self.runner.command(config, action, self.root / "probe")
                 if action in {"check", "mobile"}:
                     self.runner.preflight(config)
-            job = self._save({"id": uuid.uuid4().hex, "action": action, "status": "queued",
-                              "created_at": time.time(), "config": config.model_dump(),
-                              "attempt": 1, "metadata": metadata or {}, "result": {}, "error": None})
+            now = time.time()
+            job = self._save({
+                "id": uuid.uuid4().hex,
+                "action": action,
+                "status": "queued",
+                "stage": "queued",
+                "stage_label": STAGE_LABELS["queued"],
+                "progress": None,
+                "progress_message": "任务已进入单 worker 队列",
+                "created_at": now,
+                "started_at": None,
+                "completed_at": None,
+                "activity_at": now,
+                "config": config.model_dump(),
+                "attempt": 1,
+                "metadata": metadata or {},
+                "result": {},
+                "error": None,
+            })
         self._wake.set()
         return job
 
@@ -577,7 +760,20 @@ class ConversionService:
                 self.runner.command(config, job["action"], self.root / "probe")
                 if job["action"] in {"check", "mobile"}:
                     self.runner.preflight(config)
-            job.update(status="queued", error=None, config=config.model_dump(), attempt=job["attempt"] + 1)
+            now = time.time()
+            job.update(
+                status="queued",
+                stage="queued",
+                stage_label=STAGE_LABELS["queued"],
+                progress=None,
+                progress_message="重试任务已进入单 worker 队列",
+                started_at=None,
+                completed_at=None,
+                activity_at=now,
+                error=None,
+                config=config.model_dump(),
+                attempt=job["attempt"] + 1,
+            )
             self._save(job)
         self._wake.set()
         return job
@@ -609,7 +805,17 @@ class ConversionService:
                 attempt_dir = self.root / job["id"] / str(job["attempt"])
                 attempt_dir.mkdir(parents=True, exist_ok=True)
                 (attempt_dir / "cancel").touch()
-                self._save({**job, "status": "interrupted", "error": "服务重启时任务尚未完成，请检查后重试"})
+                self._save({
+                    **job,
+                    "status": "interrupted",
+                    "stage": "interrupted",
+                    "stage_label": STAGE_LABELS["interrupted"],
+                    "progress": None,
+                    "progress_message": "服务重启时任务尚未完成",
+                    "completed_at": time.time(),
+                    "activity_at": time.time(),
+                    "error": "服务重启时任务尚未完成，请检查后重试",
+                })
         self._stop.clear()
         self._thread = threading.Thread(target=self._work, name="model-conversion", daemon=True)
         self._thread.start()
@@ -627,7 +833,48 @@ class ConversionService:
             self._lock_file = None
 
     def _default_handler(self, job: dict, directory: Path, config: ConversionConfig) -> dict:
-        return self.runner.run(config, job["action"], directory, self._stop)
+        return self.run_action(job, config, job["action"], directory)
+
+    def run_action(
+        self, job: dict, config: ConversionConfig, action: str, directory: Path
+    ) -> dict:
+        parameters = inspect.signature(self.runner.run).parameters
+        if "progress_callback" in parameters:
+            return self.runner.run(
+                config,
+                action,
+                directory,
+                self._stop,
+                progress_callback=lambda payload: self.report_progress(job, payload),
+            )
+        return self.runner.run(config, action, directory, self._stop)
+
+    def report_progress(self, job: dict, payload: dict) -> None:
+        stage = str(payload.get("stage") or "starting")
+        if not re.fullmatch(r"[a-z0-9_]{1,64}", stage):
+            stage = "starting"
+        progress = payload.get("progress")
+        if progress is not None:
+            if not isinstance(progress, (int, float)):
+                progress = None
+            else:
+                progress = max(0, min(100, round(progress)))
+        now = time.time()
+        with self._guard:
+            job.update(
+                stage=stage,
+                stage_label=str(
+                    payload.get("stage_label") or STAGE_LABELS.get(stage, "正在处理")
+                )[:100],
+                progress=progress,
+                progress_message=str(
+                    payload.get("message") or STAGE_LABELS.get(stage, "正在处理")
+                )[:300],
+                activity_at=now,
+            )
+            if payload.get("remote_stage"):
+                job["remote_stage"] = str(payload["remote_stage"])[:64]
+            self._save(job)
 
     def _work(self) -> None:
         while not self._stop.is_set():
@@ -635,7 +882,17 @@ class ConversionService:
                 queued = [job for job in self.jobs() if job["status"] == "queued"]
                 job = queued[-1] if queued else None
                 if job:
-                    job["status"] = "running"
+                    now = time.time()
+                    job.update(
+                        status="running",
+                        stage="starting",
+                        stage_label=STAGE_LABELS["starting"],
+                        progress=None,
+                        progress_message="后台 worker 已接收任务",
+                        started_at=now,
+                        completed_at=None,
+                        activity_at=now,
+                    )
                     self._save(job)
             if not job:
                 self._wake.wait(1)
@@ -645,8 +902,31 @@ class ConversionService:
             directory = self.root / job["id"] / str(job["attempt"])
             try:
                 result = self.handler(job, directory, ConversionConfig.model_validate(job["config"]))
-                job.update(status="succeeded", result=result, error=None)
+                now = time.time()
+                job.update(
+                    status="succeeded",
+                    stage="completed",
+                    stage_label=STAGE_LABELS["completed"],
+                    progress=100,
+                    progress_message="后台处理已完成",
+                    activity_at=now,
+                    completed_at=now,
+                    result=result,
+                    error=None,
+                )
             except Exception as exc:
-                job.update(status="interrupted" if self._stop.is_set() else "failed", error=str(exc)[:2000])
+                interrupted = self._stop.is_set()
+                stage = "interrupted" if interrupted else "failed"
+                now = time.time()
+                job.update(
+                    status=stage,
+                    stage=stage,
+                    stage_label=STAGE_LABELS[stage],
+                    progress=None,
+                    progress_message=STAGE_LABELS[stage],
+                    activity_at=now,
+                    completed_at=now,
+                    error=str(exc)[:2000],
+                )
             with self._guard:
                 self._save(job)

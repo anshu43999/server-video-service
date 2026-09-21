@@ -45,6 +45,7 @@ from .model_catalog import ModelCatalog
 from .model_parameters import ModelParameterConflict, ModelParameterError, ModelParameterStore
 from .conversion import ConversionService
 from .conversion_api import create_conversion_router
+from .calibration import CalibrationDatasetCatalog
 from .alerts.rules import RuleValidationError, rule_registry
 from .alerts.disposition import alert_disposition_store
 from .alerts.verification import AlertVerificationStore, alert_verification_store
@@ -59,6 +60,12 @@ model_parameter_store = ModelParameterStore(database_manager=database if databas
 conversion_service = ConversionService(
     model_catalog.project_root / "models" / "local-conversion",
     database_manager=database if database.enabled else None,
+)
+calibration_catalog = CalibrationDatasetCatalog(
+    Path(settings.calibration_root),
+    database if database.enabled else None,
+    max_expanded_bytes=settings.calibration_max_expanded_bytes,
+    max_files=settings.calibration_max_files,
 )
 alert_verification_store.configure_database(database if database.enabled else None)
 alert_delivery = AlertDeliveryService(database_manager=database if database.enabled else None)
@@ -325,7 +332,12 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="Server Video Service", version="0.1.0", lifespan=lifespan)
 app.include_router(create_auth_router())
-app.include_router(create_conversion_router(conversion_service, model_catalog))
+app.include_router(create_conversion_router(
+    conversion_service,
+    model_catalog,
+    calibration_catalog=calibration_catalog,
+    max_calibration_upload_bytes=settings.calibration_max_upload_bytes,
+))
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/admin", StaticFiles(directory=STATIC_DIR, html=True), name="admin")
 

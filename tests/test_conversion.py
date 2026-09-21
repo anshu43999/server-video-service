@@ -165,7 +165,7 @@ class ConversionTests(unittest.TestCase):
             "CONVERSION_REMOTE_ENDPOINT": "http://model-converter:8090",
             "CONVERSION_REMOTE_ALLOW_INSECURE_HTTP": "true",
             "CONVERSION_VERIFIER_PYTHON": sys.executable,
-            "CONVERSION_CALIBRATION_DATA": "dataset.yaml",
+            "CONVERSION_DEFAULT_CALIBRATION_DATASET_ID": "coco8-dev",
             "CONVERSION_INPUT_SIZE": "416",
             "CONVERSION_TIMEOUT_SECONDS": "1200",
             "CONVERSION_AUTO_CONVERT": "true",
@@ -179,6 +179,7 @@ class ConversionTests(unittest.TestCase):
         assert config is not None
         self.assertEqual("remote", config.mode)
         self.assertEqual(416, config.input_size)
+        self.assertEqual("coco8-dev", config.default_calibration_dataset_id)
         self.assertTrue(config.auto_convert)
         self.assertEqual(config, fresh)
         self.assertNotIn("secret-not-part-of-config", json.dumps(config.model_dump()))

@@ -30,7 +30,7 @@ class DatabaseConfigurationTests(unittest.TestCase):
                 "alert_rules", "alert_rule_bindings", "alert_rule_audits",
                 "model_parameter_profiles", "model_parameter_audits",
                 "alert_verification_config", "alert_verifications", "alert_delivery_receipts",
-                "conversion_config", "conversion_jobs", "stream_configs",
+                "conversion_config", "conversion_jobs", "calibration_datasets", "stream_configs",
             },
         )
         database.close()

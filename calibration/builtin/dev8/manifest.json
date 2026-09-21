@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "datasetId": "coco8-dev",
+  "name": "内置 8 图转换测试",
+  "license": "Project-generated test fixture; not derived from COCO images",
+  "purpose": "conversion-smoke-test-only",
+  "contentSha256": "f889fd83d2d7a73b3a4f228ff4739dccbf489e05699b98df3bd97cdcfe9f4937",
+  "yamlPath": "dataset.yaml",
+  "files": [
+    {
+      "path": "dataset.yaml",
+      "sizeBytes": 158,
+      "sha256": "9a0557d5b2289f3ad1ddcc2d5e206e4f09cc3545ecb4036daf42088473672ba9"
+    },
+    {
+      "path": "images/000001.png",
+      "sizeBytes": 246680,
+      "sha256": "c9bf9a451869ae7600a7e81fb17d38e70828c10516de0042d985709ed18d49fe"
+    },
+    {
+      "path": "images/000002.png",
+      "sizeBytes": 240758,
+      "sha256": "3af2636351a2576fa21667bd2aa58dd2e9c36a9927bbcd0aa2c6721e4e88ceab"
+    },
+    {
+      "path": "images/000003.png",
+      "sizeBytes": 218068,
+      "sha256": "baed54428a08e48ef3b83d23e8dc16a770b8b224c9ed26d45d2d8658928d3727"
+    },
+    {
+      "path": "images/000004.png",
+      "sizeBytes": 228168,
+      "sha256": "22d98d98df3a8c241dfa2a1ec671ebc13467bb22f56d8cf7419768e57c58d1cc"
+    },
+    {
+      "path": "images/000005.png",
+      "sizeBytes": 243132,
+      "sha256": "d29307854c841e00dcef47067248e22056486508ef82c35146947fa7c3f901a2"
+    },
+    {
+      "path": "images/000006.png",
+      "sizeBytes": 247801,
+      "sha256": "6ae9aebd533c8b2b1383e316f1654955172c2b1d008d9754f368c4ffdfe3b863"
+    },
+    {
+      "path": "images/000007.png",
+      "sizeBytes": 241308,
+      "sha256": "0937415dd854db5fffafb51107132ac265b01a7f338154c9011748a2a9125e29"
+    },
+    {
+      "path": "images/000008.png",
+      "sizeBytes": 247456,
+      "sha256": "4adc4734e4691f2afcd29c14f028909276369395e33a112b58c9b6b21183190d"
+    }
+  ]
+}

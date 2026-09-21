@@ -1,0 +1,6 @@
+# Project-owned synthetic images for conversion smoke tests only.
+path: __AIYOLO_BUILTIN_CALIBRATION_ROOT__
+train: images
+val: images
+names:
+  0: calibration

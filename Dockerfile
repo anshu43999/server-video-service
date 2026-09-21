@@ -24,7 +24,7 @@ COPY --chown=app:app alembic ./alembic
 COPY --chown=app:app alembic.ini run.py ./
 COPY --chown=app:app tools/conversion_worker.py ./tools/conversion_worker.py
 COPY --chown=app:app deploy/container-models ./models
-RUN mkdir -p /app/evidence && chown app:app /app/evidence
+RUN mkdir -p /app/evidence /app/calibration && chown app:app /app/evidence /app/calibration
 
 USER app
 

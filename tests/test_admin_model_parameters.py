@@ -30,10 +30,12 @@ class AdminModelParameterViewTests(unittest.TestCase):
         for marker in ("/parameters?platform=${platform}", "method:'PUT'", "method:'DELETE'", "expectedRevision"):
             self.assertIn(marker, self.js)
 
-    def test_head_semantics_and_delivery_boundary_are_explicit(self):
+    def test_head_semantics_and_connected_delivery_flow_are_explicit(self):
         self.assertIn('"head": "PPE_NO_HELMET"', self.parameters_py)
         self.assertIn('"head": "未佩戴安全帽"', self.parameters_py)
-        self.assertIn("Android 参数同步和识别事件自动告警投递尚未接通", self.html)
+        self.assertIn("参数保存后由 Android 端同步使用", self.html)
+        self.assertIn("符合告警规则的识别事件会自动投递到告警中心", self.html)
+        self.assertNotIn("Android 参数同步和识别事件自动告警投递尚未接通", self.html)
 
     def test_parameter_and_activation_actions_are_independent(self):
         self.assertIn("data-model-parameters=", self.js)
@@ -41,7 +43,7 @@ class AdminModelParameterViewTests(unittest.TestCase):
         self.assertIn("querySelectorAll('[data-model-activate]')", self.conversion_js)
         self.assertNotIn("querySelectorAll('[data-model-id]')", self.conversion_js)
         self.assertIn("if(!state.demo)await refreshLiveModels()", self.html)
-        self.assertIn("conversion.js?v=20260914-param-cards", self.html)
+        self.assertIn("conversion.js?v=20260921-conversion-progress", self.html)
 
     def test_detection_terms_have_accessible_explanations(self):
         for marker in (

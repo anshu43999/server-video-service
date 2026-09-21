@@ -21,6 +21,7 @@ RUN pip install --no-cache-dir -r requirements-converter-service.txt
 
 COPY --chown=converter:converter converter_service ./converter_service
 COPY --chown=converter:converter tools/conversion_worker.py ./tools/conversion_worker.py
+COPY --chown=converter:converter calibration/builtin/dev8 /app/calibration-builtin
 RUN mkdir -p /data /calibration && chown -R converter:converter /data /calibration
 
 USER converter

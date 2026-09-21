@@ -21,7 +21,19 @@ class ProtocolError(Exception):
 
 
 def public_job(job: dict) -> dict:
-    payload = {"jobId": job["jobId"], "status": job["status"]}
+    payload = {
+        "jobId": job["jobId"],
+        "status": job["status"],
+        "stage": job.get("stage"),
+        "stageLabel": job.get("stageLabel"),
+        "progress": job.get("progress"),
+        "message": job.get("message"),
+        "queuePosition": job.get("queuePosition"),
+        "createdAt": job.get("createdAt"),
+        "startedAt": job.get("startedAt"),
+        "updatedAt": job.get("updatedAt"),
+        "completedAt": job.get("completedAt"),
+    }
     if job["status"] == "succeeded":
         internal = job.get("result") or {}
         allowed = {
@@ -62,9 +74,11 @@ def create_app(
             job_store = JobStore(
                 config.root,
                 config.calibration_root,
+                builtin_calibration_manifest=config.builtin_calibration_manifest,
                 timeout_seconds=config.timeout_seconds,
                 max_queued_jobs=config.max_queued_jobs,
             )
+        job_store.validate_calibration("coco8.yaml")
         job_store.start()
         try:
             yield

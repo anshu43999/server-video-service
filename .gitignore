@@ -8,6 +8,8 @@ __pycache__/
 backups/
 calibration/*
 !calibration/README.md
+!calibration/builtin/
+!calibration/builtin/**
 models/*.pt
 models/*.onnx
 models/*.tflite

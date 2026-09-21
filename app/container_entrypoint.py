@@ -64,8 +64,6 @@ def validate_environment(environ: Mapping[str, str]) -> list[str]:
         verifier = Path(environ.get("CONVERSION_VERIFIER_PYTHON", ""))
         if not verifier.is_file():
             errors.append("CONVERSION_VERIFIER_PYTHON must reference the verifier Python")
-        if not environ.get("CONVERSION_CALIBRATION_DATA", "").strip():
-            errors.append("CONVERSION_CALIBRATION_DATA is required")
     return errors
 
 

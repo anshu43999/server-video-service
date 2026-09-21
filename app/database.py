@@ -235,6 +235,25 @@ class ConversionJobRecord(Base):
     )
 
 
+class CalibrationDatasetRecord(Base):
+    __tablename__ = "calibration_datasets"
+
+    dataset_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    version: Mapped[str] = mapped_column(String(50), nullable=False)
+    scenario: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    image_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    yaml_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("name", "version", name="uq_calibration_dataset_name_version"),
+    )
+
+
 class StreamConfigRecord(Base):
     __tablename__ = "stream_configs"
 
@@ -301,7 +320,8 @@ class DatabaseManager:
             "alert_rules", "alert_rule_bindings", "alert_rule_audits",
             "model_parameter_profiles", "model_parameter_audits",
             "alert_verification_config", "alert_verifications", "alert_delivery_receipts",
-            "conversion_config", "conversion_jobs", "stream_configs", "alembic_version",
+            "conversion_config", "conversion_jobs", "calibration_datasets",
+            "stream_configs", "alembic_version",
         }
         available = set(inspect(self.engine).get_table_names())
         missing = sorted(required - available)
