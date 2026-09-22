@@ -127,6 +127,8 @@ bash deploy/deploy.sh up
 
 项目只保留一套根目录 `compose.yml`，CentOS Stream 9、Rocky Linux、AlmaLinux、Ubuntu 等 Linux 服务器共用同一编排。它包含后端、独立模型转换服务、PostgreSQL 和 MediaMTX，并启用配置门禁、自动数据库迁移、健康检查、持久卷、只读模型/校准集挂载、非 root 进程、转换资源限制和日志轮转。部署前先阅读 [Docker 部署说明](docs/docker-deployment.md)：
 
+首次启动成功后仍需完成管理员初始化、防火墙、App 地址、转换输入尺寸/校准集和 Android 模型签名；真实部署问题与逐项命令见部署说明的“部署完成后的手动配置清单”。小规格测试服务器的资源补偿措施仅在文档补充说明中列出，不作为通用生产步骤。
+
 ```bash
 cp .env.example .env
 # 编辑 .env，替换全部 CHANGE_ME

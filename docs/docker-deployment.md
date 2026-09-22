@@ -44,8 +44,6 @@ Dockerfile 不复制 `.env`、密钥、业务校准数据或历史日志。模�
 
 视频服务每次启动都会校验 `/models/registry.json`，并将尚未登记的 Git 模型及其已校验产物增量导入 `model-data` 卷。导入以 `modelId` 为键，已有模型、文件和当前激活选择不会被覆盖；同一路径存在不同内容时服务会拒绝启动并报告冲突。该流程对已有 `model-data` 卷同样生效，因此升级时不需要也不应删除模型卷。自备模型目录没有注册表时跳过导入，不影响仅提供原始视频的部署。
 
-部分仍使用旧版 Docker Engine 默认 seccomp 配置的 CentOS/RHEL 主机会阻止 PostgreSQL 16 创建 `postmaster.pid` 或 WAL 临时文件，并返回 `Operation not permitted`。统一 Compose 仅对不发布宿主机端口、只连接内部 `control` 网络的 `postgres` 容器设置 `seccomp=unconfined` 兼容项，同时保留 `no-new-privileges`。视频服务、转换服务和 MediaMTX 继续使用默认 seccomp。该配置避免不同 Linux 主机首次初始化数据库时出现环境相关失败；主机仍应及时升级内核和 Docker Engine。
-
 ## 3. 网络和防火墙
 
 默认端口策略：
@@ -63,15 +61,8 @@ Dockerfile 不复制 `.env`、密钥、业务校准数据或历史日志。模�
 
 `.env.example` 面向当前直接 HTTP 联调场景，使用 `CONTROL_BIND_ADDRESS=0.0.0.0` 和 `CONTROL_PORT=18080`。如果部署了 Nginx/Caddy/TLS 网关，应将控制面改回仅本机绑定，并让网关上游指向该端口。媒体端口冲突时修改对应的 `MEDIA_*_PORT`，同时更新防火墙和客户端地址。未提供 `.env` 覆盖时，Compose 仍使用仅本机 `8080` 作为安全回退值。
 
-按实际来源网段收紧防火墙；下面示例展示直接 HTTP 联调需要放行的端口：
-
-```bash
-sudo firewall-cmd --permanent --add-port=18080/tcp
-sudo firewall-cmd --permanent --add-port=8889/tcp
-sudo firewall-cmd --permanent --add-port=8888/tcp
-sudo firewall-cmd --permanent --add-port=8189/udp
-sudo firewall-cmd --reload
-```
+按实际来源网段收紧云安全组和主机防火墙。CentOS/RHEL 的 `firewall-cmd` 命令见
+`deploy/centos/README.md`；其他发行版使用各自的防火墙工具。
 
 公网部署必须在 8080 前配置 Nginx/Caddy/负载均衡器，启用 HTTPS、动态账号 Session 鉴权、限流和访问日志。WHEP/LL-HLS 也应通过 MediaMTX 原生 TLS 或独立媒体反向代理启用 HTTPS；在 TLS 完成前只应在受信任内网使用 `MEDIA_PUBLIC_SCHEME=http`。跨 NAT 的公网 WebRTC 还需要按实际拓扑部署 STUN/TURN，当前 Compose 不宣称已解决 NAT 穿透。
 
@@ -95,9 +86,61 @@ docker compose --env-file .env -f compose.yml ps
 
 从 App 所在网络验证 `8889/tcp`、`8888/tcp` 和 `8189/udp`，再创建真实 RTSP 流检查 WHEP 首帧与 LL-HLS 回退。仅看到容器运行不等于视频链路验收通过。
 
-转换服务不对宿主机发布端口。管理后台首次读取转换配置时会从容器环境得到 `remote` 模式，地址为 `http://model-converter:8090`；这里的明文 HTTP 只允许用于不可从宿主机访问的 Compose 内部网络，并由独立 Bearer Token 保护。若数据库中已有 Windows/WSL 时代保存的转换配置，它会优先于环境默认值，需要在管理后台重新保存为 remote 模式。可先选择内置 `coco8-dev` 完成一次无需联网下载校准图片的转换冒烟测试；正式验收仍应上传业务校准图片 ZIP 和 PT，再选择该业务校准集执行真实移动端转换，检查任务保存的校准集版本与哈希、TFLite 下载后本地复验和模型目录登记均成功。
+转换服务不对宿主机发布端口。管理后台首次读取转换配置时会从容器环境得到 `remote` 模式，地址为 `http://model-converter:8090`；这里的明文 HTTP 只允许用于不可从宿主机访问的 Compose 内部网络，并由独立 Bearer Token 保护。可先选择内置 `coco8-dev` 完成一次无需联网下载校准图片的转换冒烟测试；正式验收仍应上传业务校准图片 ZIP 和 PT，再选择该业务校准集执行真实移动端转换，检查任务保存的校准集版本与哈希、TFLite 下载后本地复验和模型目录登记均成功。
 
-## 5. 日志、备份和恢复
+## 5. 部署完成后的手动配置清单
+
+Compose 只能启动基础设施，以下项目不会也不应该由镜像替管理员自动决定。首次部署和
+新服务器迁移后应逐项完成。
+
+| 项目 | 是否必做 | 操作与验收 |
+|---|---|---|
+| 管理员账号 | 必做 | 打开 `http://服务器:18080/admin/`，按页面引导初始化管理员并使用动态 Session 登录；生产 `.env` 不配置 `ADMIN_TOKEN`、`MOBILE_TOKEN` |
+| 云安全组与主机防火墙 | 必做 | 仅向 App 所在来源开放 `18080/tcp`、`8889/tcp`、`8888/tcp`、`8189/udp`；5432、8090、9997 不对外开放 |
+| App 服务地址 | 必做 | App 填 `http://服务器IP:18080`；`8889` 是 WHEP 信令端口，不能替代控制 API 端口 |
+| 转换配置 | 使用模型转换时必做 | 管理后台保存 `remote` 模式、320/416/640 输入尺寸和默认校准集；输入尺寸在 PT 验证成功时冻结，修改只影响之后新上传的 PT |
+| 业务校准集 | 业务 INT8 必做 | 在“模型资产 → 校准集”上传具有代表性的业务图片 ZIP，再在转换任务中选择；`coco8-dev` 只验证链路 |
+| 模型签名 | App 动态安装模型时必做 | 按附录 C 将本地 Ed25519 私钥安全上传并挂载到 `video-service`；只有签名后 `androidReady=true` |
+| 媒体鉴权/TLS | 公网生产必做 | 当前 HTTP 配置只适合受信环境；公网应配置网关 HTTPS、MediaMTX TLS/鉴权以及必要的 STUN/TURN |
+| 备份 | 必做 | 备份 PostgreSQL 和四个业务卷；不要执行 `docker compose down -v` |
+
+### 5.1 验证转换参数确实生效
+
+修改后台下拉框后必须点击“保存配置”。查看 PostgreSQL 中持久化的输入尺寸：
+
+```bash
+docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select payload->>'"'"'input_size'"'"' from conversion_config where config_key='"'"'default'"'"';"'
+```
+
+新任务提交后检查转换服务真正收到的尺寸：
+
+```bash
+docker compose exec -T model-converter sh -c 'd=$(ls -td /data/jobs/* 2>/dev/null | head -n 1); echo JOB=$d; grep -E "\"inputSize\"|\"input_size\"" "$d/job.json" "$d/request.json" 2>/dev/null'
+```
+
+输出中的 `inputSize` 必须与上传 PT 前在管理后台保存的尺寸一致。输入尺寸在 PT 验证成功
+时冻结，之后修改配置不会改变已有模型版本或已有任务。
+
+## 6. 真实部署问题与处理结论
+
+| 现象 | 根因 | 正确处理 |
+|---|---|---|
+| `CHANGE_ME placeholders` | `.env` 仍是模板 | 替换所有占位值；数据库密码与 URL 一致，保留字符做 URL 编码 |
+| `127.0.0.1:8080 bind: address already in use` | 主机已有其他服务占用端口 | 使用 `.env` 的 `CONTROL_PORT=18080` 或其他空闲端口，并同步 App 与防火墙 |
+| `worker_result_missing` | 转换子进程未写出最终结果，可能是宿主机 OOM、原生库崩溃或进程被外部终止 | 检查任务 `progress.json`、容器日志和 `dmesg`；中间 `source_int8.tflite` 不等于成功产物 |
+| “无法连接远程转换服务或响应无效” | 服务重建、瞬时连接中断或子进程异常后上层收到无效响应 | 从 `video-service` 请求 `http://model-converter:8090/v1/health`，确认 Token 长度、HTTP 200 和两个容器 healthy，再看任务目录 |
+| 后台显示产物已生成，App 仍等待 | TFLite 已转换但 Manifest 未签名，`androidReady=false` | 配置匹配 App 公钥的 Ed25519 私钥并生成新签名产物 |
+| “模型签名私钥无法读取或格式无效” | 宿主机私钥未挂载、路径误填，或 `root:root 0600` 导致 UID 10001 无法读取 | 使用 Compose 覆盖只读挂载，设置 `10001:10001 0400`，在容器内解析验证 |
+| 新代码拉取后服务行为没变化 | 容器仍在运行旧镜像 | 重新执行 `build` 和 `up -d --force-recreate`；仅 `git pull` 不会更新镜像或容器 |
+
+排查远程转换连通性时，可从 `video-service` 容器内部访问健康接口。不要把
+`model-converter:8090` 发布到公网：
+
+```bash
+docker compose --env-file .env -f compose.yml exec -T video-service python -c 'import os,urllib.request; n=os.environ.get("CONVERSION_REMOTE_TOKEN_ENV","AIYOLO_REMOTE_CONVERSION_TOKEN"); u=os.environ["CONVERSION_REMOTE_ENDPOINT"].rstrip("/")+"/v1/health"; t=os.environ.get(n,""); print("ENDPOINT="+os.environ.get("CONVERSION_REMOTE_ENDPOINT","")); print("TOKEN_LEN="+str(len(t))); r=urllib.request.Request(u,headers={"Authorization":"Bearer "+t}); x=urllib.request.urlopen(r,timeout=10); print("HEALTH",x.status,x.read().decode())'
+```
+
+## 7. 日志、备份和恢复
 
 应用只向 stdout/stderr 输出日志，Compose 使用 `json-file` 驱动，单文件 20 MB、保留 5 个。查看日志：
 
@@ -115,7 +158,7 @@ bash deploy/deploy.sh backup-db
 
 备份文件写入项目的 `backups/`，应转存到独立存储并按组织策略加密。还需要单独备份 Docker 卷 `aiyolo_model-data`、`aiyolo_evidence-data`、`aiyolo_converter-data`、`aiyolo_calibration-data`，以及宿主机只读模型目录。恢复会覆盖业务状态，必须先停止写入并在隔离环境验证备份；校准集数据库记录与 `calibration-data` 卷必须按同一备份点恢复。
 
-## 6. 升级和回滚
+## 8. 升级和回滚
 
 每次发布为视频服务和转换服务都使用不可变镜像标签，例如 `aiyolo-video-service:2026.09.1` 与 `aiyolo-model-converter:2026.09.1`，不要在生产长期使用 `latest`：
 
@@ -135,3 +178,169 @@ bash deploy/deploy.sh stop
 ```
 
 不要使用 `docker compose down -v`，该命令会删除 PostgreSQL、模型市场、转换任务/产物、校准集图片和告警证据卷。
+
+签名部署使用覆盖文件时，升级、状态、日志和停止命令按附录 C 执行。私钥和服务器专用
+覆盖文件不由 Git 管理，迁移新服务器时要通过安全渠道单独恢复。
+
+## 附录 A：小规格测试服务器补充说明
+
+本节仅适用于约 2 GB RAM 的临时测试服务器，不是通用生产部署建议。正式生产环境应按
+第 1 节容量建议提供足够的物理内存，并根据真实模型、并发流和编码负载完成压测。
+
+实际在 1.9 GB RAM、无 Swap 的 CentOS 测试机上，640 INT8 导出在生成中间 TFLite 后被
+内核杀死，后台只看到 `worker_result_missing`。`CONVERTER_MEMORY_LIMIT=8g` 只是容器
+上限，不会为 1.9 GB 的宿主机创造 8 GB 内存。临时测试机可以增加 4 GB Swap：
+
+```bash
+if [ ! -f /swapfile ]; then fallocate -l 4G /swapfile || dd if=/dev/zero of=/swapfile bs=1M count=4096; chmod 600 /swapfile; mkswap /swapfile; fi; swapon --show | grep -q '/swapfile' || swapon /swapfile; grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab; free -h
+```
+
+看到 `Swap: 4.0G` 才表示生效，不需要重启 Docker。Swap 速度远慢于 RAM，只用于测试机
+缓冲，不能替代生产物理内存。后台可先将“新上传模型输入尺寸”保存为 320，再重新上传并
+验证 PT；输入尺寸在验证成功时冻结，旧模型和旧任务仍保持原来的 640。
+
+判断是否发生宿主机 OOM：
+
+```bash
+dmesg -T | grep -Ei 'oom|out of memory|killed process' | tail -n 30
+```
+
+`docker inspect` 显示 `OOMKilled=false` 也不能排除容器内转换子进程被宿主机杀死。
+
+## 附录 B：旧版宿主机与 Git 客户端兼容说明
+
+本节只用于维护仍在运行旧版 Docker Engine、内核或 Git 的服务器，不属于新服务器的常规
+部署步骤。新部署应优先升级到受支持的软件版本。
+
+部分旧版 Docker Engine 的默认 seccomp 配置会阻止 PostgreSQL 16 创建
+`postmaster.pid` 或 WAL 临时文件，并返回 `Operation not permitted`。当前 `compose.yml`
+已仅为不发布宿主机端口、只连接内部 `control` 网络的 PostgreSQL 容器配置
+`seccomp=unconfined`，其他服务仍使用默认 seccomp。使用当前 Compose 时无需在服务器上
+手工编辑该项；此兼容设置也不能替代 Docker Engine 与内核升级。
+
+如果旧 Git 不支持 `git restore`，可在确认 `compose.yml` 没有需要保留的本地修改后使用：
+
+```bash
+git checkout -- compose.yml
+```
+
+服务器专属挂载和环境覆盖应放在 Git 仓库外的 Compose 覆盖文件中，不要直接修改受 Git
+管理的 `compose.yml`，否则后续 `git pull` 可能因本地修改而中止。
+
+## 附录 C：新服务器配置本地模型签名
+
+本节仅适用于 App 需要动态下载并安装服务器转换模型的部署。普通视频服务或仅在后台生成
+TFLite 时可以暂不配置。私钥属于服务器外部机密，不随 Git 仓库、Docker 镜像或数据库
+备份分发。
+
+“移动端产物已生成”只表示 TFLite 已通过转换和预热，即 `androidConverted=true`。App
+动态安装还要求 `androidReady=true`、`signatureStatus=signed`、完整的 TFLite 与
+Manifest，并要求服务器配置的 `keyId` 与 App 内置 Ed25519 公钥的 `keyId` 完全一致。
+
+### C.1 确认本地材料
+
+在可信工作站确认以下两项：
+
+1. 服务可以直接读取的未加密 Ed25519 PEM 私钥，例如
+   `C:\path\to\aiyolo-model-ed25519.pem`；
+2. App 中与该私钥公钥配对的 `keyId`。下文使用 `YOUR_APP_KEY_ID` 占位，必须替换为真实值。
+
+私钥不得放入项目目录、提交 Git、复制到 `.env` 或通过聊天和普通日志传输。
+
+### C.2 在新服务器创建密钥目录
+
+登录已经完成基础 Compose 部署的新服务器，然后执行：
+
+```bash
+install -d -m 700 /etc/aiyolo/secrets
+```
+
+### C.3 从本地 Windows 上传私钥
+
+以下命令必须在保存私钥的 Windows PowerShell 中执行，不能粘贴到 CentOS Shell。替换本地
+路径和 `SERVER_IP`：
+
+```powershell
+scp "C:\path\to\aiyolo-model-ed25519.pem" root@SERVER_IP:/etc/aiyolo/secrets/aiyolo-model-ed25519.pem
+```
+
+如果在 CentOS 中执行带盘符的 Windows 路径，`scp` 会把 `C:` 或 `E:` 当成远程主机名并
+报 `Could not resolve hostname`。使用 Linux/macOS 工作站时，改用该系统的本地绝对路径
+执行同样的 `scp` 上传。
+
+### C.4 设置服务器文件权限
+
+回到服务器执行。`video-service` 使用 UID/GID `10001`；`root:root 0600` 的文件对容器
+进程不可读，因此将密钥文件设为数值属主 `10001:10001` 和权限 `0400`，父目录仍保持
+root 专用：
+
+```bash
+chown 10001:10001 /etc/aiyolo/secrets/aiyolo-model-ed25519.pem && chmod 400 /etc/aiyolo/secrets/aiyolo-model-ed25519.pem && stat -c 'owner=%u:%g mode=%a path=%n' /etc/aiyolo/secrets/aiyolo-model-ed25519.pem
+```
+
+预期看到 `owner=10001:10001 mode=400`。不要输出或 `cat` 私钥内容。
+
+### C.5 创建服务器专用 Compose 覆盖文件
+
+在服务器创建 `/etc/aiyolo/compose-signing.yml`。必须替换 `YOUR_APP_KEY_ID`，私钥路径保持
+如下即可：
+
+```yaml
+services:
+  video-service:
+    environment:
+      MODEL_SIGNING_KEY_ID: YOUR_APP_KEY_ID
+      MODEL_SIGNING_PRIVATE_KEY_PATH: /run/secrets/aiyolo-model-ed25519.pem
+    volumes:
+      - /etc/aiyolo/secrets/aiyolo-model-ed25519.pem:/run/secrets/aiyolo-model-ed25519.pem:ro,Z
+```
+
+`MODEL_SIGNING_PRIVATE_KEY_PATH` 是容器内路径，只在 `.env` 填写宿主机路径不会自动挂载
+文件。基础 `.env` 中的两个签名变量可以保持为空，由该覆盖文件提供实际值。`:Z` 用于
+CentOS/RHEL 的 SELinux 标记，在统一 Compose 部署中保留。
+
+先检查两份 Compose 文件能否合并：
+
+```bash
+docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml config --quiet
+```
+
+### C.6 重新创建视频服务并验证
+
+加载签名覆盖并重新创建 `video-service`：
+
+```bash
+docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml up -d --force-recreate video-service && docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml ps
+```
+
+在不输出密钥内容的前提下，验证容器收到正确的 `keyId`，并且能够读取和解析私钥：
+
+```bash
+docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml exec -T video-service python -c 'import os; from pathlib import Path; from cryptography.hazmat.primitives import serialization; p=Path(os.environ["MODEL_SIGNING_PRIVATE_KEY_PATH"]); serialization.load_pem_private_key(p.read_bytes(),password=None); print("SIGNING_KEY_OK",os.environ["MODEL_SIGNING_KEY_ID"],p)'
+```
+
+预期输出 `SIGNING_KEY_OK`、真实 `keyId` 和
+`/run/secrets/aiyolo-model-ed25519.pem`。随后在管理后台新建一次移动端转换任务，成功结果
+应显示 `androidReady=true` 和 `signatureStatus=signed`，再由 App 完成下载与签名校验。
+
+若任务在签名阶段失败且尚未登记 Android 产物，修复后可以重试。已经登记为 unsigned 的
+旧产物不会自动补签，需要重新上传 PT 形成新模型版本并重新转换。
+
+### C.7 启用签名后的日常命令
+
+当前 `deploy/deploy.sh` 只加载仓库根目录的 `compose.yml`。启用签名后，所有可能创建或
+更新容器的 Compose 命令都必须同时加载覆盖文件，否则新容器会丢失私钥挂载：
+
+```bash
+# 拉取代码、重新构建并更新服务
+git pull origin main && docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml build model-converter video-service && docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml up -d --remove-orphans && docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml ps
+
+# 日常重启，不重新构建镜像
+docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml restart
+
+# 查看后端与转换服务日志
+docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml logs --tail=100 video-service model-converter
+```
+
+`/etc/aiyolo/compose-signing.yml` 和私钥都不由 Git 管理。迁移到下一台新服务器时，需要按
+本附录重新安全上传和配置。
