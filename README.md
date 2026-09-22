@@ -129,6 +129,9 @@ bash deploy/deploy.sh up
 
 首次启动成功后仍需完成管理员初始化、防火墙、App 地址、转换输入尺寸/校准集和 Android 模型签名；真实部署问题与逐项命令见部署说明的“部署完成后的手动配置清单”。小规格测试服务器的资源补偿措施仅在文档补充说明中列出，不作为通用生产步骤。
 
+服务器上的签名、测试媒体等私有 Compose 覆盖文件由 `deploy/deploy.sh` 自动读取
+`/etc/aiyolo/compose-overrides.list`；不要直接修改仓库中的基础 `compose.yml`。
+
 ```bash
 cp .env.example .env
 # 编辑 .env，替换全部 CHANGE_ME

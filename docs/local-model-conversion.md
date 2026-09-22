@@ -7,8 +7,8 @@ COCO 仅用作用户功能测试模型，不代表业务精度。训练好的 `.
 ## 使用步骤
 
 1. 启动服务并登录管理后台，进入“模型资产 → 上传与模型处理”。生产环境使用登录后签发的动态 Session；仅在 `DEPLOYMENT_ENV=development` 的本机调试中可配置 `ADMIN_TOKEN` 使用静态便捷鉴权。
-2. 展开转换环境配置，选择 WSL，填写发行版和虚拟环境的 Python **绝对路径**。不需要手动 activate。Linux 或 macOS 后台可选择本机 Python。WSL 仅支持 Windows 本机盘符中的工程目录，不支持 UNC 或自定义挂载盘路径。
-3. 保存配置后点击“检测已保存环境”。系统会先同步探测同一 WSL 发行版和 Python 解释器，探测失败时不会创建任务；探测通过后才排队做依赖检测。移动端转换和失败任务重试也会执行同样的前置探测。依赖检测成功不代表某个业务模型必然转换成功；实际模型仍需独立导出与试推理。
+2. 本机开发环境可选择 WSL 或 local，并填写对应 Python **绝对路径**，不需要手动 activate。Docker 生产环境不填写 WSL 发行版或宿主机 Python 路径；统一选择后台保存的 remote 配置，由 Compose 内部的 `model-converter` 容器执行转换。
+3. 保存本机开发配置后点击“检测已保存环境”。系统会先同步探测 Python 解释器，探测失败时不会创建任务；探测通过后才排队做依赖检测。Docker 生产环境由容器健康检查和远程转换接口负责接线，不执行服务器宿主机 WSL 探测。依赖检测成功不代表某个业务模型必然转换成功；实际模型仍需独立导出与试推理。
 4. 上传 Ultralytics 常规目标检测 PT，填写名称、版本、场景与用途。当前不支持分类、分割、姿态和端到端/NMS 内置检测模型。每次上传创建独立模型 ID；名称、版本与两端原始标签保持一致。
 5. PT 验证任务通过后，目录显示模型，按流绑定下拉框可以选择它。可设为**新流默认模型**，已有流不自动切换。
 6. 点击任务上的“生成移动端模型”，或者在配置中开启自动转换。第一版采用已验证的 INT8 导出链，输入支持 640、416、320。已上传版本的输入尺寸固定，修改默认尺寸只影响新上传。
@@ -55,13 +55,8 @@ COCO 仅用作用户功能测试模型，不代表业务精度。训练好的 `.
 
 `androidConverted` 表示转换文件通过电脑端 LiteRT 张量校验与预热并可供管理员诊断下载；`androidReady` 只有在同一产物生成有效 Ed25519 签名 Manifest 后才为 `true`，表示满足 App 安装的服务端前置条件。App 侧仍需完成真实下载、验签、预热和激活后才能用于端侧推理。
 
-签名私钥通过进程环境配置，不进入转换配置或任务数据库：
-
-```dotenv
-MODEL_SIGNING_KEY_ID=internal-dev-2026-01
-MODEL_SIGNING_PRIVATE_KEY_PATH=D:/secrets/aiyolo-model-ed25519.pem
-```
-
-私钥必须是未加密 PKCS#8 PEM 格式的 Ed25519 私钥，并位于仓库外的受控路径。未配置或配置无效时，PT 服务端推理和 TFLite 转换仍可完成，但模型保持 `signatureStatus=unsigned`、`androidReady=false`，App 必须拒绝安装。完整协议见 `docs/model-signing-publish.md`。所有新模型仍默认 `releaseEligible=false`；COCO 仅作为内部功能测试模型。
-
-M26 当时不修改 App，也未实现远程转换服务、业务精度验收、正式签名分发或全量设备验证；其中远程转换服务端已由后续 M00-T07 补齐，其余边界不变。
+签名私钥不属于本机转换环境配置，也不应直接写入 `.env` 或转换配置。Docker 生产环境如需
+App 动态安装模型，按 `docs/docker-deployment.md` 附录 C 将私钥挂载到 `video-service`，并
+使用与 App 公钥匹配的 `keyId`。未配置签名时，PT 服务端推理和 TFLite 转换仍可完成，但
+模型保持 `signatureStatus=unsigned`、`androidReady=false`，App 不得安装；COCO 仅作为内部
+功能测试模型。

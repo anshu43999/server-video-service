@@ -4,11 +4,14 @@
 
 ## 控制面与媒体面
 
-Compose 的控制面安全回退值只绑定本机 `127.0.0.1:8080`，可交给 Nginx/Caddy/云网关做 HTTPS、鉴权和限流。当前 `.env.example` 为减少直接 HTTP 部署改动，会覆盖为 `0.0.0.0:18080`；使用该模式时必须通过安全组或防火墙限制来源。媒体面独立暴露，可使用不同规则：
+Compose 的控制面容器端口固定为 `8080`。未覆盖时宿主机安全回退为
+`127.0.0.1:8080`；当前 `.env.example` 的直接 HTTP 示例映射为
+`0.0.0.0:18080`。使用直接 HTTP 模式时必须通过安全组或防火墙限制来源；使用
+Nginx/Caddy/云网关时可将控制面改回本机绑定。媒体面独立暴露，可使用不同规则：
 
 | 入口 | 默认绑定 | 用途 |
 |---|---|---|
-| `CONTROL_PORT`（8080） | `CONTROL_BIND_ADDRESS=127.0.0.1` | FastAPI 控制面、管理页和 WebSocket |
+| `CONTROL_PORT`（宿主机默认 8080，示例 18080） | `CONTROL_BIND_ADDRESS=127.0.0.1`（示例 0.0.0.0） | FastAPI 控制面、管理页和 WebSocket |
 | `MEDIA_WHEP_PORT`（8889） | `MEDIA_BIND_ADDRESS=0.0.0.0` | WebRTC/WHEP 播放 |
 | `MEDIA_LLHLS_PORT`（8888） | `MEDIA_BIND_ADDRESS=0.0.0.0` | LL-HLS 回退 |
 | `MEDIA_WEBRTC_UDP_PORT/udp`（8189） | `MEDIA_BIND_ADDRESS=0.0.0.0` | WebRTC 媒体包 |
@@ -21,24 +24,22 @@ MediaMTX 控制 API `:9997` 仅通过 Compose 的 `control` 内部网络提供�
 
 仓库只包含无密钥模板 [mediamtx.yml.example](../deploy/mediamtx/mediamtx.yml.example)。生产部署应复制为被 `.gitignore` 忽略的 `deploy/mediamtx/mediamtx.yml`，或设置 `MEDIAMTX_CONFIG` 指向外部挂载文件，然后在该文件中配置媒体鉴权、TLS 证书和公网主机名。证书文件（`*.crt`、`*.key`）同样被忽略，禁止提交令牌、密码或私钥。
 
-```powershell
-Copy-Item deploy/mediamtx/mediamtx.yml.example deploy/mediamtx/mediamtx.yml
-$env:MEDIAMTX_CONFIG = "./deploy/mediamtx/mediamtx.yml"
-$env:CONTROL_BIND_ADDRESS = "127.0.0.1"
-docker compose up --build -d
-docker compose ps
-docker compose logs --tail=100 mediamtx video-service
+```bash
+cp deploy/mediamtx/mediamtx.yml.example deploy/mediamtx/mediamtx.yml
+# 在 .env 中设置 MEDIAMTX_CONFIG=./deploy/mediamtx/mediamtx.yml
+bash deploy/deploy.sh config
+bash deploy/deploy.sh up
+bash deploy/deploy.sh logs mediamtx
 ```
 
 如需对外使用 WHEP/LL-HLS，应将 TLS 终止放在网关，并把 `MEDIAMTX_WHEP_URL`、`MEDIAMTX_LLHLS_URL` 设置为网关的 HTTPS 基地址；不要直接把 Uvicorn 或 MediaMTX 控制 API 暴露到公网。
 
 ## 运维检查
 
-```powershell
-docker compose config
-docker compose ps
-docker compose restart mediamtx
-docker compose logs --tail=100 mediamtx
+```bash
+bash deploy/deploy.sh config
+bash deploy/deploy.sh status
+bash deploy/deploy.sh logs mediamtx
 ```
 
 `docker compose config` 应显示 `bluenviron/mediamtx:1.20.1`、`restart: unless-stopped`、独立的控制/媒体网络和上述端口。真实公网部署仍需补充网关鉴权、证书、STUN/TURN 和压测结果；这些不在本任务中伪造。

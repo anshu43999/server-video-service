@@ -3,17 +3,23 @@
 版本：`v1`（M09-T01，MVP）  
 状态：冻结，供 `server-video-service` 与 Android App `M14-T02/M14-T03` 共用。
 
-2026-09-08 增补（M26）：新增独立 `/api/conversion/*` 管理接口负责上传、后台处理与环境配置，目录/下载路径保持兼容。成对产物条目以 PT 为主产物，App 必须从 `artifacts` 中选择 Android TFLite；新增 `serverReady`、`androidReady`、`androidContract`、`placeholder` 字段。`androidReady` 只代表转换与电脑端预热通过，不代表 App 安装已接通。详见 `local-model-conversion.md`。下文原 M09 范围保留为历史基线，签名仍未实现。
-
-2026-09-20 增补（M28）：INT8 移动端产物新增可选 `calibrationDataset` 快照，记录所选校准集的 ID、名称、版本、场景、图片数、大小、内容 SHA-256、受控 YAML 相对路径与内置标记。该字段用于审计和阻止误删，不代表客户端可以直接访问服务器文件路径；校准集管理与转换接口见 `local-model-conversion.md`。
+当前版本：独立 `/api/conversion/*` 管理接口负责 PT 上传、后台处理、校准集和环境配置；目录/下载
+路径保持兼容。成对产物条目以 PT 为服务端主产物，App 必须从 `artifacts` 中选择 Android
+TFLite；`serverReady`、`androidReady`、`androidContract` 和 `calibrationDataset` 用于描述
+服务端验证、移动端签名状态和校准集快照。校准集快照记录所选档案的 ID、版本、图片数、大小、
+内容 SHA-256、受控 YAML 相对路径与内置标记，不代表客户端可以直接访问服务器文件路径。详见
+`local-model-conversion.md` 和 `docker-deployment.md` 附录 C。
 
 ## 1. 范围与边界
 
 模型市场是服务端提供、App 消费的场景化目录。MVP 只负责目录元数据和模型产物下载；不负责训练、格式转换、端侧推理或签名发布。
 
-**MVP 不含数字签名。** 客户端必须在下载完成后使用目录给出的 SHA-256 校验产物；签名、密钥、证书、灰度发布和签名错误码属于后续 M10，不得在本契约中假设已提供。
+Android 动态安装要求客户端校验目录中的 SHA-256，并在 `androidReady=true` 且
+`signatureStatus=signed` 时使用与 App 内置公钥匹配的 Ed25519 Manifest。未配置签名时，
+服务端仍可提供 PT 和未签名 TFLite 供管理员诊断下载，但客户端不得安装。
 
-控制面基础地址为 `http(s)://<server-host>:8080`。所有接口均使用 UTF-8 JSON（下载接口除外）。
+容器内控制面端口为 `8080`；直接 HTTP 部署示例通常通过宿主机 `18080` 对外发布，实际地址
+以部署 `.env` 的 `CONTROL_PORT` 为准。所有接口均使用 UTF-8 JSON（下载接口除外）。
 
 ## 2. 鉴权与安全约束
 

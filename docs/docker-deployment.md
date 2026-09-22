@@ -15,6 +15,12 @@ sudo docker compose version
 
 可将运维账号加入 `docker` 组，但该组等同主机 root 权限；生产环境应限制成员并记录操作审计。以下命令假设当前账号已有 Docker 权限，否则在 `docker` 前加 `sudo`。
 
+`deploy/deploy.sh` 始终加载仓库根目录的 `compose.yml`，并会自动读取服务器本地的
+`/etc/aiyolo/compose-overrides.list`（文件不存在时跳过）。清单每行写一个绝对路径，空行和
+`#` 注释会被忽略。这样签名私钥、测试视频等服务器差异不进入 Git，同时 `config`、`up`、
+`status`、`logs`、`backup-db` 和 `stop` 会自动使用同一组 Compose 文件。生产服务器只列出
+签名覆盖；临时测试服务器才额外列出测试媒体覆盖。
+
 ## 2. 配置目录和模型
 
 将仓库部署到固定目录，例如 `/opt/aiyolo/server-video-service`。仓库已包含转换后的 ONNX/TFLite 测试资产，不包含 PT 源权重；默认允许后端在没有可用服务端推理模型时启动并提供原始视频：
@@ -305,12 +311,32 @@ CentOS/RHEL 的 SELinux 标记，在统一 Compose 部署中保留。
 docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml config --quiet
 ```
 
-### C.6 重新创建视频服务并验证
-
-加载签名覆盖并重新创建 `video-service`：
+如果测试服务器还要读取宿主机测试视频，创建 `/etc/aiyolo/compose-test-media.yml`：
 
 ```bash
-docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml up -d --force-recreate video-service && docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml ps
+install -d -m 755 /var/lib/aiyolo/test-media
+printf '%s\n' 'services:' '  video-service:' '    volumes:' '      - /var/lib/aiyolo/test-media:/test-media:ro,Z' > /etc/aiyolo/compose-test-media.yml
+```
+
+测试视频放在 `/var/lib/aiyolo/test-media/`，后台视频源填写容器内路径，例如
+`/test-media/test.mp4`。这个覆盖文件只用于测试服务器，正式生产不要加入覆盖清单。
+
+在重新创建服务前配置服务器本地覆盖清单。生产服务器只写签名覆盖；临时测试服务器还要
+把测试媒体覆盖一起写入：
+
+```bash
+install -d -m 755 /etc/aiyolo
+printf '%s\n' /etc/aiyolo/compose-signing.yml > /etc/aiyolo/compose-overrides.list
+# 临时测试服务器使用下面这一行替换上一行：
+# printf '%s\n' /etc/aiyolo/compose-signing.yml /etc/aiyolo/compose-test-media.yml > /etc/aiyolo/compose-overrides.list
+```
+
+### C.6 重新创建视频服务并验证
+
+部署脚本会自动加载覆盖清单，并重新创建 `video-service`：
+
+```bash
+bash deploy/deploy.sh config && bash deploy/deploy.sh up
 ```
 
 在不输出密钥内容的前提下，验证容器收到正确的 `keyId`，并且能够读取和解析私钥：
@@ -328,19 +354,45 @@ docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml
 
 ### C.7 启用签名后的日常命令
 
-当前 `deploy/deploy.sh` 只加载仓库根目录的 `compose.yml`。启用签名后，所有可能创建或
-更新容器的 Compose 命令都必须同时加载覆盖文件，否则新容器会丢失私钥挂载：
+覆盖清单在 C.5 创建后会由 `deploy.sh` 自动加载，日常命令不再需要重复 `-f` 参数。检查并
+应用覆盖配置：
 
 ```bash
-# 拉取代码、重新构建并更新服务
-git pull origin main && docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml build model-converter video-service && docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml up -d --remove-orphans && docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml ps
+bash deploy/deploy.sh config
+bash deploy/deploy.sh up
+bash deploy/deploy.sh status
+```
 
-# 日常重启，不重新构建镜像
-docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml restart
+`deploy.sh` 会在覆盖文件缺失或清单使用相对路径时直接停止，不会启动半配置的服务。只有
+直接调用 `docker compose` 而不经过部署脚本时，才需要手工同时写 `-f` 参数。若希望在该
+服务器上长期直接执行 `docker compose up`，可以把服务器专用 Compose 文件写入 `.env` 的
+`COMPOSE_FILE`；不要把这行加入 `.env.example`：
 
-# 查看后端与转换服务日志
+```bash
+if grep -q '^COMPOSE_FILE=' .env; then sed -i 's#^COMPOSE_FILE=.*#COMPOSE_FILE=compose.yml:/etc/aiyolo/compose-signing.yml:/etc/aiyolo/compose-test-media.yml#' .env; else printf '%s\n' 'COMPOSE_FILE=compose.yml:/etc/aiyolo/compose-signing.yml:/etc/aiyolo/compose-test-media.yml' >> .env; fi
+```
+
+正式生产服务器不需要测试媒体时，只保留 `compose-signing.yml`：
+
+```bash
+if grep -q '^COMPOSE_FILE=' .env; then sed -i 's#^COMPOSE_FILE=.*#COMPOSE_FILE=compose.yml:/etc/aiyolo/compose-signing.yml#' .env; else printf '%s\n' 'COMPOSE_FILE=compose.yml:/etc/aiyolo/compose-signing.yml' >> .env; fi
+```
+
+配置后，在项目根目录执行 `docker compose up -d` 会加载这些文件；但它不会执行部署脚本
+的占位符检查、镜像构建和状态门禁，因此正式更新仍建议使用 `bash deploy/deploy.sh up`：
+
+```bash
+# 拉取代码、重新构建并更新服务（部署脚本会自动加载清单）
+git pull origin main && bash deploy/deploy.sh up
+
+# 日常查看状态和日志
+bash deploy/deploy.sh status
+bash deploy/deploy.sh logs video-service
+
+# 直接 Compose 调用时仍需显式带覆盖文件
 docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml logs --tail=100 video-service model-converter
 ```
 
-`/etc/aiyolo/compose-signing.yml` 和私钥都不由 Git 管理。迁移到下一台新服务器时，需要按
-本附录重新安全上传和配置。
+`/etc/aiyolo/compose-signing.yml`、`/etc/aiyolo/compose-overrides.list` 和私钥都不由 Git
+管理。迁移到下一台新服务器时，需要按本附录重新安全上传和配置。若迁移的是普通生产服务，
+不要把 `compose-test-media.yml` 加入清单。
