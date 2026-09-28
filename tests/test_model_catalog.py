@@ -23,14 +23,14 @@ class ModelCatalogTests(unittest.TestCase):
 
     def test_activate_requires_valid_server_format(self):
         with TestClient(app) as client:
-            response = client.post("/api/models/ultralytics-yolo11n-coco-dev-640-int8/activate")
+            response = client.post("/aiyoloapi/models/ultralytics-yolo11n-coco-dev-640-int8/activate")
             self.assertEqual(response.status_code, 409)
 
     def test_activate_migrated_pt_model(self):
         original = __import__("json").loads((model_catalog.registry_path).read_text(encoding="utf-8"))["activeServerModel"]
         try:
             with TestClient(app) as client:
-                response = client.post("/api/models/ultralytics-yolo11n-coco-dev-pt/activate")
+                response = client.post("/aiyoloapi/models/ultralytics-yolo11n-coco-dev-pt/activate")
                 self.assertEqual(response.status_code, 200)
                 self.assertTrue(response.json()["active_model"]["hashValid"])
         finally:
@@ -44,7 +44,7 @@ class ModelCatalogTests(unittest.TestCase):
         try:
             with TestClient(app) as client:
                 response = client.post(
-                    "/api/models/register",
+                    "/aiyoloapi/models/register",
                     json={"manifest_path": "models/converted/yolo11n_640_manifest.json"},
                 )
                 self.assertEqual(response.status_code, 200)

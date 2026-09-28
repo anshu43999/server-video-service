@@ -17,7 +17,7 @@ class AdminStreamLiveContractTests(unittest.TestCase):
     def test_live_create_submits_stream_id_and_source_url(self):
         for marker in ('id="source-url"', 'id="new-stream-status"', 'id="create-stream-submit"'):
             self.assertIn(marker, self.html)
-        self.assertIn("fetch('/api/streams',{method:'POST'", self.js)
+        self.assertIn("fetch('/aiyoloapi/streams',{method:'POST'", self.js)
         self.assertIn("source_url:source||null", self.js)
         self.assertIn("await refreshLiveStreams()", self.js)
 
@@ -34,7 +34,7 @@ class AdminStreamLiveContractTests(unittest.TestCase):
         self.assertIn("app.js?v=20260917-stream-preview-stale-frame", self.html)
 
     def test_live_preview_uses_authenticated_same_origin_mjpeg(self):
-        self.assertIn("`/api/streams/${encodeURIComponent(stream.stream_id)}/mjpeg?connection=${Date.now()}`", self.js)
+        self.assertIn("`/aiyoloapi/streams/${encodeURIComponent(stream.stream_id)}/mjpeg?connection=${Date.now()}`", self.js)
         self.assertIn("state.demo?STREAM_PREVIEW_IMAGES", self.js)
         self.assertNotIn("previewImage.src=STREAM_PREVIEW_IMAGES", self.js)
 

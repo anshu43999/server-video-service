@@ -15,7 +15,7 @@ class AdminLoginViewTests(unittest.TestCase):
     def test_login_gate_and_first_admin_setup_are_present(self):
         for marker in ("auth-gate", "auth-form", "auth-username", "auth-password", "admin-user-button"):
             self.assertIn(marker, self.html)
-        for marker in ("/api/auth/status", "/api/auth/setup", "/api/auth/login", "/api/auth/logout"):
+        for marker in ("/aiyoloapi/auth/status", "/aiyoloapi/auth/setup", "/aiyoloapi/auth/login", "/aiyoloapi/auth/logout"):
             self.assertIn(marker, self.js)
         self.assertIn("auth-locked", self.css)
 

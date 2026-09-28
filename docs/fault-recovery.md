@@ -12,7 +12,7 @@
 | WHEP 不可用 | 阻断 8889 或返回非 2xx | 客户端按协议顺序回退 LL-HLS（8888），并在 UI 显示“回退”状态 |
 | 服务重启 | `docker compose restart video-service` | 健康检查恢复；旧会话被关闭；重新创建/推流后无残留进程 |
 | MediaMTX 重启 | `docker compose restart mediamtx` | 首帧触发发布器重连；状态从 `reconnecting` 回到 `connected`；路径列表无重复发布者 |
-| 资源泄漏 | 重复执行启动→播放→断开→删除（至少 20 次） | `GET /api/metrics` 中会话数、订阅数和发布进程数回到基线；无持续增长 |
+| 资源泄漏 | 重复执行启动→播放→断开→删除（至少 20 次） | `GET /aiyoloapi/metrics` 中会话数、订阅数和发布进程数回到基线；无持续增长 |
 
 ## 可重复执行
 
@@ -29,7 +29,7 @@ docker compose ps
 ```powershell
 python tools/push_video.py --help
 Invoke-RestMethod http://127.0.0.1:8080/healthz
-Invoke-RestMethod http://127.0.0.1:8080/api/metrics | ConvertTo-Json -Depth 8
+Invoke-RestMethod http://127.0.0.1:8080/aiyoloapi/metrics | ConvertTo-Json -Depth 8
 ```
 
 按上表逐项注入故障。MediaMTX 重启使用：

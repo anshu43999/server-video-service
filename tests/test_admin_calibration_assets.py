@@ -15,7 +15,7 @@ class AdminCalibrationAssetsTests(unittest.TestCase):
 
     def test_admin_supports_real_calibration_assets_and_task_selection(self) -> None:
         for value in (
-            "/api/conversion/calibration-datasets",
+            "/aiyoloapi/conversion/calibration-datasets",
             "calibration-upload-form",
             "conversion-calibration-select",
             "calibrationDatasetId",

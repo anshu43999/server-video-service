@@ -521,12 +521,12 @@ async def healthz():
     return payload
 
 
-@app.get("/api/metrics")
+@app.get("/aiyoloapi/metrics")
 async def metrics(_: None = Depends(require_admin)):
     return {"system": system_metrics(), "streams": {stream_id: stream.metrics() for stream_id, stream in streams.items()}}
 
 
-@app.get("/api/dashboard/stats")
+@app.get("/aiyoloapi/dashboard/stats")
 async def dashboard_statistics(
     range: Literal["today", "7d", "30d"] = Query(default="today"),
     _: None = Depends(require_admin),
@@ -541,7 +541,7 @@ async def dashboard_statistics(
         ) from exc
 
 
-@app.get("/api/models")
+@app.get("/aiyoloapi/models")
 async def list_models(
     scenario: str | None = Query(default=None, min_length=1, max_length=128),
     _: None = Depends(require_catalog_access),
@@ -552,7 +552,7 @@ async def list_models(
     return {"models": models}
 
 
-@app.get("/api/models/{model_id}")
+@app.get("/aiyoloapi/models/{model_id}")
 async def model_detail(model_id: str, _: None = Depends(require_catalog_access)):
     try:
         model = model_catalog.get(model_id)
@@ -564,7 +564,7 @@ async def model_detail(model_id: str, _: None = Depends(require_catalog_access))
     return model
 
 
-@app.get("/api/models/{model_id}/versions")
+@app.get("/aiyoloapi/models/{model_id}/versions")
 async def model_versions(model_id: str, _: None = Depends(require_catalog_access)):
     try:
         return {"modelId": model_id, "versions": model_catalog.versions(model_id)}
@@ -575,7 +575,7 @@ async def model_versions(model_id: str, _: None = Depends(require_catalog_access
         )
 
 
-@app.get("/api/models/{model_id}/versions/{version}")
+@app.get("/aiyoloapi/models/{model_id}/versions/{version}")
 async def model_version_detail(model_id: str, version: str, _: None = Depends(require_catalog_access)):
     try:
         return model_catalog.get(model_id, version)
@@ -586,7 +586,7 @@ async def model_version_detail(model_id: str, version: str, _: None = Depends(re
         )
 
 
-@app.post("/api/models/{model_id}/migrate")
+@app.post("/aiyoloapi/models/{model_id}/migrate")
 async def migrate_model_release(
     model_id: str,
     request: ModelMigrationRequest,
@@ -641,7 +641,7 @@ async def _bound_model_streams(model_id: str) -> list[str]:
     return sorted(runtime_bindings | persisted_bindings)
 
 
-@app.delete("/api/models/{model_id}/versions/{version}")
+@app.delete("/aiyoloapi/models/{model_id}/versions/{version}")
 async def uninstall_model_version(model_id: str, version: str, _: None = Depends(require_admin)):
     bound_streams = await _bound_model_streams(model_id)
     if bound_streams:
@@ -664,7 +664,7 @@ async def uninstall_model_version(model_id: str, version: str, _: None = Depends
         raise HTTPException(status_code=409, detail={"code": "model_in_use", "message": str(exc)})
 
 
-@app.post("/api/models/{model_id}/versions/{version}/deprecate")
+@app.post("/aiyoloapi/models/{model_id}/versions/{version}/deprecate")
 async def deprecate_model_version(
     model_id: str,
     version: str,
@@ -679,7 +679,7 @@ async def deprecate_model_version(
         raise HTTPException(status_code=409, detail={"code": "invalid_model_state", "message": str(exc)})
 
 
-@app.post("/api/models/{model_id}/versions/{version}/revoke")
+@app.post("/aiyoloapi/models/{model_id}/versions/{version}/revoke")
 async def revoke_model_version(
     model_id: str,
     version: str,
@@ -694,7 +694,7 @@ async def revoke_model_version(
         raise HTTPException(status_code=409, detail={"code": "invalid_model_state", "message": str(exc)})
 
 
-@app.delete("/api/models/{model_id}")
+@app.delete("/aiyoloapi/models/{model_id}")
 async def uninstall_model(model_id: str, _: None = Depends(require_admin)):
     bound_streams = await _bound_model_streams(model_id)
     if bound_streams:
@@ -740,7 +740,7 @@ def _parameter_actor(request: Request) -> str:
     return actor.strip()[:128] or "admin"
 
 
-@app.get("/api/models/{model_id}/parameters")
+@app.get("/aiyoloapi/models/{model_id}/parameters")
 async def get_model_parameters(
     model_id: str,
     platform: Literal["android", "server"] = Query(default="android"),
@@ -752,7 +752,7 @@ async def get_model_parameters(
         raise HTTPException(status_code=503, detail={"code": exc.code, "message": str(exc)})
 
 
-@app.put("/api/models/{model_id}/parameters")
+@app.put("/aiyoloapi/models/{model_id}/parameters")
 async def update_model_parameters(
     model_id: str,
     request: ModelParameterRequest,
@@ -776,7 +776,7 @@ async def update_model_parameters(
         raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)})
 
 
-@app.delete("/api/models/{model_id}/parameters")
+@app.delete("/aiyoloapi/models/{model_id}/parameters")
 async def reset_model_parameters(
     model_id: str,
     http_request: Request,
@@ -793,7 +793,7 @@ async def reset_model_parameters(
         raise HTTPException(status_code=503, detail={"code": exc.code, "message": str(exc)})
 
 
-@app.get("/api/models/{model_id}/artifacts/{artifact_id}/download")
+@app.get("/aiyoloapi/models/{model_id}/artifacts/{artifact_id}/download")
 async def download_model_artifact(
     model_id: str,
     artifact_id: str,
@@ -849,7 +849,7 @@ async def download_model_artifact(
     )
 
 
-@app.get("/api/models/{model_id}/versions/{version}/artifacts/{artifact_id}/download")
+@app.get("/aiyoloapi/models/{model_id}/versions/{version}/artifacts/{artifact_id}/download")
 async def download_model_version_artifact(
     model_id: str,
     version: str,
@@ -899,7 +899,7 @@ async def download_model_version_artifact(
     )
 
 
-@app.post("/api/models/{model_id}/activate")
+@app.post("/aiyoloapi/models/{model_id}/activate")
 async def activate_model(model_id: str, _: None = Depends(require_admin)):
     try:
         model = model_catalog.activate(model_id)
@@ -910,7 +910,7 @@ async def activate_model(model_id: str, _: None = Depends(require_admin)):
     return {"active_model": model}
 
 
-@app.post("/api/models/register")
+@app.post("/aiyoloapi/models/register")
 async def register_models(request: RegisterManifestRequest, _: None = Depends(require_admin)):
     try:
         models = model_catalog.register_manifest(request.manifest_path)
@@ -920,17 +920,17 @@ async def register_models(request: RegisterManifestRequest, _: None = Depends(re
 
 
 # --- Runtime alert rule management (M11-T07) -------------------------------
-@app.get("/api/rules")
+@app.get("/aiyoloapi/rules")
 async def list_rules(_: None = Depends(require_admin)):
     return {"rules": rule_registry.list()}
 
 
-@app.get("/api/rules/audit")
+@app.get("/aiyoloapi/rules/audit")
 async def list_rule_audit(rule_id: str | None = Query(default=None), _: None = Depends(require_admin)):
     return {"audit": rule_registry.audits(rule_id)}
 
 
-@app.get("/api/rules/{rule_id}")
+@app.get("/aiyoloapi/rules/{rule_id}")
 async def get_rule(rule_id: str, _: None = Depends(require_admin)):
     try:
         return rule_registry.get(rule_id)
@@ -938,7 +938,7 @@ async def get_rule(rule_id: str, _: None = Depends(require_admin)):
         raise HTTPException(status_code=404, detail={"code": "rule_not_found", "message": "rule not found"})
 
 
-@app.post("/api/rules", status_code=201)
+@app.post("/aiyoloapi/rules", status_code=201)
 async def create_rule(request: RuleRequest, _: None = Depends(require_admin)):
     try:
         try:
@@ -951,7 +951,7 @@ async def create_rule(request: RuleRequest, _: None = Depends(require_admin)):
         raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)})
 
 
-@app.put("/api/rules/{rule_id}")
+@app.put("/aiyoloapi/rules/{rule_id}")
 async def update_rule(rule_id: str, request: RuleRequest, _: None = Depends(require_admin)):
     if request.ruleId != rule_id:
         raise HTTPException(status_code=400, detail={"code": "RULE_ID_MISMATCH", "message": "ruleId does not match path"})
@@ -961,7 +961,7 @@ async def update_rule(rule_id: str, request: RuleRequest, _: None = Depends(requ
         raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)})
 
 
-@app.patch("/api/rules/{rule_id}")
+@app.patch("/aiyoloapi/rules/{rule_id}")
 async def patch_rule(rule_id: str, request: RulePatchRequest, _: None = Depends(require_admin)):
     try:
         current = rule_registry.get(rule_id)
@@ -975,7 +975,7 @@ async def patch_rule(rule_id: str, request: RulePatchRequest, _: None = Depends(
         raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)})
 
 
-@app.delete("/api/rules/{rule_id}", status_code=204)
+@app.delete("/aiyoloapi/rules/{rule_id}", status_code=204)
 async def delete_rule(rule_id: str, _: None = Depends(require_admin)):
     try:
         rule_registry.delete(rule_id)
@@ -983,7 +983,7 @@ async def delete_rule(rule_id: str, _: None = Depends(require_admin)):
         raise HTTPException(status_code=404, detail={"code": "rule_not_found", "message": "rule not found"})
 
 
-@app.get("/api/rules/{rule_id}/bindings")
+@app.get("/aiyoloapi/rules/{rule_id}/bindings")
 async def list_rule_bindings(rule_id: str, _: None = Depends(require_admin)):
     try:
         return {"bindings": rule_registry.bindings(rule_id)}
@@ -991,7 +991,7 @@ async def list_rule_bindings(rule_id: str, _: None = Depends(require_admin)):
         raise HTTPException(status_code=404, detail={"code": "rule_not_found", "message": "rule not found"})
 
 
-@app.post("/api/rules/{rule_id}/bindings")
+@app.post("/aiyoloapi/rules/{rule_id}/bindings")
 async def bind_rule(rule_id: str, request: RuleBindingRequest, _: None = Depends(require_admin)):
     try:
         result = rule_registry.bind(rule_id, request.sourceId, request.capabilities, model_id=request.modelId)
@@ -1004,7 +1004,7 @@ async def bind_rule(rule_id: str, request: RuleBindingRequest, _: None = Depends
     return result
 
 
-@app.post("/api/rules/{rule_id}/validate")
+@app.post("/aiyoloapi/rules/{rule_id}/validate")
 async def validate_rule_binding(rule_id: str, request: RuleValidationRequest, _: None = Depends(require_admin)):
     """Dry-run a binding; unlike evaluation, incompatibility is never silent."""
     try:
@@ -1015,7 +1015,7 @@ async def validate_rule_binding(rule_id: str, request: RuleValidationRequest, _:
         raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)})
 
 
-@app.get("/api/capabilities/sources")
+@app.get("/aiyoloapi/capabilities/sources")
 async def list_capability_sources(_: None = Depends(require_admin)):
     """Expose current stream/model capability projection for the admin page."""
     result = []
@@ -1027,7 +1027,7 @@ async def list_capability_sources(_: None = Depends(require_admin)):
 
 
 # --- Alert delivery (M11-T08) ----------------------------------------------
-@app.get("/api/alerts/delivery/status")
+@app.get("/aiyoloapi/alerts/delivery/status")
 async def alert_delivery_status(_: None = Depends(require_admin)):
     """Expose delivery channel health without exposing provider credentials."""
     return {
@@ -1040,7 +1040,7 @@ async def alert_delivery_status(_: None = Depends(require_admin)):
     }
 
 
-@app.post("/api/alerts/test-delivery", status_code=202)
+@app.post("/aiyoloapi/alerts/test-delivery", status_code=202)
 async def test_alert_delivery(request: AlertDeliveryRequest, _: None = Depends(require_admin)):
     """Schedule a synthetic event for configured channels.
 
@@ -1073,25 +1073,25 @@ async def _alert_websocket(websocket: WebSocket, channel_name: str, required_rol
         await channel.unsubscribe(queue)
 
 
-@app.websocket("/api/alerts/ws")
+@app.websocket("/aiyoloapi/alerts/ws")
 async def management_alerts_ws(websocket: WebSocket):
     """Management page real-time alert push channel."""
     await _alert_websocket(websocket, "management", ROLE_ADMIN)
 
 
-@app.websocket("/api/alerts/events")
+@app.websocket("/aiyoloapi/alerts/events")
 async def management_alerts_events_ws(websocket: WebSocket):
     """Compatibility alias for clients naming the management stream events."""
     await _alert_websocket(websocket, "management", ROLE_ADMIN)
 
 
-@app.websocket("/api/alerts/notifications")
+@app.websocket("/aiyoloapi/alerts/notifications")
 async def app_alert_notifications_ws(websocket: WebSocket):
     """App in-product notifications, independent from detection metadata WS."""
     await _alert_websocket(websocket, "app", ROLE_OPERATOR)
 
 
-@app.websocket("/api/alerts/app")
+@app.websocket("/aiyoloapi/alerts/app")
 async def app_alert_notifications_alias_ws(websocket: WebSocket):
     """Compatibility alias for App notification clients."""
     await _alert_websocket(websocket, "app", ROLE_OPERATOR)
@@ -1115,12 +1115,12 @@ async def require_alert_action(request: Request) -> str:
     return actor.strip()
 
 
-@app.get("/api/alerts")
+@app.get("/aiyoloapi/alerts")
 async def list_alerts(status: str | None = Query(default=None), _: None = Depends(require_alert_view)):
     return {"events": alert_disposition_store.list(status=status)}
 
 
-@app.get("/api/alerts/false-positives/export")
+@app.get("/aiyoloapi/alerts/false-positives/export")
 async def export_false_positives(_: None = Depends(require_alert_view)):
     from fastapi.responses import Response
     return Response(
@@ -1130,7 +1130,7 @@ async def export_false_positives(_: None = Depends(require_alert_view)):
     )
 
 
-@app.post("/api/alerts/mobile-ingest", status_code=202)
+@app.post("/aiyoloapi/alerts/mobile-ingest", status_code=202)
 async def ingest_mobile_alert(request: MobileAlertIngestRequest, _: None = Depends(require_mobile)):
     """Create or update a local App event using the device-scoped write token."""
     if request.confirmedAtUs is not None and request.confirmedAtUs < request.startedAtUs:
@@ -1228,7 +1228,7 @@ async def ingest_mobile_alert(request: MobileAlertIngestRequest, _: None = Depen
     return {"accepted": True, "created": current is None, "event": registered}
 
 
-@app.get("/api/alerts/export/false-positives")
+@app.get("/aiyoloapi/alerts/export/false-positives")
 async def export_false_positives_alias(_: None = Depends(require_alert_view)):
     from fastapi.responses import Response
     return Response(
@@ -1238,7 +1238,7 @@ async def export_false_positives_alias(_: None = Depends(require_alert_view)):
     )
 
 
-@app.get("/api/alerts/{event_id}")
+@app.get("/aiyoloapi/alerts/{event_id}")
 async def get_alert(event_id: str, _: None = Depends(require_alert_view)):
     try:
         return alert_disposition_store.get(event_id)
@@ -1246,7 +1246,7 @@ async def get_alert(event_id: str, _: None = Depends(require_alert_view)):
         raise HTTPException(status_code=404, detail={"code": "event_not_found", "message": "alert event not found"})
 
 
-@app.get("/api/alerts/{event_id}/evidence")
+@app.get("/aiyoloapi/alerts/{event_id}/evidence")
 async def get_server_alert_evidence(event_id: str, _: None = Depends(require_alert_view)):
     path = server_alert_runtime.evidence_path(event_id)
     if path is None:
@@ -1254,7 +1254,7 @@ async def get_server_alert_evidence(event_id: str, _: None = Depends(require_ale
     return FileResponse(path, media_type="image/jpeg")
 
 
-@app.get("/api/alerts/{event_id}/verification")
+@app.get("/aiyoloapi/alerts/{event_id}/verification")
 async def get_alert_verification(event_id: str, _: None = Depends(require_alert_view)):
     try:
         alert_disposition_store.get(event_id)
@@ -1269,7 +1269,7 @@ async def get_alert_verification(event_id: str, _: None = Depends(require_alert_
     }
 
 
-@app.post("/api/verification/config")
+@app.post("/aiyoloapi/verification/config")
 async def update_verification_config(
     request: VerificationConfigRequest,
     _: str = Depends(require_alert_action),
@@ -1283,12 +1283,12 @@ async def update_verification_config(
     )
 
 
-@app.get("/api/verification/config")
+@app.get("/aiyoloapi/verification/config")
 async def get_verification_config(_: None = Depends(require_alert_view)):
     return alert_verification_store.config()
 
 
-@app.post("/api/alerts/{event_id}/verification", status_code=202)
+@app.post("/aiyoloapi/alerts/{event_id}/verification", status_code=202)
 async def request_alert_verification(
     event_id: str,
     request: AlertVerificationRequest,
@@ -1324,32 +1324,32 @@ async def _dispose_alert(event_id: str, status: str, request: AlertDispositionRe
         raise HTTPException(status_code=422, detail={"code": "invalid_disposition", "message": str(exc)})
 
 
-@app.post("/api/alerts/{event_id}/acknowledge")
+@app.post("/aiyoloapi/alerts/{event_id}/acknowledge")
 async def acknowledge_alert(event_id: str, request: AlertDispositionRequest, actor: str = Depends(require_alert_action)):
     return await _dispose_alert(event_id, "ACKNOWLEDGED", request, actor)
 
 
-@app.post("/api/alerts/{event_id}/ack")
+@app.post("/aiyoloapi/alerts/{event_id}/ack")
 async def acknowledge_alert_alias(event_id: str, request: AlertDispositionRequest, actor: str = Depends(require_alert_action)):
     return await _dispose_alert(event_id, "ACKNOWLEDGED", request, actor)
 
 
-@app.post("/api/alerts/{event_id}/false-positive")
+@app.post("/aiyoloapi/alerts/{event_id}/false-positive")
 async def mark_false_positive(event_id: str, request: AlertDispositionRequest, actor: str = Depends(require_alert_action)):
     return await _dispose_alert(event_id, "FALSE_POSITIVE", request, actor)
 
 
-@app.post("/api/alerts/{event_id}/mark-false-positive")
+@app.post("/aiyoloapi/alerts/{event_id}/mark-false-positive")
 async def mark_false_positive_alias(event_id: str, request: AlertDispositionRequest, actor: str = Depends(require_alert_action)):
     return await _dispose_alert(event_id, "FALSE_POSITIVE", request, actor)
 
 
-@app.post("/api/alerts/{event_id}/close")
+@app.post("/aiyoloapi/alerts/{event_id}/close")
 async def close_alert(event_id: str, request: AlertDispositionRequest, actor: str = Depends(require_alert_action)):
     return await _dispose_alert(event_id, "CLOSED", request, actor)
 
 
-@app.post("/api/streams", status_code=201, dependencies=[Depends(require_admin)])
+@app.post("/aiyoloapi/streams", status_code=201, dependencies=[Depends(require_admin)])
 async def create_stream(request: CreateStreamRequest):
     if request.stream_id in streams:
         raise HTTPException(status_code=ERROR_CODES["stream_already_exists"][0], detail="stream already exists")
@@ -1424,7 +1424,7 @@ async def create_stream(request: CreateStreamRequest):
     }
 
 
-@app.get("/api/streams")
+@app.get("/aiyoloapi/streams")
 async def list_streams(_: None = Depends(require_catalog_access)):
     try:
         configurations = await asyncio.to_thread(stream_config_store.list)
@@ -1439,7 +1439,7 @@ async def list_streams(_: None = Depends(require_catalog_access)):
     return payload
 
 
-@app.delete("/api/streams/{stream_id}", status_code=204, dependencies=[Depends(require_admin)])
+@app.delete("/aiyoloapi/streams/{stream_id}", status_code=204, dependencies=[Depends(require_admin)])
 async def delete_stream(stream_id: str):
     stream = streams.get(stream_id)
     try:
@@ -1454,7 +1454,7 @@ async def delete_stream(stream_id: str):
     stream_restore_errors.pop(stream_id, None)
 
 
-@app.post("/api/streams/{stream_id}/yolo", dependencies=[Depends(require_admin)])
+@app.post("/aiyoloapi/streams/{stream_id}/yolo", dependencies=[Depends(require_admin)])
 async def set_yolo(stream_id: str, request: YoloRequest):
     stream = streams.get(stream_id)
     try:
@@ -1497,7 +1497,7 @@ async def set_yolo(stream_id: str, request: YoloRequest):
     }
 
 
-@app.patch("/api/streams/{stream_id}/config", dependencies=[Depends(require_admin)])
+@app.patch("/aiyoloapi/streams/{stream_id}/config", dependencies=[Depends(require_admin)])
 async def update_stream_config(stream_id: str, request: StreamConfigRequest):
     stream = streams.get(stream_id)
     try:
@@ -1593,7 +1593,7 @@ async def update_stream_config(stream_id: str, request: StreamConfigRequest):
     }
 
 
-@app.put("/api/streams/{stream_id}/model", dependencies=[Depends(require_admin)])
+@app.put("/aiyoloapi/streams/{stream_id}/model", dependencies=[Depends(require_admin)])
 async def bind_stream_model(stream_id: str, request: StreamModelRequest):
     stream = streams.get(stream_id)
     try:
@@ -1628,7 +1628,7 @@ async def bind_stream_model(stream_id: str, request: StreamModelRequest):
     return {"stream_id": stream_id, "model": model}
 
 
-@app.get("/api/streams/{stream_id}/model")
+@app.get("/aiyoloapi/streams/{stream_id}/model")
 async def stream_model(stream_id: str, _: None = Depends(require_catalog_access)):
     """Return the model binding and registry metadata for one stream."""
     stream = streams.get(stream_id)
@@ -1643,7 +1643,7 @@ async def stream_model(stream_id: str, _: None = Depends(require_catalog_access)
     return {"stream_id": stream_id, "model": _configured_model(configuration.model_id)}
 
 
-@app.websocket("/api/streams/{stream_id}/ingest")
+@app.websocket("/aiyoloapi/streams/{stream_id}/ingest")
 async def ingest(stream_id: str, websocket: WebSocket):
     stream = streams.get(stream_id)
     if stream is None:
@@ -1678,7 +1678,7 @@ async def mjpeg_generator(stream: StreamSession):
         yield b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: " + str(len(frame)).encode() + b"\r\n\r\n" + frame + b"\r\n"
 
 
-@app.get("/api/streams/{stream_id}/mjpeg")
+@app.get("/aiyoloapi/streams/{stream_id}/mjpeg")
 async def mjpeg(stream_id: str, _: None = Depends(require_catalog_access)):
     stream = get_stream(stream_id)
     if not stream.try_subscribe():
@@ -1703,14 +1703,14 @@ async def mjpeg(stream_id: str, _: None = Depends(require_catalog_access)):
     )
 
 
-@app.get("/api/streams/{stream_id}/playback")
+@app.get("/aiyoloapi/streams/{stream_id}/playback")
 async def playback(stream_id: str, _: None = Depends(require_catalog_access)):
     """Return WHEP, LL-HLS and diagnostic RTSP playback entries."""
     stream = get_stream(stream_id)
     return {"stream_id": stream.stream_id, **stream.publisher.playback()}
 
 
-@app.websocket("/api/streams/{stream_id}/ws")
+@app.websocket("/aiyoloapi/streams/{stream_id}/ws")
 async def output_ws(stream_id: str, websocket: WebSocket):
     stream = streams.get(stream_id)
     if stream is None:
@@ -1734,7 +1734,7 @@ async def output_ws(stream_id: str, websocket: WebSocket):
         stream.unsubscribe()
 
 
-@app.websocket("/api/streams/{stream_id}/detections")
+@app.websocket("/aiyoloapi/streams/{stream_id}/detections")
 async def detections_ws(stream_id: str, websocket: WebSocket):
     """结构化检测结果旁路（协议 §6.2）。
 

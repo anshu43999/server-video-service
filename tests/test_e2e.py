@@ -21,15 +21,15 @@ class EndToEndTests(unittest.TestCase):
 
     def test_multiple_real_frames_round_trip_and_state(self):
         with TestClient(app) as client:
-            self.assertEqual(client.post("/api/streams", json={"stream_id": "e2e"}).status_code, 201)
-            with client.websocket_connect("/api/streams/e2e/ingest") as ingest:
-                with client.websocket_connect("/api/streams/e2e/ws") as output:
+            self.assertEqual(client.post("/aiyoloapi/streams", json={"stream_id": "e2e"}).status_code, 201)
+            with client.websocket_connect("/aiyoloapi/streams/e2e/ingest") as ingest:
+                with client.websocket_connect("/aiyoloapi/streams/e2e/ws") as output:
                     for value in (10, 80, 160, 240):
                         ingest.send_bytes(frame_jpeg(value))
                         received = output.receive_bytes()
                         self.assertTrue(received.startswith(b"\xff\xd8"))
                         time.sleep(0.06)
-            details = client.get("/api/streams").json()[0]
+            details = client.get("/aiyoloapi/streams").json()[0]
             self.assertEqual(details["frames_received"], 4)
             self.assertEqual(details["state"], "outputting")
 

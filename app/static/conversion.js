@@ -205,12 +205,12 @@
     liveControls();
   }
   async function readCalibrationDatasets() {
-    const data = await api('/api/conversion/calibration-datasets');
+    const data = await api('/aiyoloapi/conversion/calibration-datasets');
     calibrationDatasets = data.datasets || [];
     renderCalibrationDatasets();
   }
   async function readConfig() {
-    const data = await api('/api/conversion/config'); const c = data.config;
+    const data = await api('/aiyoloapi/conversion/config'); const c = data.config;
     await readCalibrationDatasets();
     byId('conversion-mode').value = c.mode;
     byId('conversion-distribution').value = c.distribution;
@@ -261,7 +261,7 @@
     if (!connected || state.demo || refreshing) return;
     refreshing = true;
     try {
-      jobs = (await api('/api/conversion/jobs')).jobs;
+      jobs = (await api('/aiyoloapi/conversion/jobs')).jobs;
       const signature = JSON.stringify(jobs);
       lastJobs = signature;
       byId('conversion-jobs').innerHTML = jobs.length ? jobs.slice(0, 20).map(job => {
@@ -300,11 +300,11 @@
       remote_endpoint:byId('conversion-remote-endpoint').value.trim(), remote_token_env:byId('conversion-remote-token-env').value.trim(),
       remote_allow_insecure_http:byId('conversion-remote-http').checked, remote_poll_interval_seconds:Number(byId('conversion-remote-poll').value),
       remote_verifier_mode:byId('conversion-remote-verifier').value};
-    try { await api('/api/conversion/config', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(config)}); message('配置已保存。新任务使用此配置，正在执行的任务保持原配置。'); }
+    try { await api('/aiyoloapi/conversion/config', {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(config)}); message('配置已保存。新任务使用此配置，正在执行的任务保持原配置。'); }
     catch (error) { message(`保存失败：${error.message}`, true); }
   });
   byId('conversion-check').addEventListener('click', async () => {
-    try { await api('/api/conversion/check', {method:'POST'}); await refresh(); message('环境检测已排队，结果显示在任务列表。'); }
+    try { await api('/aiyoloapi/conversion/check', {method:'POST'}); await refresh(); message('环境检测已排队，结果显示在任务列表。'); }
     catch (error) { message(error.message, true); }
   });
   byId('conversion-refresh').addEventListener('click', refresh);
@@ -320,7 +320,7 @@
     if (!file.name.toLowerCase().endsWith('.zip')) { message('请选择 ZIP 校准图片集', true, 'calibration'); return; }
     uploading = true; liveControls();
     const params = new URLSearchParams({filename:file.name, name:byId('calibration-name').value.trim(), version:byId('calibration-version').value.trim(), scenario:byId('calibration-scenario').value.trim()});
-    const xhr = new XMLHttpRequest(); xhr.open('POST', '/api/conversion/calibration-datasets?' + params); xhr.timeout = 310000;
+    const xhr = new XMLHttpRequest(); xhr.open('POST', '/aiyoloapi/conversion/calibration-datasets?' + params); xhr.timeout = 310000;
     xhr.setRequestHeader('Content-Type', 'application/zip');
     xhr.upload.onprogress = event => { if (event.lengthComputable) byId('calibration-progress').value = Math.round(event.loaded / event.total * 100); };
     xhr.onload = async () => { if (xhr.status >= 200 && xhr.status < 300) { await readCalibrationDatasets(); message('校准集已保存，可在模型转换中选择。', false, 'calibration'); } else { let detail = xhr.responseText; try { detail = JSON.parse(detail).detail; } catch (_) {} message('校准集上传失败：' + detail, true, 'calibration'); } };
@@ -332,7 +332,7 @@
     const button = event.target.closest('[data-delete-calibration]'); if (!button || state.demo || !connected) return;
     if (!window.confirm('删除这个校准集版本？已被转换任务引用的版本不会被删除。')) return;
     button.disabled = true;
-    try { await api(`/api/conversion/calibration-datasets/${encodeURIComponent(button.dataset.deleteCalibration)}`, {method:'DELETE'}); await readCalibrationDatasets(); message('校准集已删除。', false, 'calibration'); }
+    try { await api(`/aiyoloapi/conversion/calibration-datasets/${encodeURIComponent(button.dataset.deleteCalibration)}`, {method:'DELETE'}); await readCalibrationDatasets(); message('校准集已删除。', false, 'calibration'); }
     catch (error) { message(`删除失败：${error.message}`, true, 'calibration'); button.disabled = false; }
   });
   byId('conversion-upload-form').addEventListener('submit', async event => {
@@ -348,7 +348,7 @@
       : familySelect.value).trim();
     if (modelId) params.set('modelId', modelId);
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/conversion/uploads?' + params);
+    xhr.open('POST', '/aiyoloapi/conversion/uploads?' + params);
     xhr.timeout = 310000;
     Object.entries(headers()).forEach(([key, value]) => xhr.setRequestHeader(key, value));
     xhr.setRequestHeader('Content-Type', 'application/octet-stream');
@@ -370,14 +370,14 @@
     const button = event.target.closest('button'); if (!button || state.demo || !connected) return;
     button.disabled = true;
     try {
-      if (button.dataset.retry) await api(`/api/conversion/jobs/${button.dataset.retry}/retry`, {method:'POST'});
+      if (button.dataset.retry) await api(`/aiyoloapi/conversion/jobs/${button.dataset.retry}/retry`, {method:'POST'});
       if (button.dataset.convert) {
         const calibrationId = byId('conversion-calibration-select').value;
         if (!calibrationId) throw new Error('请选择本次转换使用的校准集');
-        await api(`/api/conversion/uploads/${button.dataset.convert}/mobile?calibrationDatasetId=${encodeURIComponent(calibrationId)}`, {method:'POST'});
+        await api(`/aiyoloapi/conversion/uploads/${button.dataset.convert}/mobile?calibrationDatasetId=${encodeURIComponent(calibrationId)}`, {method:'POST'});
       }
       if (button.dataset.log) {
-        const text = await api(`/api/conversion/jobs/${button.dataset.log}/log`);
+        const text = await api(`/aiyoloapi/conversion/jobs/${button.dataset.log}/log`);
         const dialog = document.createElement('dialog'); dialog.className = 'conversion-log-dialog conversion-panel';
         dialog.innerHTML = '<div class="conversion-heading"><h3>执行日志</h3><button class="ghost-btn">关闭</button></div><pre></pre>';
         dialog.querySelector('pre').textContent = text; dialog.querySelector('button').onclick = () => dialog.close();
@@ -403,7 +403,7 @@
       if (badge && model.placeholder) badge.textContent = '开发占位';
       button.onclick = async event => {
         event.stopPropagation();
-        try { await api(`/api/models/${encodeURIComponent(model.modelId)}/activate`, {method:'POST'}); await refreshLiveModels(); message('已设置新流默认模型，已有视频流的绑定保持不变。'); }
+        try { await api(`/aiyoloapi/models/${encodeURIComponent(model.modelId)}/activate`, {method:'POST'}); await refreshLiveModels(); message('已设置新流默认模型，已有视频流的绑定保持不变。'); }
         catch (error) { message(error.message, true); }
       };
     });
@@ -417,14 +417,14 @@
     });
   };
   refreshLiveModels = async () => {
-    try { state.models = (await api('/api/models')).models || []; txt('model-catalog-state', state.models.length ? `Live API · ${state.models.length} 个真实模型` : 'Live API · 目录为空'); renderModels(); renderStreamBindings(); renderModelFamilyOptions(); }
+    try { state.models = (await api('/aiyoloapi/models')).models || []; txt('model-catalog-state', state.models.length ? `Live API · ${state.models.length} 个真实模型` : 'Live API · 目录为空'); renderModels(); renderStreamBindings(); renderModelFamilyOptions(); }
     catch (error) { state.models = []; renderModels(); renderStreamBindings(); renderModelFamilyOptions(); txt('model-catalog-state', `目录不可用 · ${error.message}`); }
   };
   const originalBind = bindStreamModel;
   bindStreamModel = async (streamId, modelId) => {
     if (state.demo) return originalBind(streamId, modelId);
     try {
-      const data = await api(`/api/streams/${encodeURIComponent(streamId)}/model`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({model_id:modelId})});
+      const data = await api(`/aiyoloapi/streams/${encodeURIComponent(streamId)}/model`, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({model_id:modelId})});
       const stream = state.streams.find(row => row.stream_id === streamId); if (stream) stream.model = data.model;
       renderStreamBindings(); message('该视频流已绑定所选模型。');
     } catch (error) { renderStreamBindings(); message(`绑定失败：${error.message}`, true); }
@@ -433,7 +433,7 @@
   byId('register-model-form').onsubmit = async event => {
     if (state.demo) return oldRegister(event);
     event.preventDefault(); if (event.submitter?.value === 'cancel') return;
-    try { await api('/api/models/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({manifest_path:byId('manifest-path').value})}); byId('register-model-dialog').close(); await refreshLiveModels(); message('Manifest 已通过校验并登记。'); }
+    try { await api('/aiyoloapi/models/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({manifest_path:byId('manifest-path').value})}); byId('register-model-dialog').close(); await refreshLiveModels(); message('Manifest 已通过校验并登记。'); }
     catch (error) { message(`登记失败：${error.message}`, true); }
   };
   setInterval(() => { liveControls(); if (!document.hidden && host.classList.contains('active-view')) refresh(); }, 4000);

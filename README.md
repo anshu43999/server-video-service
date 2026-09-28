@@ -66,10 +66,10 @@ python harness/harness.py next
 ## 功能
 
 - 每个 `stream_id` 一个独立会话，支持多个客户端订阅。
-- `POST /api/streams/{stream_id}/yolo` 手动开启/关闭 YOLO。
+- `POST /aiyoloapi/streams/{stream_id}/yolo` 手动开启/关闭 YOLO。
 - YOLO 模型惰性加载，未安装 `ultralytics` 或模型文件不存在时服务仍可输出原始视频。
 - 输入方式：
-  - WebSocket 推送：`/api/streams/{stream_id}/ingest`，每条 binary message 是一张 JPEG/PNG。
+  - WebSocket 推送：`/aiyoloapi/streams/{stream_id}/ingest`，每条 binary message 是一张 JPEG/PNG。
   - 服务端拉流：创建流时传入 `source_url`（RTSP、HTTP、摄像头索引或本地文件）。
 - 输出方式（目标形态，见 ADR-002）：
   - WebRTC/WHEP：生产播放路径，H.264，由 MediaMTX 提供（默认 `:8889`）。
@@ -77,8 +77,8 @@ python harness/harness.py next
   - RTSP：只给 VLC/ffprobe 等诊断工具（默认 `:8554`），不进 App。
   - 检测结果 WebSocket 旁路：结构化 JSON，与视频帧解耦。
 - 测试与诊断通道（已实现，非生产输出）：
-  - MJPEG：`GET /api/streams/{stream_id}/mjpeg`，用于管理页预览和自动化测试。
-  - WebSocket JPEG：`/api/streams/{stream_id}/ws`，用于联调探针。
+  - MJPEG：`GET /aiyoloapi/streams/{stream_id}/mjpeg`，用于管理页预览和自动化测试。
+  - WebSocket JPEG：`/aiyoloapi/streams/{stream_id}/ws`，用于联调探针。
 
 当前代码库已实现输入、YOLO 开关、MJPEG/WebSocket JPEG 诊断输出、H.264 编码、MediaMTX 推流、WHEP/LL-HLS 播放、检测结果旁路和模型管理。
 
@@ -146,7 +146,7 @@ CentOS/RHEL 的 Docker 安装、firewalld 和 SELinux 注意事项单独记录�
 创建一个等待移动端推送的会话：
 
 ```http
-POST /api/streams
+POST /aiyoloapi/streams
 Content-Type: application/json
 
 {"stream_id":"巡检-001"}
@@ -155,7 +155,7 @@ Content-Type: application/json
 开启 YOLO：
 
 ```http
-POST /api/streams/巡检-001/yolo
+POST /aiyoloapi/streams/巡检-001/yolo
 Content-Type: application/json
 
 {"enabled":true}
@@ -164,14 +164,14 @@ Content-Type: application/json
 移动端将摄像头帧 JPEG 二进制写入 ingest WebSocket；诊断预览可访问：
 
 ```text
-http://server:8080/api/streams/巡检-001/mjpeg
+http://server:8080/aiyoloapi/streams/巡检-001/mjpeg
 ```
 
-生产播放先调用 `GET /api/streams/{stream_id}/playback` 获取 MediaMTX 的 WHEP 地址（H.264），例如 `http://server:8889/巡检-001/whep`；WebRTC 不可用时回退 `http://server:8888/巡检-001/index.m3u8`。接口同时返回 RTSP 诊断地址及各协议当前可用性。
+生产播放先调用 `GET /aiyoloapi/streams/{stream_id}/playback` 获取 MediaMTX 的 WHEP 地址（H.264），例如 `http://server:8889/巡检-001/whep`；WebRTC 不可用时回退 `http://server:8888/巡检-001/index.m3u8`。接口同时返回 RTSP 诊断地址及各协议当前可用性。
 
 完整接口可打开 `http://server:8080/docs` 查看。
 
-运维指标接口：`GET /api/metrics`，返回进程 CPU/内存、可选 NVIDIA GPU 和各视频流 FPS/延迟/丢帧指标。
+运维指标接口：`GET /aiyoloapi/metrics`，返回进程 CPU/内存、可选 NVIDIA GPU 和各视频流 FPS/延迟/丢帧指标。
 
 ## 媒体服务器
 

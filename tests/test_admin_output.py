@@ -15,8 +15,8 @@ class AdminOutputContractTests(unittest.TestCase):
             self.assertIn(marker, self.html)
 
     def test_live_adapter_reads_playback_and_detection_side_channel(self):
-        self.assertIn("/api/streams/${encodeURIComponent(stream.stream_id)}/playback", self.js)
-        self.assertIn("/api/streams/${encodeURIComponent(stream.stream_id)}/detections", self.js)
+        self.assertIn("/aiyoloapi/streams/${encodeURIComponent(stream.stream_id)}/playback", self.js)
+        self.assertIn("/aiyoloapi/streams/${encodeURIComponent(stream.stream_id)}/detections", self.js)
         self.assertIn("state.playback", self.js)
         self.assertIn("WebSocket", self.js)
 

@@ -25,7 +25,7 @@ class PlaybackApiTests(unittest.TestCase):
 
     def test_missing_stream_returns_404(self):
         with TestClient(app) as client:
-            response = client.get("/api/streams/missing/playback")
+            response = client.get("/aiyoloapi/streams/missing/playback")
         self.assertEqual(response.status_code, 404)
 
     def test_unpublished_stream_exposes_unavailable_protocols(self):
@@ -33,7 +33,7 @@ class PlaybackApiTests(unittest.TestCase):
         settings.mediamtx_rtsp_url = "rtsp://media.example:8554"
         streams["inspection-001"] = StreamSession("inspection-001")
         with TestClient(app) as client:
-            payload = client.get("/api/streams/inspection-001/playback").json()
+            payload = client.get("/aiyoloapi/streams/inspection-001/playback").json()
         self.assertEqual(payload["publish_state"], "idle")
         self.assertEqual(payload["whep"], {"url": "http://media.example:8889/inspection-001/whep", "available": False})
         self.assertEqual(payload["llhls"], {"url": "http://media.example:8888/inspection-001/index.m3u8", "available": False})
@@ -49,7 +49,7 @@ class PlaybackApiTests(unittest.TestCase):
         stream.publisher.publish_state = "connected"
         streams[stream.stream_id] = stream
         with TestClient(app) as client:
-            payload = client.get("/api/streams/inspection-002/playback").json()
+            payload = client.get("/aiyoloapi/streams/inspection-002/playback").json()
         self.assertEqual(payload["publish_state"], "connected")
         self.assertTrue(payload["whep"]["available"])
         self.assertEqual(payload["whep"]["url"], "https://video.example/webrtc/inspection-002/whep")
@@ -65,7 +65,7 @@ class PlaybackApiTests(unittest.TestCase):
         stream.publisher.publish_state = "failed"
         streams["failed"] = stream
         with TestClient(app) as client:
-            payload = client.get("/api/streams/failed/playback").json()
+            payload = client.get("/aiyoloapi/streams/failed/playback").json()
         self.assertEqual(payload["publish_state"], "failed")
         self.assertFalse(payload["whep"]["available"])
         self.assertFalse(payload["llhls"]["available"])

@@ -36,7 +36,7 @@ chmod 0600 .env
 - `DATABASE_URL` 填云数据库提供的 PostgreSQL 连接信息，驱动格式为 `postgresql+psycopg://...`；密码中的保留字符需要百分号编码。生产连接应启用 TLS，优先使用云厂商 CA 和 `sslmode=verify-full`；`sslmode=require` 至少保证加密传输。
 - 为应用创建最小权限的独立数据库账号，不使用云数据库管理员账号。配置云数据库网络白名单/安全组，只允许部署主机出口地址连接；不要将数据库端口向公网开放。
 - 在云数据库控制台启用自动备份和时间点恢复（PITR），并设置符合业务要求的保留周期。部署主机另需安装与 PostgreSQL 版本兼容的 `pg_dump` 客户端，供 `backup-db` 生成逻辑备份。
-- 不要在生产 `.env` 中设置 `ADMIN_TOKEN` 或 `MOBILE_TOKEN`。生产环境通过 `/api/auth/setup`、`/api/auth/login` 签发动态账号 Session；容器入口会拒绝误配置的静态客户端令牌。
+- 不要在生产 `.env` 中设置 `ADMIN_TOKEN` 或 `MOBILE_TOKEN`。生产环境通过 `/aiyoloapi/auth/setup`、`/aiyoloapi/auth/login` 签发动态账号 Session；容器入口会拒绝误配置的静态客户端令牌。
 - `MEDIA_PUBLIC_HOST` 填 App 实际可访问的服务器 DNS 名或 IP，不能填 `127.0.0.1`。
 - `MODEL_MOUNT_PATH` 默认 `./models`，容器内以只读方式挂载到 `/models`。
 - `YOLO_MODEL_PATH` 预留为转换后的 ONNX 路径；当前运行镜像未安装 ONNX Runtime，因此默认 `REQUIRE_YOLO_MODEL=false`。需要服务器 ONNX 推理时先补充 `requirements-onnx.txt`，再改为 `true`。

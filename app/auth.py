@@ -300,7 +300,7 @@ def _auth_response(response: Response, user: CurrentUser, token: str) -> dict:
 
 
 def create_auth_router() -> APIRouter:
-    router = APIRouter(prefix="/api/auth", tags=["auth"])
+    router = APIRouter(prefix="/aiyoloapi/auth", tags=["auth"])
 
     @router.get("/status")
     async def auth_status(request: Request):

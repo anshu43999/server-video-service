@@ -20,7 +20,7 @@ class ModelMarketplaceAutomationTests(unittest.TestCase):
         cls.model_id = model["modelId"]
         cls.artifact = model["artifacts"][0]
         cls.download_path = (
-            f"/api/models/{cls.model_id}/artifacts/{cls.artifact['artifactId']}/download"
+            f"/aiyoloapi/models/{cls.model_id}/artifacts/{cls.artifact['artifactId']}/download"
         )
 
     @classmethod
@@ -45,8 +45,8 @@ class ModelMarketplaceAutomationTests(unittest.TestCase):
         _download_rate_events.clear()
 
     def test_directory_query_and_scenario_filter(self):
-        listing = self.client.get("/api/models", params={"scenario": "catalog-test"})
-        detail = self.client.get(f"/api/models/{self.model_id}")
+        listing = self.client.get("/aiyoloapi/models", params={"scenario": "catalog-test"})
+        detail = self.client.get(f"/aiyoloapi/models/{self.model_id}")
         self.assertEqual(listing.status_code, 200)
         self.assertEqual([item["modelId"] for item in listing.json()["models"]], [self.model_id])
         self.assertEqual(detail.status_code, 200)
@@ -57,8 +57,8 @@ class ModelMarketplaceAutomationTests(unittest.TestCase):
         settings.mobile_token = "m09-mobile-secret"
         anonymous = TestClient(app)
         try:
-            self.assertEqual(anonymous.get("/api/models").status_code, 401)
-            self.assertEqual(anonymous.get("/api/models", headers={"X-Video-Service-Token": "wrong"}).status_code, 401)
+            self.assertEqual(anonymous.get("/aiyoloapi/models").status_code, 401)
+            self.assertEqual(anonymous.get("/aiyoloapi/models", headers={"X-Video-Service-Token": "wrong"}).status_code, 401)
         finally:
             anonymous.close()
 

@@ -12,9 +12,9 @@ class ModelMarketplaceContractTests(unittest.TestCase):
 
     def test_contract_covers_three_endpoint_families(self):
         for endpoint in (
-            "GET /api/models",
-            "GET /api/models/{modelId}",
-            "GET /api/models/{modelId}/artifacts/{artifactId}/download",
+            "GET /aiyoloapi/models",
+            "GET /aiyoloapi/models/{modelId}",
+            "GET /aiyoloapi/models/{modelId}/artifacts/{artifactId}/download",
         ):
             self.assertIn(endpoint, self.text)
 

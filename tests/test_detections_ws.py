@@ -24,14 +24,14 @@ class DetectionWebSocketTests(unittest.TestCase):
     def test_missing_stream_closes_with_4404(self):
         with TestClient(app) as client:
             with self.assertRaises(WebSocketDisconnect) as caught:
-                with client.websocket_connect("/api/streams/missing/detections"):
+                with client.websocket_connect("/aiyoloapi/streams/missing/detections"):
                     pass
             self.assertEqual(caught.exception.code, 4404)
 
     def test_yolo_off_sends_heartbeat_without_video_subscription(self):
         streams["heartbeat"] = StreamSession("heartbeat")
         with TestClient(app) as client:
-            with client.websocket_connect("/api/streams/heartbeat/detections") as websocket:
+            with client.websocket_connect("/aiyoloapi/streams/heartbeat/detections") as websocket:
                 payload = json.loads(websocket.receive_text())
                 self.assertEqual(payload, {"stream_id": "heartbeat", "yolo_enabled": False})
                 self.assertEqual(streams["heartbeat"].active_subscribers, 0)
@@ -40,7 +40,7 @@ class DetectionWebSocketTests(unittest.TestCase):
         settings.mobile_token = "mobile-secret"
         streams["secure"] = StreamSession("secure")
         with TestClient(app) as client:
-            with client.websocket_connect("/api/streams/secure/detections") as websocket:
+            with client.websocket_connect("/aiyoloapi/streams/secure/detections") as websocket:
                 message = websocket.receive()
                 self.assertEqual(message["type"], "websocket.close")
                 self.assertEqual(message["code"], 4401)
@@ -75,7 +75,7 @@ class DetectionWebSocketTests(unittest.TestCase):
         stream._detection_version = 1
         streams["live"] = stream
         with TestClient(app) as client:
-            with client.websocket_connect("/api/streams/live/detections") as websocket:
+            with client.websocket_connect("/aiyoloapi/streams/live/detections") as websocket:
                 payload = json.loads(websocket.receive_text())
                 self.assertEqual(payload["stream_id"], "live")
                 self.assertEqual(payload["frame_seq"], 3)

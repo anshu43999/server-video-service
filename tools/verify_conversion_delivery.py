@@ -30,9 +30,9 @@ def main():
             response = client.request(method, path, **kwargs)
             response.raise_for_status()
             return response
-        job = request("GET", f"/api/conversion/jobs/{args.job_id}").json()
+        job = request("GET", f"/aiyoloapi/conversion/jobs/{args.job_id}").json()
         assert job["status"] == "succeeded", job.get("error")
-        model = request("GET", f"/api/models/{args.model_id}").json()
+        model = request("GET", f"/aiyoloapi/models/{args.model_id}").json()
         assert model["serverReady"] and model["androidReady"]
         report.update(version=model["version"], labels=len(model["labels"]),
                       conversion_seconds=round(job["updated_at"] - job["created_at"], 2), artifacts=[])
@@ -42,24 +42,24 @@ def main():
             assert len(data) == artifact["sizeBytes"] and digest.lower() == artifact["sha256"].lower()
             report["artifacts"].append({"id": artifact["artifactId"], "bytes": len(data), "sha256": digest})
         stream_id = "m26-verify-" + uuid.uuid4().hex[:10]
-        request("POST", "/api/streams", json={"stream_id": stream_id})
+        request("POST", "/aiyoloapi/streams", json={"stream_id": stream_id})
         try:
-            bound = request("PUT", f"/api/streams/{stream_id}/model", json={"model_id": args.model_id}).json()
+            bound = request("PUT", f"/aiyoloapi/streams/{stream_id}/model", json={"model_id": args.model_id}).json()
             assert bound["model"]["modelId"] == args.model_id
-            request("POST", f"/api/streams/{stream_id}/yolo", json={"enabled": True})
+            request("POST", f"/aiyoloapi/streams/{stream_id}/yolo", json={"enabled": True})
             assets = Path(sys.prefix) / "Lib" / "site-packages" / "ultralytics" / "assets" / "bus.jpg"
             if not assets.exists():
                 import ultralytics
                 assets = Path(ultralytics.__file__).parent / "assets" / "bus.jpg"
             ws_base = args.base_url.replace("http://", "ws://", 1)
-            with connect(f"{ws_base}/api/streams/{stream_id}/detections", additional_headers=mobile) as results:
-                with connect(f"{ws_base}/api/streams/{stream_id}/ingest", additional_headers=mobile) as ingest:
+            with connect(f"{ws_base}/aiyoloapi/streams/{stream_id}/detections", additional_headers=mobile) as results:
+                with connect(f"{ws_base}/aiyoloapi/streams/{stream_id}/ingest", additional_headers=mobile) as ingest:
                     ingest.send(assets.read_bytes())
                     envelope = json.loads(results.recv(timeout=45))
             assert envelope.get("detections"), envelope
             report["stream_inference"] = {"bound_model": args.model_id, "result": envelope}
         finally:
-            request("DELETE", f"/api/streams/{stream_id}")
+            request("DELETE", f"/aiyoloapi/streams/{stream_id}")
     report["result"] = "passed"
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")

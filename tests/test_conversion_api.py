@@ -100,7 +100,7 @@ class ConversionApiTests(unittest.TestCase):
         params = {"filename": filename, "name": "安全帽", "version": version}
         if model_id is not None:
             params["modelId"] = model_id
-        return self.client.post("/api/conversion/uploads", params=params,
+        return self.client.post("/aiyoloapi/conversion/uploads", params=params,
                                 content=payload, headers=self.headers)
 
     def test_stable_model_id_is_reused_for_new_versions_without_hash_or_name_auto_merge(self):
@@ -141,7 +141,7 @@ class ConversionApiTests(unittest.TestCase):
         self.fail("job did not finish")
 
     def test_upload_requires_admin_and_rejects_empty_wrong_format_and_size(self):
-        self.assertEqual(self.client.get("/api/conversion/config").status_code, 401)
+        self.assertEqual(self.client.get("/aiyoloapi/conversion/config").status_code, 401)
         self.assertEqual(self.upload(b"").status_code, 422)
         self.assertEqual(self.upload(filename="best.onnx").status_code, 422)
         self.assertEqual(self.upload(b"x" * 129).status_code, 413)
@@ -155,7 +155,7 @@ class ConversionApiTests(unittest.TestCase):
         self.assertEqual(model["version"], "2.0")
         self.assertTrue(model["serverReady"])
         self.assertFalse(model["androidReady"])
-        response = self.client.post(f'/api/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers)
+        response = self.client.post(f'/aiyoloapi/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers)
         self.assertEqual(response.status_code, 202)
         self.assertEqual(self.wait(response.json())["status"], "succeeded")
         model = self.catalog.get(upload["model_id"])
@@ -175,13 +175,13 @@ class ConversionApiTests(unittest.TestCase):
             __import__("base64").b64decode(manifest["signature"]["signatureBase64"]), payload,
         )
         self.assertEqual(hashlib.sha256(payload).hexdigest(), manifest["signature"]["signedPayloadSha256"])
-        self.assertEqual(self.client.post(f'/api/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers).status_code, 409)
+        self.assertEqual(self.client.post(f'/aiyoloapi/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers).status_code, 409)
 
     def test_calibration_asset_is_versioned_selected_and_reference_protected(self):
-        datasets = self.client.get("/api/conversion/calibration-datasets", headers=self.headers).json()["datasets"]
+        datasets = self.client.get("/aiyoloapi/conversion/calibration-datasets", headers=self.headers).json()["datasets"]
         self.assertEqual(["coco8-dev"], [item["datasetId"] for item in datasets])
         created = self.client.post(
-            "/api/conversion/calibration-datasets",
+            "/aiyoloapi/conversion/calibration-datasets",
             params={"filename": "site.zip", "name": "工地巡检", "version": "1.0", "scenario": "construction"},
             content=self.calibration_zip(), headers={**self.headers, "Content-Type": "application/zip"},
         )
@@ -194,7 +194,7 @@ class ConversionApiTests(unittest.TestCase):
         upload = self.upload().json()
         self.wait(upload["job"])
         mobile = self.client.post(
-            f'/api/conversion/uploads/{upload["upload_id"]}/mobile',
+            f'/aiyoloapi/conversion/uploads/{upload["upload_id"]}/mobile',
             params={"calibrationDatasetId": dataset["datasetId"]}, headers=self.headers,
         ).json()
         completed = self.wait(mobile)
@@ -204,21 +204,21 @@ class ConversionApiTests(unittest.TestCase):
         self.assertIn("calibrationDataset", model, model)
         self.assertEqual(dataset["datasetId"], model["calibrationDataset"]["datasetId"])
         blocked = self.client.delete(
-            f'/api/conversion/calibration-datasets/{dataset["datasetId"]}', headers=self.headers
+            f'/aiyoloapi/conversion/calibration-datasets/{dataset["datasetId"]}', headers=self.headers
         )
         self.assertEqual(409, blocked.status_code)
 
         image = next((self.calibration_catalog.root / dataset["yamlPath"]).parent.joinpath("images").iterdir())
         image.write_bytes(b"changed-after-registration")
         inspected = self.client.get(
-            f'/api/conversion/calibration-datasets/{dataset["datasetId"]}', headers=self.headers
+            f'/aiyoloapi/conversion/calibration-datasets/{dataset["datasetId"]}', headers=self.headers
         )
         self.assertEqual(200, inspected.status_code)
         self.assertEqual("invalid", inspected.json()["status"])
 
     def test_unreferenced_calibration_asset_can_be_deleted(self):
         created = self.client.post(
-            "/api/conversion/calibration-datasets",
+            "/aiyoloapi/conversion/calibration-datasets",
             params={"filename": "temporary.zip", "name": "临时校准集", "version": "1", "scenario": "test"},
             content=self.calibration_zip(), headers={**self.headers, "Content-Type": "application/zip"},
         )
@@ -227,17 +227,17 @@ class ConversionApiTests(unittest.TestCase):
         directory = (self.calibration_catalog.root / dataset["yamlPath"]).parent
         self.assertTrue(directory.is_dir())
         deleted = self.client.delete(
-            f'/api/conversion/calibration-datasets/{dataset["datasetId"]}', headers=self.headers
+            f'/aiyoloapi/conversion/calibration-datasets/{dataset["datasetId"]}', headers=self.headers
         )
         self.assertEqual(200, deleted.status_code, deleted.text)
         self.assertFalse(directory.exists())
         self.assertEqual(404, self.client.get(
-            f'/api/conversion/calibration-datasets/{dataset["datasetId"]}', headers=self.headers
+            f'/aiyoloapi/conversion/calibration-datasets/{dataset["datasetId"]}', headers=self.headers
         ).status_code)
 
     def test_calibration_upload_rejects_path_traversal(self):
         response = self.client.post(
-            "/api/conversion/calibration-datasets",
+            "/aiyoloapi/conversion/calibration-datasets",
             params={"filename": "bad.zip", "name": "bad", "version": "1", "scenario": "test"},
             content=self.calibration_zip(unsafe_name="../escape.png"),
             headers={**self.headers, "Content-Type": "application/zip"},
@@ -249,12 +249,12 @@ class ConversionApiTests(unittest.TestCase):
         upload = self.upload().json()
         self.wait(upload["job"])
         self.service.runner.fail_mobile = True
-        job = self.client.post(f'/api/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers).json()
+        job = self.client.post(f'/aiyoloapi/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers).json()
         self.assertEqual(self.wait(job)["status"], "failed")
         self.assertTrue(self.catalog.get(upload["model_id"])["serverReady"])
         self.assertFalse(self.catalog.get(upload["model_id"])["androidReady"])
         self.service.runner.fail_mobile = False
-        response = self.client.post(f'/api/conversion/jobs/{job["id"]}/retry', headers=self.headers)
+        response = self.client.post(f'/aiyoloapi/conversion/jobs/{job["id"]}/retry', headers=self.headers)
         self.assertEqual(self.wait(response.json())["status"], "succeeded")
 
     def test_invalid_pt_is_never_published_and_missing_config_does_not_block_pt(self):
@@ -264,12 +264,12 @@ class ConversionApiTests(unittest.TestCase):
         self.assertEqual(self.catalog.list_models(), [])
         good = self.upload().json()
         self.assertEqual(self.wait(good["job"])["status"], "succeeded")
-        self.assertEqual(self.client.post(f'/api/conversion/uploads/{good["upload_id"]}/mobile', headers=self.headers).status_code, 409)
+        self.assertEqual(self.client.post(f'/aiyoloapi/conversion/uploads/{good["upload_id"]}/mobile', headers=self.headers).status_code, 409)
 
     def test_config_and_environment_check_are_async_admin_operations(self):
-        response = self.client.put("/api/conversion/config", json={"mode": "local", "python_path": sys.executable, "auto_convert": True}, headers=self.headers)
+        response = self.client.put("/aiyoloapi/conversion/config", json={"mode": "local", "python_path": sys.executable, "auto_convert": True}, headers=self.headers)
         self.assertEqual(response.status_code, 200)
-        job = self.client.post("/api/conversion/check", headers=self.headers).json()
+        job = self.client.post("/aiyoloapi/conversion/check", headers=self.headers).json()
         self.assertTrue(self.wait(job)["result"]["mobile_available"])
         upload = self.upload().json()
         self.wait(upload["job"])
@@ -278,7 +278,7 @@ class ConversionApiTests(unittest.TestCase):
 
     def test_jobs_expose_stage_activity_and_terminal_progress(self):
         upload = self.upload().json()
-        queued = self.client.get("/api/conversion/jobs", headers=self.headers).json()["jobs"]
+        queued = self.client.get("/aiyoloapi/conversion/jobs", headers=self.headers).json()["jobs"]
         current = next(job for job in queued if job["id"] == upload["job"]["id"])
         self.assertIn(current["stage"], {"queued", "starting", "preparing", "loading_model", "validating_model", "completed"})
         self.assertIn("activity_at", current)
@@ -302,7 +302,7 @@ class ConversionApiTests(unittest.TestCase):
         registry["models"][0]["placeholder"] = False
         self.catalog._save(registry)
         (self.service.root / "uploads" / uploaded["upload_id"] / "source.pt").write_bytes(b"changed")
-        job = self.client.post(f'/api/conversion/uploads/{uploaded["upload_id"]}/mobile', headers=self.headers).json()
+        job = self.client.post(f'/aiyoloapi/conversion/uploads/{uploaded["upload_id"]}/mobile', headers=self.headers).json()
         self.assertEqual(self.wait(job)["status"], "failed")
         self.assertFalse(self.catalog.get(uploaded["model_id"])["androidReady"])
 
@@ -323,7 +323,7 @@ class ConversionApiTests(unittest.TestCase):
         self.service.start()
         upload = self.upload().json()
         self.wait(upload["job"])
-        mobile = self.client.post(f'/api/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers).json()
+        mobile = self.client.post(f'/aiyoloapi/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers).json()
         self.assertEqual(self.wait(mobile)["status"], "succeeded")
         model = self.catalog.get(upload["model_id"])
         self.assertTrue(model["androidConverted"])

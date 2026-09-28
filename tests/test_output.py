@@ -29,13 +29,13 @@ class OutputContractTests(unittest.TestCase):
             stream_id = f"output-contract-{uuid.uuid4().hex}"
             try:
                 self.assertEqual(client.post(
-                    "/api/streams", json={"stream_id": stream_id}, headers=admin_headers
+                    "/aiyoloapi/streams", json={"stream_id": stream_id}, headers=admin_headers
                 ).status_code, 201)
                 with client.websocket_connect(
-                    f"/api/streams/{stream_id}/ingest", headers=mobile_headers
+                    f"/aiyoloapi/streams/{stream_id}/ingest", headers=mobile_headers
                 ) as ingest:
                     with client.websocket_connect(
-                        f"/api/streams/{stream_id}/ws", headers=admin_headers
+                        f"/aiyoloapi/streams/{stream_id}/ws", headers=admin_headers
                     ) as output:
                         ingest.send_bytes(sample_jpeg())
                         frame = output.receive_bytes()
@@ -48,7 +48,7 @@ class OutputContractTests(unittest.TestCase):
                 self.assertIn(b"Content-Type: image/jpeg", part)
                 self.assertIn(b"Content-Length:", part)
             finally:
-                client.delete(f"/api/streams/{stream_id}", headers=admin_headers)
+                client.delete(f"/aiyoloapi/streams/{stream_id}", headers=admin_headers)
 
     def test_mjpeg_generator_stops_without_replaying_last_frame_after_close(self):
         async def exercise():
@@ -66,7 +66,7 @@ class OutputContractTests(unittest.TestCase):
         self.assertEqual(subscribers, 0)
 
     def test_mjpeg_response_disables_caching_and_proxy_buffering(self):
-        route = next(route for route in app.routes if getattr(route, "path", None) == "/api/streams/{stream_id}/mjpeg")
+        route = next(route for route in app.routes if getattr(route, "path", None) == "/aiyoloapi/streams/{stream_id}/mjpeg")
         source = __import__("inspect").getsource(route.endpoint)
         self.assertIn('"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"', source)
         self.assertIn('"X-Accel-Buffering": "no"', source)

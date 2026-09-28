@@ -34,10 +34,10 @@ class ModelParameterApiTests(unittest.TestCase):
 
     def test_get_returns_versioned_default_profile_for_catalog_clients(self):
         settings.mobile_token = "mobile-secret"
-        denied = self.client.get(f"/api/models/{HELMET_MODEL_ID}/parameters")
+        denied = self.client.get(f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters")
         self.assertEqual(denied.status_code, 401)
         response = self.client.get(
-            f"/api/models/{HELMET_MODEL_ID}/parameters",
+            f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters",
             headers={"X-Video-Service-Token": "mobile-secret"},
         )
         self.assertEqual(response.status_code, 200)
@@ -50,7 +50,7 @@ class ModelParameterApiTests(unittest.TestCase):
     def test_v2_update_returns_image_and_camera_parameters(self):
         settings.admin_token = "admin-secret"
         profile = self.client.get(
-            f"/api/models/{HELMET_MODEL_ID}/parameters",
+            f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters",
             headers={"X-Admin-Token": "admin-secret"},
         ).json()
         payload = {
@@ -61,7 +61,7 @@ class ModelParameterApiTests(unittest.TestCase):
         }
         payload["alertRules"][0]["image"]["minimumConfidence"] = 0.45
         saved = self.client.put(
-            f"/api/models/{HELMET_MODEL_ID}/parameters",
+            f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters",
             json=payload,
             headers={"X-Admin-Token": "admin-secret"},
         )
@@ -75,7 +75,7 @@ class ModelParameterApiTests(unittest.TestCase):
     def test_legacy_v1_update_is_accepted_and_persisted_as_v2(self):
         settings.admin_token = "admin-secret"
         profile = self.client.get(
-            f"/api/models/{HELMET_MODEL_ID}/parameters",
+            f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters",
             headers={"X-Admin-Token": "admin-secret"},
         ).json()
         legacy_rules = []
@@ -86,7 +86,7 @@ class ModelParameterApiTests(unittest.TestCase):
             )})
         payload = {"expectedRevision": 0, "detection": profile["detection"], "alertRules": legacy_rules}
         saved = self.client.put(
-            f"/api/models/{HELMET_MODEL_ID}/parameters",
+            f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters",
             json=payload,
             headers={"X-Admin-Token": "admin-secret"},
         )
@@ -97,12 +97,12 @@ class ModelParameterApiTests(unittest.TestCase):
     def test_v2_image_confidence_is_validated_against_detection_threshold(self):
         settings.admin_token = "admin-secret"
         profile = self.client.get(
-            f"/api/models/{HELMET_MODEL_ID}/parameters",
+            f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters",
             headers={"X-Admin-Token": "admin-secret"},
         ).json()
         profile["alertRules"][0]["image"]["minimumConfidence"] = 0.2
         rejected = self.client.put(
-            f"/api/models/{HELMET_MODEL_ID}/parameters",
+            f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters",
             json={"schemaVersion": 2, "expectedRevision": 0, "detection": profile["detection"], "alertRules": profile["alertRules"]},
             headers={"X-Admin-Token": "admin-secret"},
         )
@@ -113,7 +113,7 @@ class ModelParameterApiTests(unittest.TestCase):
         settings.admin_token = "admin-secret"
         settings.mobile_token = "mobile-secret"
         profile = self.client.get(
-            f"/api/models/{HELMET_MODEL_ID}/parameters?platform=server",
+            f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters?platform=server",
             headers={"X-Video-Service-Token": "mobile-secret"},
         ).json()
         payload = {
@@ -121,14 +121,14 @@ class ModelParameterApiTests(unittest.TestCase):
             "detection": profile["detection"],
             "alertRules": profile["alertRules"],
         }
-        self.assertEqual(self.client.put(f"/api/models/{HELMET_MODEL_ID}/parameters?platform=server", json=payload).status_code, 401)
+        self.assertEqual(self.client.put(f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters?platform=server", json=payload).status_code, 401)
         saved = self.client.put(
-            f"/api/models/{HELMET_MODEL_ID}/parameters?platform=server",
+            f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters?platform=server",
             json=payload,
             headers={"X-Admin-Token": "admin-secret", "X-Operator-Id": "safety-admin"},
         )
         stale = self.client.put(
-            f"/api/models/{HELMET_MODEL_ID}/parameters?platform=server",
+            f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters?platform=server",
             json=payload,
             headers={"X-Admin-Token": "admin-secret"},
         )
@@ -138,18 +138,18 @@ class ModelParameterApiTests(unittest.TestCase):
         self.assertEqual(stale.json()["detail"]["code"], "revision_conflict")
 
     def test_update_validates_model_labels_and_reset_is_audited(self):
-        profile = self.client.get(f"/api/models/{HELMET_MODEL_ID}/parameters").json()
+        profile = self.client.get(f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters").json()
         invalid = {
             "expectedRevision": 0,
             "detection": profile["detection"],
             "alertRules": profile["alertRules"][:-1],
         }
-        rejected = self.client.put(f"/api/models/{HELMET_MODEL_ID}/parameters", json=invalid)
+        rejected = self.client.put(f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters", json=invalid)
         saved = self.client.put(
-            f"/api/models/{HELMET_MODEL_ID}/parameters",
+            f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters",
             json={"expectedRevision": 0, "detection": profile["detection"], "alertRules": profile["alertRules"]},
         )
-        reset = self.client.delete(f"/api/models/{HELMET_MODEL_ID}/parameters")
+        reset = self.client.delete(f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters")
         self.assertEqual(rejected.status_code, 422)
         self.assertEqual(rejected.json()["detail"]["code"], "alert_label_mismatch")
         self.assertEqual(saved.status_code, 200)
@@ -158,8 +158,8 @@ class ModelParameterApiTests(unittest.TestCase):
         self.assertEqual([item["action"] for item in reset.json()["audit"]], ["UPDATED", "RESET"])
 
     def test_missing_model_and_invalid_platform_are_rejected(self):
-        self.assertEqual(self.client.get("/api/models/missing/parameters").status_code, 404)
-        self.assertEqual(self.client.get(f"/api/models/{HELMET_MODEL_ID}/parameters?platform=ios").status_code, 422)
+        self.assertEqual(self.client.get("/aiyoloapi/models/missing/parameters").status_code, 404)
+        self.assertEqual(self.client.get(f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters?platform=ios").status_code, 422)
 
 
 if __name__ == "__main__":

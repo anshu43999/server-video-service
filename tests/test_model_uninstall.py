@@ -212,7 +212,7 @@ class ModelUninstallApiTests(unittest.TestCase):
     def test_admin_can_uninstall_an_unbound_model(self):
         result = {"modelId": "demo", "uninstalled": True, "deletedFiles": 2, "cleanupFailures": []}
         with patch.object(model_catalog, "uninstall", return_value=result) as uninstall:
-            response = self.client.delete("/api/models/demo")
+            response = self.client.delete("/aiyoloapi/models/demo")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), result)
         uninstall.assert_called_once_with("demo")
@@ -220,7 +220,7 @@ class ModelUninstallApiTests(unittest.TestCase):
     def test_bound_model_is_rejected_before_catalog_mutation(self):
         streams["uninstall-bound-stream"] = SimpleNamespace(model_catalog_id="demo")
         with patch.object(model_catalog, "uninstall") as uninstall:
-            response = self.client.delete("/api/models/demo")
+            response = self.client.delete("/aiyoloapi/models/demo")
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["detail"]["code"], "model_in_use")
         self.assertEqual(response.json()["detail"]["streamIds"], ["uninstall-bound-stream"])
@@ -229,11 +229,11 @@ class ModelUninstallApiTests(unittest.TestCase):
     def test_uninstall_requires_admin_and_maps_missing_model(self):
         anonymous = TestClient(app)
         try:
-            self.assertEqual(anonymous.delete("/api/models/demo").status_code, 401)
+            self.assertEqual(anonymous.delete("/aiyoloapi/models/demo").status_code, 401)
         finally:
             anonymous.close()
         with patch.object(model_catalog, "uninstall", side_effect=KeyError("missing")):
-            response = self.client.delete("/api/models/missing")
+            response = self.client.delete("/aiyoloapi/models/missing")
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"]["code"], "model_not_found")
 

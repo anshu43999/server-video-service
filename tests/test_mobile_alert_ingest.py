@@ -42,10 +42,10 @@ class MobileAlertIngestApiTests(unittest.TestCase):
         return value
 
     def test_mobile_ingest_requires_mobile_token_and_accepts_colon_id(self):
-        denied = self.client.post("/api/alerts/mobile-ingest", json=self.payload())
+        denied = self.client.post("/aiyoloapi/alerts/mobile-ingest", json=self.payload())
         self.assertEqual(denied.status_code, 401)
         response = self.client.post(
-            "/api/alerts/mobile-ingest",
+            "/aiyoloapi/alerts/mobile-ingest",
             headers={"X-Video-Service-Token": "mobile-secret"},
             json=self.payload(),
         )
@@ -59,7 +59,7 @@ class MobileAlertIngestApiTests(unittest.TestCase):
         payload = self.payload(sourceId="camera:back")
         payload.pop("origin")
         response = self.client.post(
-            "/api/alerts/mobile-ingest",
+            "/aiyoloapi/alerts/mobile-ingest",
             headers={"X-Video-Service-Token": "mobile-secret"},
             json=payload,
         )
@@ -68,11 +68,11 @@ class MobileAlertIngestApiTests(unittest.TestCase):
 
     def test_ingest_is_idempotent_and_preserves_disposition_history(self):
         headers = {"X-Video-Service-Token": "mobile-secret"}
-        first = self.client.post("/api/alerts/mobile-ingest", headers=headers, json=self.payload(
+        first = self.client.post("/aiyoloapi/alerts/mobile-ingest", headers=headers, json=self.payload(
             disposition={"status": "ACKNOWLEDGED", "actor": "local-operator", "actedAtUs": 2000},
         ))
         self.assertEqual(first.status_code, 202)
-        second = self.client.post("/api/alerts/mobile-ingest", headers=headers, json=self.payload(
+        second = self.client.post("/aiyoloapi/alerts/mobile-ingest", headers=headers, json=self.payload(
             detectionResults=[{"label": "head", "confidence": 0.95}],
             disposition={"status": "ACKNOWLEDGED", "actor": "local-operator", "actedAtUs": 2000},
         ))
@@ -80,19 +80,19 @@ class MobileAlertIngestApiTests(unittest.TestCase):
         event = second.json()["event"]
         self.assertEqual(event["disposition"]["status"], "ACKNOWLEDGED")
         self.assertEqual(len(event["disposition"]["history"]), 1)
-        listed = self.client.get("/api/alerts", headers={"X-Admin-Token": "admin-secret"})
+        listed = self.client.get("/aiyoloapi/alerts", headers={"X-Admin-Token": "admin-secret"})
         self.assertEqual(listed.status_code, 200)
         self.assertEqual(len(listed.json()["events"]), 1)
 
     def test_mobile_token_cannot_use_admin_disposition_endpoint(self):
         response = self.client.post(
-            "/api/alerts/mobile-ingest",
+            "/aiyoloapi/alerts/mobile-ingest",
             headers={"X-Video-Service-Token": "mobile-secret"},
             json=self.payload(),
         )
         self.assertEqual(response.status_code, 202)
         denied = self.client.post(
-            "/api/alerts/local:uploaded-helmet:PPE_NO_HELMET:123/acknowledge",
+            "/aiyoloapi/alerts/local:uploaded-helmet:PPE_NO_HELMET:123/acknowledge",
             headers={"X-Video-Service-Token": "mobile-secret"},
             json={},
         )

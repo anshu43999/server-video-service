@@ -99,7 +99,7 @@ MJPEG / WS JPEG ──→ 管理页预览、自动化测试、联调探针（非
 
 ### FR-03 YOLO 分析控制（必须）
 
-- `POST /api/streams/{stream_id}/yolo` 手动设置 `enabled=true/false`；
+- `POST /aiyoloapi/streams/{stream_id}/yolo` 手动设置 `enabled=true/false`；
 - 开启后仅对后续接收帧执行推理；关闭后直接输出原始画面；
 - 推理必须返回**结构化检测结果**（类别 id、类别名、置信度、归一化或像素坐标框），叠加是基于该结果的可选下游步骤；不允许只产出已画框的图像；
 - 返回模型是否加载成功、模型路径错误或依赖缺失等状态；
@@ -207,24 +207,24 @@ MJPEG / WS JPEG ──→ 管理页预览、自动化测试、联调探针（非
 | 方法 | 路径 | 用途 |
 |---|---|---|
 | GET | `/healthz` | 服务存活检查 |
-| POST | `/api/streams` | 创建视频流会话 |
-| GET | `/api/streams` | 查询所有会话 |
-| DELETE | `/api/streams/{stream_id}` | 删除会话 |
-| POST | `/api/streams/{stream_id}/yolo` | 开关 YOLO |
-| PATCH | `/api/streams/{stream_id}/config` | 调整置信度、最大 FPS |
-| GET | `/api/streams/{stream_id}/playback` | 查询该流的 WHEP / LL-HLS / RTSP 播放地址与可用性 |
-| GET | `/api/metrics` | 进程与各流的 FPS/延迟/丢帧指标 |
+| POST | `/aiyoloapi/streams` | 创建视频流会话 |
+| GET | `/aiyoloapi/streams` | 查询所有会话 |
+| DELETE | `/aiyoloapi/streams/{stream_id}` | 删除会话 |
+| POST | `/aiyoloapi/streams/{stream_id}/yolo` | 开关 YOLO |
+| PATCH | `/aiyoloapi/streams/{stream_id}/config` | 调整置信度、最大 FPS |
+| GET | `/aiyoloapi/streams/{stream_id}/playback` | 查询该流的 WHEP / LL-HLS / RTSP 播放地址与可用性 |
+| GET | `/aiyoloapi/metrics` | 进程与各流的 FPS/延迟/丢帧指标 |
 
 数据面：
 
 | 面 | 通道 | 用途 |
 |---|---|---|
-| 输入 | WS `/api/streams/{stream_id}/ingest` | 移动端推送 JPEG/PNG 帧 |
+| 输入 | WS `/aiyoloapi/streams/{stream_id}/ingest` | 移动端推送 JPEG/PNG 帧 |
 | 视频（生产） | WHEP `http://<media>:8889/{path}/whep` | App、浏览器播放，H.264 |
 | 视频（回退） | LL-HLS `http://<media>:8888/{path}/index.m3u8` | WebRTC 打不通时降级 |
 | 视频（诊断） | RTSP `rtsp://<media>:8554/{path}` | VLC/ffprobe 排障，不进 App |
-| 元数据 | WS `/api/streams/{stream_id}/detections` | 结构化检测结果 JSON |
-| 测试与诊断 | `GET /api/streams/{stream_id}/mjpeg`、WS `/api/streams/{stream_id}/ws` | 管理页预览、自动化测试、联调探针（非生产） |
+| 元数据 | WS `/aiyoloapi/streams/{stream_id}/detections` | 结构化检测结果 JSON |
+| 测试与诊断 | `GET /aiyoloapi/streams/{stream_id}/mjpeg`、WS `/aiyoloapi/streams/{stream_id}/ws` | 管理页预览、自动化测试、联调探针（非生产） |
 
 创建会话请求：
 

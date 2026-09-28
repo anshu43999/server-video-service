@@ -29,24 +29,24 @@ class ApiTests(unittest.TestCase):
             self.assertIn('id="main-nav"', admin.text)
             self.assertEqual(client.get("/admin/styles.css").status_code, 200)
             self.assertEqual(client.get("/admin/app.js").status_code, 200)
-            response = client.post("/api/streams", json={"stream_id": "demo"})
+            response = client.post("/aiyoloapi/streams", json={"stream_id": "demo"})
             self.assertEqual(response.status_code, 201)
             self.assertEqual(response.json()["state"], "created")
-            response = client.patch("/api/streams/demo/config", json={"confidence": 0.4, "max_fps": 12})
+            response = client.patch("/aiyoloapi/streams/demo/config", json={"confidence": 0.4, "max_fps": 12})
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()["confidence"], 0.4)
             self.assertEqual(response.json()["max_fps"], 12.0)
             self.assertTrue(response.json()["overlay_enabled"])
-            response = client.patch("/api/streams/demo/config", json={"overlay_enabled": False})
+            response = client.patch("/aiyoloapi/streams/demo/config", json={"overlay_enabled": False})
             self.assertEqual(response.status_code, 200)
             self.assertFalse(response.json()["overlay_enabled"])
             self.assertFalse(streams["demo"].overlay_enabled)
-            response = client.patch("/api/streams/demo/config", json={"overlay_enabled": True})
+            response = client.patch("/aiyoloapi/streams/demo/config", json={"overlay_enabled": True})
             self.assertTrue(response.json()["overlay_enabled"])
-            with client.websocket_connect("/api/streams/demo/ingest") as ws:
+            with client.websocket_connect("/aiyoloapi/streams/demo/ingest") as ws:
                 ws.send_bytes(make_jpeg())
             self.assertEqual(streams["demo"].frames_received, 1)
-            response = client.get("/api/streams")
+            response = client.get("/aiyoloapi/streams")
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.json()[0]["stream_id"], "demo")
             self.assertEqual(response.json()[0]["state"], "outputting")
@@ -55,7 +55,7 @@ class ApiTests(unittest.TestCase):
 
     def test_stream_id_uses_frozen_safe_charset(self):
         with TestClient(app) as client:
-            response = client.post("/api/streams", json={"stream_id": "bad/id"})
+            response = client.post("/aiyoloapi/streams", json={"stream_id": "bad/id"})
             self.assertEqual(response.status_code, 422)
 
 

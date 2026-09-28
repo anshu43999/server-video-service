@@ -66,7 +66,7 @@ class ServerAlertRuntime:
             temporary.replace(target)
         finally:
             temporary.unlink(missing_ok=True)
-        return f"/api/alerts/{event_id}/evidence"
+        return f"/aiyoloapi/alerts/{event_id}/evidence"
 
     def evidence_path(self, event_id: str) -> Path | None:
         if not event_id.startswith("evt-server-"):

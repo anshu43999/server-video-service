@@ -11,7 +11,7 @@ class MetricsApiTests(unittest.TestCase):
 
     def test_metrics_endpoint_returns_system_and_streams(self):
         with TestClient(app) as client:
-            response = client.get("/api/metrics")
+            response = client.get("/aiyoloapi/metrics")
             self.assertEqual(response.status_code, 200)
             self.assertIn("system", response.json())
             self.assertIn("streams", response.json())

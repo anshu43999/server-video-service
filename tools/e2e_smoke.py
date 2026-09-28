@@ -26,10 +26,10 @@ def run(source: str, stream_id: str, frames: int = 10) -> dict:
     try:
         with TestClient(app) as client:
             streams.clear()
-            created = client.post("/api/streams", json={"stream_id": stream_id})
+            created = client.post("/aiyoloapi/streams", json={"stream_id": stream_id})
             created.raise_for_status()
-            with client.websocket_connect(f"/api/streams/{stream_id}/ingest") as ingest:
-                with client.websocket_connect(f"/api/streams/{stream_id}/ws") as output:
+            with client.websocket_connect(f"/aiyoloapi/streams/{stream_id}/ingest") as ingest:
+                with client.websocket_connect(f"/aiyoloapi/streams/{stream_id}/ws") as output:
                     for _ in range(frames):
                         ok, frame = capture.read()
                         if not ok:

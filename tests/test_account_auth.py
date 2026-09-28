@@ -41,52 +41,52 @@ class AccountAuthApiTests(unittest.TestCase):
         settings.mobile_token = self.old_mobile_token
 
     def test_setup_login_me_logout_and_business_gate(self):
-        status = self.client.get("/api/auth/status").json()
+        status = self.client.get("/aiyoloapi/auth/status").json()
         self.assertTrue(status["setupRequired"])
         self.assertFalse(status["authenticated"])
-        self.assertEqual(self.client.get("/api/models").status_code, 401)
+        self.assertEqual(self.client.get("/aiyoloapi/models").status_code, 401)
 
-        setup = self.client.post("/api/auth/setup", json={"username": "Admin", "password": "correct-horse-1"})
+        setup = self.client.post("/aiyoloapi/auth/setup", json={"username": "Admin", "password": "correct-horse-1"})
         self.assertEqual(setup.status_code, 200)
         self.assertEqual(setup.json()["user"], {"username": "admin", "role": "admin"})
         token = setup.json()["accessToken"]
         self.assertGreater(len(token), 40)
 
         anonymous = TestClient(app)
-        self.assertEqual(anonymous.get("/api/models").status_code, 401)
-        self.assertEqual(anonymous.get("/api/auth/me").status_code, 401)
-        self.assertEqual(self.client.get("/api/auth/me").json()["username"], "admin")
+        self.assertEqual(anonymous.get("/aiyoloapi/models").status_code, 401)
+        self.assertEqual(anonymous.get("/aiyoloapi/auth/me").status_code, 401)
+        self.assertEqual(self.client.get("/aiyoloapi/auth/me").json()["username"], "admin")
 
-        logout = self.client.post("/api/auth/logout")
+        logout = self.client.post("/aiyoloapi/auth/logout")
         self.assertEqual(logout.status_code, 200)
-        self.assertEqual(self.client.get("/api/auth/me").status_code, 401)
+        self.assertEqual(self.client.get("/aiyoloapi/auth/me").status_code, 401)
 
-        failed = self.client.post("/api/auth/login", json={"username": "admin", "password": "incorrect-1"})
+        failed = self.client.post("/aiyoloapi/auth/login", json={"username": "admin", "password": "incorrect-1"})
         self.assertEqual(failed.status_code, 401)
-        login = self.client.post("/api/auth/login", json={"username": "admin", "password": "correct-horse-1"})
+        login = self.client.post("/aiyoloapi/auth/login", json={"username": "admin", "password": "correct-horse-1"})
         self.assertEqual(login.status_code, 200)
         bearer = {"Authorization": f"Bearer {login.json()['accessToken']}"}
-        self.assertEqual(self.client.get("/api/auth/me", headers=bearer).status_code, 200)
+        self.assertEqual(self.client.get("/aiyoloapi/auth/me", headers=bearer).status_code, 200)
 
     def test_admin_can_create_operator_and_operator_cannot_use_admin_api(self):
-        setup = self.client.post("/api/auth/setup", json={"username": "admin", "password": "correct-horse-1"})
+        setup = self.client.post("/aiyoloapi/auth/setup", json={"username": "admin", "password": "correct-horse-1"})
         admin = {"Authorization": f"Bearer {setup.json()['accessToken']}"}
         created = self.client.post(
-            "/api/auth/users",
+            "/aiyoloapi/auth/users",
             headers=admin,
             json={"username": "inspector", "password": "operator-pass-1", "role": "operator"},
         )
         self.assertEqual(created.status_code, 200)
-        login = self.client.post("/api/auth/login", json={"username": "inspector", "password": "operator-pass-1"})
+        login = self.client.post("/aiyoloapi/auth/login", json={"username": "inspector", "password": "operator-pass-1"})
         mobile = {"X-Video-Service-Token": login.json()["accessToken"]}
-        self.assertEqual(self.client.get("/api/models", headers=mobile).status_code, 200)
-        self.assertEqual(self.client.get("/api/dashboard/stats", headers=mobile).status_code, 401)
-        self.assertEqual(self.client.get("/api/auth/users", headers=mobile).status_code, 401)
+        self.assertEqual(self.client.get("/aiyoloapi/models", headers=mobile).status_code, 200)
+        self.assertEqual(self.client.get("/aiyoloapi/dashboard/stats", headers=mobile).status_code, 401)
+        self.assertEqual(self.client.get("/aiyoloapi/auth/users", headers=mobile).status_code, 401)
 
     def test_password_and_session_are_not_returned_by_user_listing(self):
-        setup = self.client.post("/api/auth/setup", json={"username": "admin", "password": "correct-horse-1"})
+        setup = self.client.post("/aiyoloapi/auth/setup", json={"username": "admin", "password": "correct-horse-1"})
         users = self.client.get(
-            "/api/auth/users",
+            "/aiyoloapi/auth/users",
             headers={"Authorization": f"Bearer {setup.json()['accessToken']}"},
         )
         payload = users.text.lower()
@@ -96,7 +96,7 @@ class AccountAuthApiTests(unittest.TestCase):
 
     def test_database_stores_password_hash_and_session_digest_only(self):
         password = "correct-horse-1"
-        setup = self.client.post("/api/auth/setup", json={"username": "admin", "password": password})
+        setup = self.client.post("/aiyoloapi/auth/setup", json={"username": "admin", "password": password})
         token = setup.json()["accessToken"]
 
         with database.session() as session:

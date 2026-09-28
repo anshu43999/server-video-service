@@ -169,15 +169,15 @@ class AlertPostgreSqlIntegrationTests(unittest.TestCase):
         admin_headers = {"X-Admin-Token": "integration-admin"}
         try:
             first = client.post(
-                "/api/alerts/mobile-ingest", headers=mobile_headers,
+                "/aiyoloapi/alerts/mobile-ingest", headers=mobile_headers,
                 json=payload(acknowledged_id, "ACKNOWLEDGED"),
             )
             retry = client.post(
-                "/api/alerts/mobile-ingest", headers=mobile_headers,
+                "/aiyoloapi/alerts/mobile-ingest", headers=mobile_headers,
                 json=payload(acknowledged_id, "ACKNOWLEDGED"),
             )
             false_positive = client.post(
-                "/api/alerts/mobile-ingest", headers=mobile_headers,
+                "/aiyoloapi/alerts/mobile-ingest", headers=mobile_headers,
                 json=payload(false_positive_id, "FALSE_POSITIVE"),
             )
             self.assertEqual(first.status_code, 202)
@@ -185,17 +185,17 @@ class AlertPostgreSqlIntegrationTests(unittest.TestCase):
             self.assertEqual(false_positive.status_code, 202)
             self.assertEqual(len(retry.json()["event"]["disposition"]["history"]), 1)
 
-            filtered = client.get("/api/alerts?status=ACKNOWLEDGED", headers=admin_headers)
+            filtered = client.get("/aiyoloapi/alerts?status=ACKNOWLEDGED", headers=admin_headers)
             self.assertEqual(filtered.status_code, 200)
             self.assertIn(acknowledged_id, {item["eventId"] for item in filtered.json()["events"]})
-            exported = client.get("/api/alerts/false-positives/export", headers=admin_headers)
+            exported = client.get("/aiyoloapi/alerts/false-positives/export", headers=admin_headers)
             self.assertEqual(exported.status_code, 200)
             self.assertIn(false_positive_id, exported.text)
 
             integration_database.close()
             reopened_database = DatabaseManager(settings.database_url)
             alert_disposition_store.configure_database(reopened_database)
-            detail = client.get(f"/api/alerts/{acknowledged_id}", headers=admin_headers)
+            detail = client.get(f"/aiyoloapi/alerts/{acknowledged_id}", headers=admin_headers)
             self.assertEqual(detail.status_code, 200)
             self.assertEqual(detail.json()["disposition"]["status"], "ACKNOWLEDGED")
             reopened_database.close()

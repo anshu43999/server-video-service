@@ -23,16 +23,16 @@ docker compose up --build
 
 1. 启动服务并访问 `/healthz`；
 2. 创建流并推送至少一帧；
-3. 调用 `POST /api/streams/{id}/yolo` 开启分析；
-4. 调用 `GET /api/streams`，保存返回的 `model` 元数据；
+3. 调用 `POST /aiyoloapi/streams/{id}/yolo` 开启分析；
+4. 调用 `GET /aiyoloapi/streams`，保存返回的 `model` 元数据；
 5. 检查 `model_exists`、`loaded`、文件大小、`imgsz`、设备和类别顺序；
 6. 从 WebSocket/MJPEG 输出确认画面可解码，记录处理帧数和模型错误。
 
 管理接口：
 
-- `GET /api/models`：列出模型、格式、文件存在性、SHA-256 和当前活动模型；
-- `POST /api/models/register`：登记 `models/` 目录下转换工具生成的 Manifest；服务端会重新计算产物 SHA-256，哈希不匹配或路径越界时拒绝登记；
-- `POST /api/models/{model_id}/activate`：校验文件哈希后将 PT/ONNX 服务端模型设为新会话默认模型；TFLite 只作为移动端产物，不能直接作为当前服务端活动模型。
+- `GET /aiyoloapi/models`：列出模型、格式、文件存在性、SHA-256 和当前活动模型；
+- `POST /aiyoloapi/models/register`：登记 `models/` 目录下转换工具生成的 Manifest；服务端会重新计算产物 SHA-256，哈希不匹配或路径越界时拒绝登记；
+- `POST /aiyoloapi/models/{model_id}/activate`：校验文件哈希后将 PT/ONNX 服务端模型设为新会话默认模型；TFLite 只作为移动端产物，不能直接作为当前服务端活动模型。
 
 管理页面的“模型资产”区域会显示每个资产的格式、输入尺寸、文件存在性和哈希校验状态；只有文件存在且哈希匹配的 PT/ONNX 模型可以激活，新建视频流会使用激活模型。
 转换完成后可在管理页面点击“登记 Manifest”，填写例如 `models/converted/yolo11n_640_manifest.json`；登记成功后 ONNX/PT 会出现在列表中，TFLite 会以 MOBILE ONLY 状态展示。

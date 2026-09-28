@@ -16,8 +16,8 @@ class AdminModelMarketViewTests(unittest.TestCase):
             self.assertIn(marker, self.html)
 
     def test_live_catalog_and_binding_routes_are_used(self):
-        self.assertIn("fetch('/api/models')", self.js)
-        self.assertIn("/api/streams/${encodeURIComponent(streamId)}/model", self.js)
+        self.assertIn("fetch('/aiyoloapi/models')", self.js)
+        self.assertIn("/aiyoloapi/streams/${encodeURIComponent(streamId)}/model", self.js)
         self.assertIn("method:'PUT'", self.js)
         self.assertIn("refreshLiveModels", self.js)
 

@@ -11,7 +11,7 @@ class AdminDashboardLiveContractTests(unittest.TestCase):
         self.js = (ROOT / "app" / "static" / "app.js").read_text(encoding="utf-8")
 
     def test_dashboard_reads_real_statistics_and_health(self):
-        self.assertIn("/api/dashboard/stats?range=", self.js)
+        self.assertIn("/aiyoloapi/dashboard/stats?range=", self.js)
         self.assertIn("fetch('/healthz')", self.js)
         self.assertIn("state.dashboardStats", self.js)
         self.assertIn("dataSource", self.js)

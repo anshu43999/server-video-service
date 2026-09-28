@@ -34,21 +34,21 @@ class AlertVerificationApiTests(unittest.TestCase):
 
     def test_manual_request_is_deduplicated_and_keeps_disposition(self):
         headers = {"X-Admin-Token": "admin-secret", "X-Operator-Id": "reviewer"}
-        first = self.client.post("/api/alerts/evt-review/verification", headers=headers, json={})
+        first = self.client.post("/aiyoloapi/alerts/evt-review/verification", headers=headers, json={})
         self.assertEqual(first.status_code, 202)
         self.assertEqual(first.json()["status"], "FAILED")
         self.assertEqual(first.json()["failureKind"], "NOT_CONFIGURED")
-        second = self.client.post("/api/alerts/evt-review/verification", headers=headers, json={})
+        second = self.client.post("/aiyoloapi/alerts/evt-review/verification", headers=headers, json={})
         self.assertEqual(second.status_code, 202)
         self.assertEqual(second.json()["requestedAtUs"], first.json()["requestedAtUs"])
-        event = self.client.get("/api/alerts/evt-review", headers={"X-Admin-Token": "admin-secret"}).json()
+        event = self.client.get("/aiyoloapi/alerts/evt-review", headers={"X-Admin-Token": "admin-secret"}).json()
         self.assertEqual(event["disposition"]["status"], "OPEN")
         self.assertEqual(event["verification"]["failureKind"], "NOT_CONFIGURED")
 
     def test_privacy_gate_is_fail_closed(self):
         alert_verification_store.image_egress_authorized = False
         response = self.client.post(
-            "/api/alerts/evt-review/verification",
+            "/aiyoloapi/alerts/evt-review/verification",
             headers={"X-Admin-Token": "admin-secret", "X-Operator-Id": "reviewer"},
             json={},
         )

@@ -3,7 +3,7 @@
 管理后台的总览、数据看板和系统诊断读取真实业务数据，不再使用固定统计数字。统计接口为：
 
 ```http
-GET /api/dashboard/stats?range=today
+GET /aiyoloapi/dashboard/stats?range=today
 Authorization: Bearer <dynamic-access-token>
 ```
 

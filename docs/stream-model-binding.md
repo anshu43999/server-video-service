@@ -6,11 +6,11 @@
 
 ## 接口
 
-- 创建流时可传 `model_id`：`POST /api/streams`。
-- 切换已存在流：`PUT /api/streams/{stream_id}/model`，请求体
+- 创建流时可传 `model_id`：`POST /aiyoloapi/streams`。
+- 切换已存在流：`PUT /aiyoloapi/streams/{stream_id}/model`，请求体
   `{ "model_id": "<registered-id>" }`。
-- 查询当前绑定：`GET /api/streams/{stream_id}/model`。
-- 也可在 `PATCH /api/streams/{stream_id}/config` 中传 `model_id`。
+- 查询当前绑定：`GET /aiyoloapi/streams/{stream_id}/model`。
+- 也可在 `PATCH /aiyoloapi/streams/{stream_id}/config` 中传 `model_id`。
 
 服务端只接受注册表中存在且校验通过的 `pt`/`onnx` 产物；移动端专用
 `tflite` 返回 409。不存在的模型返回 404，文件缺失、大小或 SHA-256

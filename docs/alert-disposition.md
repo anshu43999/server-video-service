@@ -10,28 +10,28 @@
 
 ## 权限
 
-- `GET /api/alerts`、`GET /api/alerts/{eventId}` 和误报导出允许管理员或操作员动态 Session，
+- `GET /aiyoloapi/alerts`、`GET /aiyoloapi/alerts/{eventId}` 和误报导出允许管理员或操作员动态 Session，
   移动端可通过 `X-Video-Service-Token` 兼容头传递动态访问令牌。
 - `POST` 处置接口只允许管理员动态 Session。操作人从 `X-Operator-Id`（兼容
   `X-Actor`）读取，不接受请求体中的 actor，避免伪造审计身份。
 
 ## 管理后台告警中心
 
-告警中心直接读取 `GET /api/alerts` 返回的持久化事件，不使用本地示例告警。导航徽标和
+告警中心直接读取 `GET /aiyoloapi/alerts` 返回的持久化事件，不使用本地示例告警。导航徽标和
 “全部、严重、重要、一般”筛选数量均由同一批真实事件计算；空库显示 `00` 和明确空状态，
 查询失败则清空列表并显示“告警数据不可用”，不会继续展示旧数据。
 
 点击列表项后，详情、证据截图和事件元数据均来自对应 `eventId`。复核状态通过
-`GET /api/alerts/{eventId}/verification` 获取；确认告警、标记误报和发起复核使用同一个
+`GET /aiyoloapi/alerts/{eventId}/verification` 获取；确认告警、标记误报和发起复核使用同一个
 真实 `eventId` 调用服务端接口。严重筛选对应 `CRITICAL`，重要对应 `MAJOR`，其他级别归入
 一般。
 
 ## 处置接口
 
 ```text
-POST /api/alerts/{eventId}/acknowledge
-POST /api/alerts/{eventId}/false-positive
-POST /api/alerts/{eventId}/close
+POST /aiyoloapi/alerts/{eventId}/acknowledge
+POST /aiyoloapi/alerts/{eventId}/false-positive
+POST /aiyoloapi/alerts/{eventId}/close
 ```
 
 请求体可带 `actedAtUs`（测试/回放用；缺省取服务端 UTC 微秒）、`screenshot`、
@@ -40,7 +40,7 @@ POST /api/alerts/{eventId}/close
 
 ## 误报数据集导出
 
-`GET /api/alerts/false-positives/export` 返回
+`GET /aiyoloapi/alerts/false-positives/export` 返回
 `aiyolo-false-positive-v1` JSON。每条 entry 包含截图引用、生效阈值、原始检测
 结果、来源/主体和规则版本，可直接交给标注或再训练流水线。导出前递归移除
 token/secret/password/authorization 等字段，并将 Windows、Unix 和 `file:` 绝对

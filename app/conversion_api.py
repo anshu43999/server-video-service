@@ -132,7 +132,7 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
                              calibration_catalog: CalibrationDatasetCatalog | None = None,
                              max_calibration_upload_bytes: int = 512 * 1024 * 1024,
                              signer: ModelManifestSigner | None = None) -> APIRouter:
-    router = APIRouter(prefix="/api/conversion", dependencies=[Depends(require_admin)], tags=["model conversion"])
+    router = APIRouter(prefix="/aiyoloapi/conversion", dependencies=[Depends(require_admin)], tags=["model conversion"])
     signer = signer or ModelManifestSigner(settings.model_signing_key_id, settings.model_signing_private_key_path)
     calibration_catalog = calibration_catalog or CalibrationDatasetCatalog(
         service.root.parents[1] / "calibration"

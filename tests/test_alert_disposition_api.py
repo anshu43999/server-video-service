@@ -27,20 +27,20 @@ class AlertDispositionApiTests(unittest.TestCase):
         alert_disposition_store.configure_database(self.old_database)
 
     def test_mobile_can_read_but_cannot_dispose(self):
-        response = self.client.get("/api/alerts", headers={"X-Video-Service-Token": "mobile-secret"})
+        response = self.client.get("/aiyoloapi/alerts", headers={"X-Video-Service-Token": "mobile-secret"})
         self.assertEqual(response.status_code, 200)
-        denied = self.client.post("/api/alerts/evt-api/acknowledge", headers={"X-Video-Service-Token": "mobile-secret"}, json={})
+        denied = self.client.post("/aiyoloapi/alerts/evt-api/acknowledge", headers={"X-Video-Service-Token": "mobile-secret"}, json={})
         self.assertEqual(denied.status_code, 403)
 
     def test_admin_disposition_and_safe_export(self):
         response = self.client.post(
-            "/api/alerts/evt-api/false-positive",
+            "/aiyoloapi/alerts/evt-api/false-positive",
             headers={"X-Admin-Token": "admin-secret", "X-Operator-Id": "reviewer"},
             json={"actedAtUs": 200, "screenshot": "C:\\private\\frame.jpg"},
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["disposition"]["status"], "FALSE_POSITIVE")
-        exported = self.client.get("/api/alerts/false-positives/export", headers={"X-Video-Service-Token": "mobile-secret"})
+        exported = self.client.get("/aiyoloapi/alerts/false-positives/export", headers={"X-Video-Service-Token": "mobile-secret"})
         self.assertEqual(exported.status_code, 200)
         self.assertNotIn("C:\\private", exported.text)
         self.assertIn("evidence/frame.jpg", exported.text)

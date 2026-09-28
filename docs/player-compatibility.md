@@ -8,8 +8,8 @@
 
 ## 诊断协议（已实现，非生产）
 
-1. `GET /api/streams/{stream_id}/mjpeg`：标准 `multipart/x-mixed-replace; boundary=frame`，每个 part 为 JPEG；
-2. `WS /api/streams/{stream_id}/ws`：每条 binary message 为 JPEG。
+1. `GET /aiyoloapi/streams/{stream_id}/mjpeg`：标准 `multipart/x-mixed-replace; boundary=frame`，每个 part 为 JPEG；
+2. `WS /aiyoloapi/streams/{stream_id}/ws`：每条 binary message 为 JPEG。
 
 这两条通道只用于管理页预览、自动化测试和联调探针，不再作为任何客户端的生产播放路径。
 
@@ -45,7 +45,7 @@ Android 记录必须包含设备型号、Android API、libwebrtc/播放器库版
 
 ```powershell
 tools\rtsp\vlc\3.0.23\vlc-3.0.23\vlc.exe `
-  http://127.0.0.1:8080/api/streams/inspection-001/mjpeg `
+  http://127.0.0.1:8080/aiyoloapi/streams/inspection-001/mjpeg `
   --intf dummy --play-and-exit --run-time=10
 ```
 

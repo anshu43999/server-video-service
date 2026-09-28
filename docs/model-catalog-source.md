@@ -13,7 +13,7 @@ M09-T02 将 `models/registry.json` 固定为服务端模型市场的唯一登记
 3. 文件大小与 `sizeBytes` 一致；
 4. 文件 SHA-256 与登记值一致。
 
-任何一项失败都会抛出 `ModelCatalogValidationError`，FastAPI lifespan 启动失败并保留明确错误信息。服务不会删除无效条目，也不会静默回退到默认模型。模型转换注册 (`/api/models/register`) 必须先校验 manifest 产物哈希，再写回同一 `registry.json`。
+任何一项失败都会抛出 `ModelCatalogValidationError`，FastAPI lifespan 启动失败并保留明确错误信息。服务不会删除无效条目，也不会静默回退到默认模型。模型转换注册 (`/aiyoloapi/models/register`) 必须先校验 manifest 产物哈希，再写回同一 `registry.json`。
 
 开发环境如需新增模型，请先把产物放入 `models/` 下，计算 SHA-256 和大小后更新登记源，并在启动服务前运行：
 

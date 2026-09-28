@@ -84,8 +84,8 @@ class DashboardStatsTests(unittest.TestCase):
             settings.admin_token = "dashboard-admin"
             try:
                 client = TestClient(app)
-                denied = client.get("/api/dashboard/stats")
-                accepted = client.get("/api/dashboard/stats", headers={"X-Admin-Token": "dashboard-admin"})
+                denied = client.get("/aiyoloapi/dashboard/stats")
+                accepted = client.get("/aiyoloapi/dashboard/stats", headers={"X-Admin-Token": "dashboard-admin"})
                 self.assertEqual(denied.status_code, 401)
                 self.assertEqual(accepted.status_code, 200)
                 self.assertEqual(accepted.json()["summary"]["totalEvents"], 0)

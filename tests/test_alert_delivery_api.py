@@ -16,10 +16,10 @@ class AlertDeliveryApiTests(unittest.TestCase):
         settings.admin_token, settings.mobile_token = self.old_admin, self.old_mobile
 
     def test_test_delivery_is_accepted_and_requires_admin(self):
-        denied = self.client.post("/api/alerts/test-delivery", json={"event": {"eventId": "evt"}})
+        denied = self.client.post("/aiyoloapi/alerts/test-delivery", json={"event": {"eventId": "evt"}})
         self.assertEqual(denied.status_code, 401)
         response = self.client.post(
-            "/api/alerts/test-delivery",
+            "/aiyoloapi/alerts/test-delivery",
             headers={"X-Admin-Token": "admin-secret"},
             json={"event": {"eventId": "evt"}, "channels": ["management", "email", "sms", "enterprise_im"]},
         )
@@ -28,11 +28,11 @@ class AlertDeliveryApiTests(unittest.TestCase):
         self.assertEqual(len(response.json()["deliveryIds"]), 4)
 
     def test_status_does_not_expose_credentials_or_allow_webhook(self):
-        response = self.client.get("/api/alerts/delivery/status", headers={"X-Admin-Token": "admin-secret"})
+        response = self.client.get("/aiyoloapi/alerts/delivery/status", headers={"X-Admin-Token": "admin-secret"})
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("credential", response.text.lower())
         invalid = self.client.post(
-            "/api/alerts/test-delivery",
+            "/aiyoloapi/alerts/test-delivery",
             headers={"X-Admin-Token": "admin-secret"},
             json={"event": {"eventId": "evt"}, "channels": ["webhook"]},
         )

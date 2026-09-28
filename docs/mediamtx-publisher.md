@@ -10,9 +10,9 @@ MediaMTX 控制 API 是可选的。设置 `MEDIAMTX_API_URL=http://127.0.0.1:999
 
 默认 `MEDIAMTX_ENABLED=false`，避免开发环境在未启动媒体服务器时阻塞 JPEG/MJPEG 诊断链路。部署 MediaMTX 后设置 `MEDIAMTX_ENABLED=true`，并按需设置 `MEDIAMTX_FFMPEG_PATH`、RTSP/API 地址。
 
-`GET /api/streams` 与 `/api/metrics` 的每路条目新增：`publish_state`、`viewers`、`publish_path`、`publish_url`、`frames_published`、`publish_error`。
+`GET /aiyoloapi/streams` 与 `/aiyoloapi/metrics` 的每路条目新增：`publish_state`、`viewers`、`publish_path`、`publish_url`、`frames_published`、`publish_error`。
 
-播放端通过 `GET /api/streams/{stream_id}/playback` 获取动态入口，不应硬编码媒体地址。响应包含：
+播放端通过 `GET /aiyoloapi/streams/{stream_id}/playback` 获取动态入口，不应硬编码媒体地址。响应包含：
 
 - `whep.url`：`http(s)://<media-host>:8889/{stream_id}/whep`，生产播放首选；
 - `llhls.url`：`http(s)://<media-host>:8888/{stream_id}/index.m3u8`，WHEP 失败时回退；

@@ -7,7 +7,7 @@ v2 在保留 v1 顶层目录字段和旧下载路径的同时，将发布对象�
 `modelId + version`。完整生命周期、端云对账状态和升级回滚语义见
 `E:/aiyolo/mobile-app/docs/模型版本生命周期与端云对账契约.md`。
 
-当前版本：独立 `/api/conversion/*` 管理接口负责 PT 上传、后台处理、校准集和环境配置；目录/下载
+当前版本：独立 `/aiyoloapi/conversion/*` 管理接口负责 PT 上传、后台处理、校准集和环境配置；目录/下载
 路径保持兼容。成对产物条目以 PT 为服务端主产物，App 必须从 `artifacts` 中选择 Android
 TFLite；`serverReady`、`androidReady`、`androidContract` 和 `calibrationDataset` 用于描述
 服务端验证、移动端签名状态和校准集快照。校准集快照记录所选档案的 ID、版本、图片数、大小、
@@ -71,7 +71,7 @@ Android 动态安装要求客户端校验目录中的 SHA-256，并在 `androidR
 
 ### 4.1 查询目录列表
 
-`GET /api/models`
+`GET /aiyoloapi/models`
 
 可选查询参数：`scenario=<scenario>`，按场景精确过滤。没有过滤时返回全部可见模型。
 
@@ -94,13 +94,13 @@ Android 动态安装要求客户端校验目录中的 SHA-256，并在 `androidR
         "artifactId": "android-arm64-int8",
         "format": "tflite",
         "platform": "android",
-        "url": "/api/models/authorized-scene-v1/artifacts/android-arm64-int8/download",
+        "url": "/aiyoloapi/models/authorized-scene-v1/artifacts/android-arm64-int8/download",
         "sizeBytes": 12345678,
         "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
         "contentType": "application/octet-stream"
       }],
       "format": "tflite",
-      "downloadUrl": "/api/models/authorized-scene-v1/artifacts/android-arm64-int8/download",
+      "downloadUrl": "/aiyoloapi/models/authorized-scene-v1/artifacts/android-arm64-int8/download",
       "sizeBytes": 12345678,
       "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
       "releaseEligible": true
@@ -113,13 +113,13 @@ Android 动态安装要求客户端校验目录中的 SHA-256，并在 `androidR
 
 ### 4.2 查询模型详情
 
-`GET /api/models/{modelId}`
+`GET /aiyoloapi/models/{modelId}`
 
 成功 `200` 返回单个模型对象（字段同 §3，必须包含完整 `artifacts`）。详情用于安装前展示和选择具体产物。
 
 ### 4.3 下载模型产物
 
-`GET /api/models/{modelId}/artifacts/{artifactId}/download`
+`GET /aiyoloapi/models/{modelId}/artifacts/{artifactId}/download`
 
 成功 `200` 返回二进制流，并设置：
 
@@ -132,7 +132,7 @@ Android 动态安装要求客户端校验目录中的 SHA-256，并在 `androidR
 
 ### 4.4 卸载模型
 
-`DELETE /api/models/{modelId}`
+`DELETE /aiyoloapi/models/{modelId}`
 
 仅管理员可调用。成功后从目录移除模型，并删除未被其他目录条目共享的本地产物；模型参数及审计历史保留。当前激活模型或仍被任一视频流绑定的模型返回 `409 model_in_use`，管理员必须先切换默认模型或流绑定后重试。
 
@@ -156,21 +156,21 @@ Android 动态安装要求客户端校验目录中的 SHA-256，并在 `androidR
 v2 新增以下接口：
 
 ```text
-GET    /api/models/{modelId}/versions
-GET    /api/models/{modelId}/versions/{version}
-GET    /api/models/{modelId}/versions/{version}/artifacts/{artifactId}/download
-DELETE /api/models/{modelId}/versions/{version}
-POST   /api/models/{modelId}/versions/{version}/deprecate
-POST   /api/models/{modelId}/versions/{version}/revoke
+GET    /aiyoloapi/models/{modelId}/versions
+GET    /aiyoloapi/models/{modelId}/versions/{version}
+GET    /aiyoloapi/models/{modelId}/versions/{version}/artifacts/{artifactId}/download
+DELETE /aiyoloapi/models/{modelId}/versions/{version}
+POST   /aiyoloapi/models/{modelId}/versions/{version}/deprecate
+POST   /aiyoloapi/models/{modelId}/versions/{version}/revoke
 ```
 
-同一 `modelId` 可以保留多个不可变 `version`。`GET /api/models` 默认返回模型族的
+同一 `modelId` 可以保留多个不可变 `version`。`GET /aiyoloapi/models` 默认返回模型族的
 最新可安装版本；版本列表接口返回完整历史。目录对象新增 `status`、`latestVersion`、
 `availableVersions`、`isLatest`、`manifestSha256`、`revokeReason` 和 `versionedUrl`，
 未知字段由旧 App 忽略。
 
 版本级卸载只允许删除未被服务端 active 模型、视频流绑定或进行中下载使用的版本，
-并写入 `UNINSTALLED` 历史墓碑。旧 `DELETE /api/models/{modelId}` 在只有一个版本时
+并写入 `UNINSTALLED` 历史墓碑。旧 `DELETE /aiyoloapi/models/{modelId}` 在只有一个版本时
 兼容映射；同一模型族存在多个版本时返回 `409 version_required`，禁止隐式删除整个模型族。
 
 `DEPRECATED` 版本停止新安装但不强制中断已激活的端侧模型；`REVOKED` 版本禁止新安装、
@@ -200,21 +200,21 @@ JSON 错误统一为：
 
 ## 6. 与 Android M14 对接约定
 
-- `M14-T02` 使用 `GET /api/models`，读取 `modelId`、`name`、`scenario`、`version`、`sizeBytes`、`license`、`compatibleDevices`、`format`、`downloadUrl`、`sha256`；服务端必须保留这些别名字段。
+- `M14-T02` 使用 `GET /aiyoloapi/models`，读取 `modelId`、`name`、`scenario`、`version`、`sizeBytes`、`license`、`compatibleDevices`、`format`、`downloadUrl`、`sha256`；服务端必须保留这些别名字段。
 - `M14-T03` 使用详情中的 `artifacts` 选择适配 Android/API/ABI 的产物，下载后校验 `sizeBytes` 与 `sha256`。本契约不要求或假设签名字段。
 - App 的下载器不得把 `X-Video-Service-Token` 拼接到 `downloadUrl`；每个请求都通过 header 注入。
 - 服务端新增字段必须向后兼容；未知字段 App 应忽略。
 
 ## 7. 当前服务端实现说明（M09-T03）
 
-- `GET /api/models` 支持可选的 `scenario` 精确匹配过滤；未知场景返回空数组而不是错误。
-- `GET /api/models/{modelId}` 返回与列表项相同的公开字段，并保留完整 `artifacts` 数组。
+- `GET /aiyoloapi/models` 支持可选的 `scenario` 精确匹配过滤；未知场景返回空数组而不是错误。
+- `GET /aiyoloapi/models/{modelId}` 返回与列表项相同的公开字段，并保留完整 `artifacts` 数组。
 - 目录查询必须携带有效账号 Session；管理工具使用 Cookie 或 `Authorization: Bearer`，移动端可使用 `X-Video-Service-Token` 兼容头传递动态 Session。静态令牌只在开发环境可用。
 - 服务端从注册表读取文件并执行存在性/哈希检查，但查询响应只返回下载 API URL、大小和 SHA-256，不返回 `models/` 下的本机路径、Manifest 路径或其他本地文件定位信息。
 
 ## 8. 下载实现与运行时保护（M09-T04）
 
-- `GET /api/models/{modelId}/artifacts/{artifactId}/download` 只解析注册表中已登记的产物；路径必须位于服务端 `models/` 目录内，禁止通过 `..`、绝对路径或符号链接逃逸。
+- `GET /aiyoloapi/models/{modelId}/artifacts/{artifactId}/download` 只解析注册表中已登记的产物；路径必须位于服务端 `models/` 目录内，禁止通过 `..`、绝对路径或符号链接逃逸。
 - 开始传输前再次读取文件大小并计算 SHA-256；文件缺失、大小变化或摘要不一致返回 `409 model_not_available`，不会发送不符合目录契约的字节。
 - 成功响应设置 `Content-Length`、安全的 `Content-Disposition` 文件名和 `X-Model-SHA256`。客户端仍应自行计算下载文件的大小与 SHA-256。
 - 每个服务进程默认最多并发下载 2 个、每个客户端 60 秒最多 10 次。超限返回 `429 rate_limited` 和 `Retry-After`；可通过 `MODEL_DOWNLOAD_MAX_CONCURRENT`、`MODEL_DOWNLOAD_RATE_LIMIT`、`MODEL_DOWNLOAD_RATE_WINDOW_SECONDS`、`MODEL_DOWNLOAD_CHUNK_SIZE` 调整。

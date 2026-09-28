@@ -17,7 +17,7 @@ def parse_source(value: str):
 
 def create_session(base_url: str, stream_id: str, source_url: str | None) -> None:
     response = httpx.post(
-        f"{base_url.rstrip('/')}/api/streams",
+        f"{base_url.rstrip('/')}/aiyoloapi/streams",
         json={"stream_id": stream_id, "source_url": source_url},
         timeout=10,
     )
@@ -44,7 +44,7 @@ async def push(args: argparse.Namespace) -> int:
     target_fps = min(max(target_fps, 1.0), 30.0)
     interval = 1.0 / target_fps
     ws_url = args.server.rstrip("/").replace("http://", "ws://").replace("https://", "wss://")
-    ws_url += f"/api/streams/{args.stream_id}/ingest"
+    ws_url += f"/aiyoloapi/streams/{args.stream_id}/ingest"
     headers = {"X-Video-Service-Token": args.token} if args.token else {}
     sent = 0
     deadline = time.monotonic() + args.duration if args.duration else None

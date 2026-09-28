@@ -100,7 +100,7 @@ YOLO 模式独立于会话状态：`off` 或 `on`。模型不可用时，开启�
 
 ### 5.1 创建会话
 
-`POST /api/streams`
+`POST /aiyoloapi/streams`
 
 请求：
 
@@ -120,19 +120,19 @@ YOLO 模式独立于会话状态：`off` 或 `on`。模型不可用时，开启�
 
 ### 5.2 查询会话
 
-`GET /api/streams`
+`GET /aiyoloapi/streams`
 
 返回数组。每项至少包含 `stream_id`、`display_name`、`source_type`、脱敏后的 `source_url`、`enabled`、`state`、`yolo_enabled`、`frames_received`、`frames_processed`、`confidence`、`max_fps`、`last_error`，以及输出面字段 `publish_state`（`idle`/`connected`/`reconnecting`/`failed`）和 `viewers`。RTSP 用户名、密码和查询参数不会出现在普通 API 响应或拉流错误中。
 
 ### 5.3 YOLO 开关
 
-`POST /api/streams/{stream_id}/yolo`
+`POST /aiyoloapi/streams/{stream_id}/yolo`
 
 请求：`{"enabled":true}`。成功 `200` 返回 `stream_id`、`state`、`yolo_enabled`、`model_error`。
 
 ### 5.4 单路运行参数
 
-`PATCH /api/streams/{stream_id}/config`
+`PATCH /aiyoloapi/streams/{stream_id}/config`
 
 可选字段：
 
@@ -144,7 +144,7 @@ YOLO 模式独立于会话状态：`off` 或 `on`。模型不可用时，开启�
 
 ### 5.5 播放地址
 
-`GET /api/streams/{stream_id}/playback`
+`GET /aiyoloapi/streams/{stream_id}/playback`
 
 返回该流的播放入口与当前可用性，客户端据此选择路径，不硬编码地址：
 
@@ -160,13 +160,13 @@ YOLO 模式独立于会话状态：`off` 或 `on`。模型不可用时，开启�
 
 ### 5.6 删除会话
 
-`DELETE /api/streams/{stream_id}`，成功返回 `204`。
+`DELETE /aiyoloapi/streams/{stream_id}`，成功返回 `204`。
 
 ## 6. WebSocket 与播放
 
 ### 6.1 移动端推流
 
-连接：`/api/streams/{stream_id}/ingest`
+连接：`/aiyoloapi/streams/{stream_id}/ingest`
 
 - 客户端发送 binary JPEG/PNG；
 - 服务端不要求客户端等待 ACK，可按最大 30 FPS 推送；
@@ -175,7 +175,7 @@ YOLO 模式独立于会话状态：`off` 或 `on`。模型不可用时，开启�
 
 ### 6.2 检测结果旁路
 
-连接：`/api/streams/{stream_id}/detections`
+连接：`/aiyoloapi/streams/{stream_id}/detections`
 
 服务端按帧发送文本 JSON：
 
@@ -196,7 +196,7 @@ YOLO 模式独立于会话状态：`off` 或 `on`。模型不可用时，开启�
 
 ### 6.3 播放与回退顺序
 
-1. 用 `GET /api/streams/{stream_id}/playback` 取地址；
+1. 用 `GET /aiyoloapi/streams/{stream_id}/playback` 取地址；
 2. 优先 WHEP：向 `whep.url` POST SDP offer，`Content-Type: application/sdp`，响应体为 SDP answer；
 3. WHEP 建连失败或超时（UDP 被封、ICE 失败、SDP 交换失败）后回退 LL-HLS；
 4. 两者都失败时向用户报错，不静默停留在黑屏；
@@ -205,7 +205,7 @@ YOLO 模式独立于会话状态：`off` 或 `on`。模型不可用时，开启�
 
 ### 6.4 管理端诊断预览
 
-MJPEG：`/api/streams/{stream_id}/mjpeg`；WebSocket JPEG：`/api/streams/{stream_id}/ws`。仅用于诊断，不承诺指标。
+MJPEG：`/aiyoloapi/streams/{stream_id}/mjpeg`；WebSocket JPEG：`/aiyoloapi/streams/{stream_id}/ws`。仅用于诊断，不承诺指标。
 
 ## 7. 错误码与重试
 
@@ -244,7 +244,7 @@ HTTP 错误响应统一预留为：
 ## 9. 后续兼容规则
 
 - 新增字段只能向后兼容，不能改变既有字段语义；
-- 升级协议时使用 `/api/v2` 或显式 `protocol_version`，不静默改变既有行为；
+- 升级协议时使用 `/aiyoloapi/v2` 或显式 `protocol_version`，不静默改变既有行为；
 - 控制面语义（`stream_id`、会话状态、YOLO 开关）与传输协议解耦：更换分发协议不得改变控制面；
 - 检测结果通道与视频通道必须保持可独立消费，不得为了同步把二者重新耦合；
 - 增加新的分发协议（如 SRT 服务端间链路）只能作为额外出口，不得改变 WHEP 为生产主链路的定位；除 ADR-002 声明的 LL-HLS 回退外，不得引入第二条隐式回退路径。

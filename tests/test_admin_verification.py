@@ -22,7 +22,7 @@ class AdminVerificationDashboardTests(unittest.TestCase):
     def test_usage_dashboard_has_all_required_breakdowns(self):
         for marker in ("verification-used", "verification-limit-display", "verification-conclusions", "verification-failures", "verification-before-rate", "verification-after-rate"):
             self.assertIn(marker, self.html)
-        for marker in ("/api/dashboard/stats?range=", "today", "7d", "30d", "renderBreakdown"):
+        for marker in ("/aiyoloapi/dashboard/stats?range=", "today", "7d", "30d", "renderBreakdown"):
             self.assertIn(marker, self.js)
 
     def test_usage_ranges_use_real_stats_without_mock_fallback(self):

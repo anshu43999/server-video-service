@@ -9,8 +9,8 @@
 
 | 名称 | 用途 | 实现 |
 |---|---|---|
-| `management` | 管理页实时告警推送 | 有界内存订阅队列，WebSocket `/api/alerts/ws` |
-| `app` | App 内通知 | 独立有界内存订阅队列，WebSocket `/api/alerts/notifications` |
+| `management` | 管理页实时告警推送 | 有界内存订阅队列，WebSocket `/aiyoloapi/alerts/ws` |
+| `app` | App 内通知 | 独立有界内存订阅队列，WebSocket `/aiyoloapi/alerts/notifications` |
 | `email` | 邮件 | `EmailAdapter` 本地假实现 |
 | `sms` | 短信 | `SmsAdapter` 本地假实现 |
 | `enterprise_im` | 企业 IM | `EnterpriseIMAdapter` 本地假实现 |
@@ -23,9 +23,9 @@
 
 ## HTTP 接口
 
-- `POST /api/alerts/test-delivery`（管理令牌）接受 `{event, channels}`，返回 `202`
+- `POST /aiyoloapi/alerts/test-delivery`（管理令牌）接受 `{event, channels}`，返回 `202`
   和 delivery IDs，仅负责排队。
-- `GET /api/alerts/delivery/status`（管理令牌）返回通道订阅数、待处理数和最近
+- `GET /aiyoloapi/alerts/delivery/status`（管理令牌）返回通道订阅数、待处理数和最近
   回执；不返回凭据。
 - 管理页 WebSocket 使用管理员动态 Session（同源 Cookie 或 Bearer）。
 - App WebSocket 使用操作员动态 Session，可通过 `X-Video-Service-Token` 兼容头传递该动态访问令牌。

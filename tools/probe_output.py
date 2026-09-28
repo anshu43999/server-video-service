@@ -25,7 +25,7 @@ def sample_jpeg() -> bytes:
 
 
 def create_stream(base_url: str, stream_id: str) -> None:
-    response = httpx.post(f"{base_url.rstrip('/')}/api/streams", json={"stream_id": stream_id}, timeout=5)
+    response = httpx.post(f"{base_url.rstrip('/')}/aiyoloapi/streams", json={"stream_id": stream_id}, timeout=5)
     if response.status_code not in (201, 409):
         response.raise_for_status()
 
@@ -40,8 +40,8 @@ async def connect(url: str):
 
 async def probe_ws(server: str, stream_id: str, payload: bytes) -> dict:
     base = server.rstrip("/").replace("http://", "ws://").replace("https://", "wss://")
-    async with await connect(f"{base}/api/streams/{stream_id}/ingest") as ingest:
-        async with await connect(f"{base}/api/streams/{stream_id}/ws") as output:
+    async with await connect(f"{base}/aiyoloapi/streams/{stream_id}/ingest") as ingest:
+        async with await connect(f"{base}/aiyoloapi/streams/{stream_id}/ws") as output:
             await ingest.send(payload)
             result = await asyncio.wait_for(output.recv(), timeout=5)
             return {"bytes": len(result), "is_jpeg": result[:2] == b"\xff\xd8"}
@@ -49,7 +49,7 @@ async def probe_ws(server: str, stream_id: str, payload: bytes) -> dict:
 
 def probe_mjpeg(base_url: str, stream_id: str) -> dict:
     response = httpx.get(
-        f"{base_url.rstrip('/')}/api/streams/{stream_id}/mjpeg",
+        f"{base_url.rstrip('/')}/aiyoloapi/streams/{stream_id}/mjpeg",
         timeout=5,
         headers={"Range": "bytes=0-2047"},
     )

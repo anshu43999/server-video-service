@@ -313,9 +313,9 @@ class ModelCatalog:
                 continue
             artifact_copy = dict(artifact)
             artifact_path = self._artifact_path(artifact)
-            artifact_copy["url"] = f"/api/models/{item.get('modelId')}/artifacts/{artifact.get('artifactId')}/download"
+            artifact_copy["url"] = f"/aiyoloapi/models/{item.get('modelId')}/artifacts/{artifact.get('artifactId')}/download"
             artifact_copy["versionedUrl"] = (
-                f"/api/models/{item.get('modelId')}/versions/{item.get('version')}"
+                f"/aiyoloapi/models/{item.get('modelId')}/versions/{item.get('version')}"
                 f"/artifacts/{artifact.get('artifactId')}/download"
             )
             artifact_copy["exists"] = artifact_path.is_file()

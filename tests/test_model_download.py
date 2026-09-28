@@ -42,7 +42,7 @@ class ModelDownloadTests(unittest.TestCase):
 
     def test_download_returns_bytes_size_hash_and_safe_headers(self):
         model_id, artifact = self._target()
-        response = self.client.get(f"/api/models/{model_id}/artifacts/{artifact['artifactId']}/download")
+        response = self.client.get(f"/aiyoloapi/models/{model_id}/artifacts/{artifact['artifactId']}/download")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(int(response.headers["content-length"]), artifact["sizeBytes"])
         self.assertEqual(response.headers["x-model-sha256"].lower(), artifact["sha256"].lower())
@@ -55,9 +55,9 @@ class ModelDownloadTests(unittest.TestCase):
         settings.mobile_token = "mobile-secret"
         anonymous = TestClient(app)
         try:
-            self.assertEqual(anonymous.get(f"/api/models/{model_id}/artifacts/{artifact['artifactId']}/download").status_code, 401)
+            self.assertEqual(anonymous.get(f"/aiyoloapi/models/{model_id}/artifacts/{artifact['artifactId']}/download").status_code, 401)
             response = anonymous.get(
-                f"/api/models/{model_id}/artifacts/{artifact['artifactId']}/download",
+                f"/aiyoloapi/models/{model_id}/artifacts/{artifact['artifactId']}/download",
                 headers={"X-Video-Service-Token": "mobile-secret"},
             )
         finally:
@@ -65,23 +65,23 @@ class ModelDownloadTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
 
     def test_missing_model_or_artifact_is_not_found(self):
-        self.assertEqual(self.client.get("/api/models/missing/artifacts/nope/download").status_code, 404)
+        self.assertEqual(self.client.get("/aiyoloapi/models/missing/artifacts/nope/download").status_code, 404)
         model_id, _ = self._target()
-        response = self.client.get(f"/api/models/{model_id}/artifacts/missing/download")
+        response = self.client.get(f"/aiyoloapi/models/{model_id}/artifacts/missing/download")
         self.assertEqual(response.status_code, 404)
         self.assertEqual(response.json()["detail"]["error"]["code"], "model_not_found")
 
     def test_integrity_failure_is_not_streamed(self):
         with patch.object(model_catalog, "get_artifact", side_effect=ValueError("artifact integrity check failed")):
-            response = self.client.get("/api/models/any/artifacts/any/download")
+            response = self.client.get("/aiyoloapi/models/any/artifacts/any/download")
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["detail"]["error"]["code"], "model_not_available")
 
     def test_rate_limit_returns_retryable_error(self):
         model_id, artifact = self._target()
         settings.model_download_rate_limit = 1
-        first = self.client.get(f"/api/models/{model_id}/artifacts/{artifact['artifactId']}/download")
-        second = self.client.get(f"/api/models/{model_id}/artifacts/{artifact['artifactId']}/download")
+        first = self.client.get(f"/aiyoloapi/models/{model_id}/artifacts/{artifact['artifactId']}/download")
+        second = self.client.get(f"/aiyoloapi/models/{model_id}/artifacts/{artifact['artifactId']}/download")
         self.assertEqual(first.status_code, 200)
         self.assertEqual(second.status_code, 429)
         self.assertEqual(second.json()["detail"]["error"]["code"], "rate_limited")

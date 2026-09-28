@@ -33,17 +33,17 @@ COCO 仅用作用户功能测试模型，不代表业务精度。训练好的 `.
 
 | 方法与路径 | 功能 |
 |---|---|
-| GET /api/conversion/config | 配置、工作目录与能力 |
-| PUT /api/conversion/config | 保存执行方式、发行版、Python、默认校准集、输入尺寸、超时和自动转换 |
-| GET/POST /api/conversion/calibration-datasets | 列出校准集或上传图片 ZIP |
-| GET/DELETE /api/conversion/calibration-datasets/{id} | 查看或安全删除未被引用的校准集版本 |
-| POST /api/conversion/check | 返回 202 与环境检测任务 |
-| POST /api/conversion/uploads?filename=best.pt&name=模型&version=1.0.0&scenario=场景&purpose=development | 二进制 PT 上传，返回 202 与 PT 验证任务 |
-| POST /api/conversion/uploads/{upload_id}/mobile?calibrationDatasetId={id} | 使用指定校准集创建移动端转换任务 |
-| GET /api/conversion/jobs | 最近 100 个任务 |
-| GET /api/conversion/jobs/{id} | 任务状态、结果与错误 |
-| POST /api/conversion/jobs/{id}/retry | 失败/中断任务按当前配置重试 |
-| GET /api/conversion/jobs/{id}/log | 当前尝试最近 32 KB 日志，仅管理员 |
+| GET /aiyoloapi/conversion/config | 配置、工作目录与能力 |
+| PUT /aiyoloapi/conversion/config | 保存执行方式、发行版、Python、默认校准集、输入尺寸、超时和自动转换 |
+| GET/POST /aiyoloapi/conversion/calibration-datasets | 列出校准集或上传图片 ZIP |
+| GET/DELETE /aiyoloapi/conversion/calibration-datasets/{id} | 查看或安全删除未被引用的校准集版本 |
+| POST /aiyoloapi/conversion/check | 返回 202 与环境检测任务 |
+| POST /aiyoloapi/conversion/uploads?filename=best.pt&name=模型&version=1.0.0&scenario=场景&purpose=development | 二进制 PT 上传，返回 202 与 PT 验证任务 |
+| POST /aiyoloapi/conversion/uploads/{upload_id}/mobile?calibrationDatasetId={id} | 使用指定校准集创建移动端转换任务 |
+| GET /aiyoloapi/conversion/jobs | 最近 100 个任务 |
+| GET /aiyoloapi/conversion/jobs/{id} | 任务状态、结果与错误 |
+| POST /aiyoloapi/conversion/jobs/{id}/retry | 失败/中断任务按当前配置重试 |
+| GET /aiyoloapi/conversion/jobs/{id}/log | 当前尝试最近 32 KB 日志，仅管理员 |
 
 执行方式支持 `wsl`、`local` 和 `remote`。remote 模式的 endpoint、令牌环境变量名、HTTP 开发开关、轮询间隔和本地复验方式可在同一后台页面配置；真实 Bearer 令牌只由服务进程环境提供，页面与配置 API 不接收令牌值。远程协议和部署约束见 `docs/remote-model-conversion.md`。
 
@@ -51,7 +51,7 @@ COCO 仅用作用户功能测试模型，不代表业务精度。训练好的 `.
 
 ## 双端产物与当前边界
 
-同一模型 ID、版本包含 `server-pt`、`android-int8` 和 `android-manifest` 产物。沿用 `/api/models` 目录、详情与下载 API，并返回 `serverReady`、`androidReady` 和 `androidContract`。原始 PT 保持服务端主产物，移动端必须通过 `artifacts` 选择 `platform=android, format=tflite`，不能使用兼容别名误下载 PT。
+同一模型 ID、版本包含 `server-pt`、`android-int8` 和 `android-manifest` 产物。沿用 `/aiyoloapi/models` 目录、详情与下载 API，并返回 `serverReady`、`androidReady` 和 `androidContract`。原始 PT 保持服务端主产物，移动端必须通过 `artifacts` 选择 `platform=android, format=tflite`，不能使用兼容别名误下载 PT。
 
 `androidConverted` 表示转换文件通过电脑端 LiteRT 张量校验与预热并可供管理员诊断下载；`androidReady` 只有在同一产物生成有效 Ed25519 签名 Manifest 后才为 `true`，表示满足 App 安装的服务端前置条件。App 侧仍需完成真实下载、验签、预热和激活后才能用于端侧推理。
 

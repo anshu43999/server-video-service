@@ -192,9 +192,9 @@ class StreamRestartRecoveryTests(unittest.TestCase):
                     patch.object(main_module.conversion_service, "start"), \
                     patch.object(main_module.conversion_service, "close"):
                 with TestClient(app) as client:
-                    self.assertEqual(client.get("/api/streams").status_code, 401)
+                    self.assertEqual(client.get("/aiyoloapi/streams").status_code, 401)
                     response = client.get(
-                        "/api/streams", headers={"X-Admin-Token": "restart-test-admin"}
+                        "/aiyoloapi/streams", headers={"X-Admin-Token": "restart-test-admin"}
                     )
                     self.assertEqual(response.status_code, 200)
                     self.assertEqual(response.json()[0]["stream_id"], "protected")

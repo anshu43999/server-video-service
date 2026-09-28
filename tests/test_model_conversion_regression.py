@@ -22,7 +22,7 @@ class ModelConversionRegressionTests(unittest.TestCase):
         javascript = (ROOT / "app" / "static" / "app.js").read_text(encoding="utf-8")
         conversion_javascript = (ROOT / "app" / "static" / "conversion.js").read_text(encoding="utf-8")
         self.assertIn("register-model-btn", html)
-        self.assertIn("/api/models/register", javascript)
+        self.assertIn("/aiyoloapi/models/register", javascript)
         self.assertIn("移动端产物", conversion_javascript)
 
 
