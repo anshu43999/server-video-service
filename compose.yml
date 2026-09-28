@@ -7,32 +7,6 @@ x-logging: &default-logging
     max-file: "5"
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: "${POSTGRES_DB:-aiyolo}"
-      POSTGRES_USER: "${POSTGRES_USER:-aiyolo}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the production env file}"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 10s
-    restart: unless-stopped
-    stop_grace_period: 30s
-    security_opt:
-      - no-new-privileges:true
-      # Older Docker Engine seccomp profiles can block PostgreSQL 16 file
-      # syscalls with EPERM during initdb. Scope the compatibility exception
-      # to this internal-only database container.
-      - seccomp=unconfined
-    logging: *default-logging
-    networks:
-      - control
-
   mediamtx:
     image: bluenviron/mediamtx:1.20.1
     command: ["/mediamtx.yml"]
@@ -164,8 +138,6 @@ services:
     security_opt:
       - no-new-privileges:true
     depends_on:
-      postgres:
-        condition: service_healthy
       mediamtx:
         condition: service_healthy
       model-converter:
@@ -178,7 +150,6 @@ services:
       - media
 
 volumes:
-  postgres-data:
   model-data:
   evidence-data:
   converter-data:

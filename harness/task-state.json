@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "server-video-service",
-  "updatedAt": "2026-09-21T18:42:08+08:00",
+  "updatedAt": "2026-09-28T10:46:47+08:00",
   "majorTasks": [
     {
       "id": "M00",
@@ -371,25 +371,17 @@
     {
       "id": "M04",
       "title": "生产传输协议与多流扩展",
-      "status": "in_progress",
+      "status": "completed",
       "dependsOn": [
         "M01",
         "M02"
       ],
       "acceptanceDocument": "harness/acceptance/M04-production-transport.md",
-      "frozenRisks": [
-        {
-          "id": "FR-M04-PLAYER-ENV",
-          "description": "WHEP/LL-HLS 生产播放需要目标 Android 播放器、公网/内网拓扑和弱网环境，当前工作区不具备",
-          "解除条件": "确定 Android WebRTC 播放实现、服务器公网/内网拓扑、STUN/TURN 方式和可用测试设备",
-          "影响": "协议决策已由 ADR-002 完成；容量与网络韧性测试在设备与拓扑就绪前不得给出通过结论"
-        }
-      ],
       "acceptanceCriteria": [
         "生产输出协议由 ADR-002 定为 WebRTC/WHEP（回退 LL-HLS），实现工作在 M08 完成",
         "多路视频流并发能力和资源上限在包含 H.264 编码开销的条件下经过压测",
         "弱网、断线、重连、服务重启和媒体服务器重启行为满足目标要求",
-        "部署方案具备可重复扩容和回滚路径"
+        "部署方案具备可重复扩容和回滚路径；Android 播放器与真实网络兼容性验证转由 M05-T07 独立跟踪，不作为 MVP 服务端传输验收阻塞项"
       ],
       "subtasks": [
         {
@@ -449,12 +441,14 @@
           "completedAt": "2026-09-04T17:41:17+08:00"
         }
       ],
-      "startedAt": "2026-09-02T15:37:12+08:00"
+      "startedAt": "2026-09-02T15:37:12+08:00",
+      "blockedAt": "2026-09-28T10:13:39+08:00",
+      "completedAt": "2026-09-28T10:25:35+08:00"
     },
     {
       "id": "M05",
       "title": "发布、运维与长期稳定性",
-      "status": "pending",
+      "status": "in_progress",
       "dependsOn": [
         "M03",
         "M04"
@@ -470,10 +464,13 @@
         {
           "id": "M05-T01",
           "title": "完善生产 Docker 与配置管理",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [],
           "acceptance": "支持环境隔离、只读模型挂载、健康检查、日志输出和配置校验，并覆盖服务端与媒体服务器的编排与端口暴露策略",
-          "record": "harness/records/M05/M05-T01.md"
+          "record": "harness/records/M05/M05-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-09-28T10:27:25+08:00",
+          "completedAt": "2026-09-28T10:46:47+08:00"
         },
         {
           "id": "M05-T02",
@@ -534,8 +531,20 @@
           "supersededReason": "PC端优先开发顺序下，视频流重启恢复任务迁移到 M30 后续任务线，原 M05 归属不再适用。",
           "supersededAt": "2026-09-17T15:00:34+08:00",
           "supersededBy": "M30-T06"
+        },
+        {
+          "id": "M05-T07",
+          "title": "完成 Android WHEP/LL-HLS 与真实网络兼容性验证",
+          "status": "pending",
+          "dependsOn": [
+            "M31-T01",
+            "M04-T04"
+          ],
+          "acceptance": "在目标 Android 设备和实际网络拓扑中验证 WHEP 主链路、LL-HLS 回退、首帧、P50/P95 延迟、断网重连和播放器资源释放；记录设备型号、Android API、播放器库版本、ABI、原始日志和失败原因；该验证属于发布兼容性门禁，不阻塞 MVP 服务端功能开发",
+          "record": "harness/records/M05/M05-T07.md"
         }
-      ]
+      ],
+      "startedAt": "2026-09-28T10:27:25+08:00"
     },
     {
       "id": "M06",

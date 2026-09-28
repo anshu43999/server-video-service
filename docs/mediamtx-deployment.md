@@ -1,6 +1,6 @@
 # MediaMTX 编排与端口策略（M08-T06）
 
-根目录唯一的 `compose.yml` 会同时启动 `video-service`、`model-converter`、PostgreSQL 与 MediaMTX 1.20.1。服务均使用 `restart: unless-stopped`；MediaMTX 通过健康检查后，视频服务才开始推流。媒体进程或容器异常退出时由 Compose 自动拉起，发布器（M08-T03）会在首帧到达后重新建立 RTSP 发布。
+根目录唯一的 `compose.yml` 会同时启动 `video-service`、`model-converter` 与 MediaMTX 1.20.1；业务 PostgreSQL 使用通过 `DATABASE_URL` 注入的云数据库，不由 Compose 创建。服务均使用 `restart: unless-stopped`；MediaMTX 通过健康检查后，视频服务才开始推流。媒体进程或容器异常退出时由 Compose 自动拉起，发布器（M08-T03）会在首帧到达后重新建立 RTSP 发布。
 
 ## 控制面与媒体面
 

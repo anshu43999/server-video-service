@@ -119,5 +119,5 @@
   (function(){const toggle=document.getElementById('mode-toggle');if(!toggle||!toggle.onclick)return;const switchMode=toggle.onclick;toggle.onclick=async function(event){await switchMode.call(this,event);if(!state.demo)await refreshLiveModels();else{renderModels();renderStreamBindings();}};})();
 </script>
 <link rel="stylesheet" href="/admin/conversion.css?v=20260921-conversion-progress">
-<script src="/admin/conversion.js?v=20260921-conversion-progress"></script>
+<script src="/admin/conversion.js?v=20260923-model-family-dropdown"></script>
 </body></html>

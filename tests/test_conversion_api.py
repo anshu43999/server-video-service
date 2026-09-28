@@ -96,9 +96,29 @@ class ConversionApiTests(unittest.TestCase):
         settings.admin_token = self.old_token
         self.tmp.cleanup()
 
-    def upload(self, payload=b"custom-weights", filename="best.pt"):
-        return self.client.post("/api/conversion/uploads", params={"filename": filename, "name": "安全帽", "version": "2.0"},
+    def upload(self, payload=b"custom-weights", filename="best.pt", model_id=None, version="2.0"):
+        params = {"filename": filename, "name": "安全帽", "version": version}
+        if model_id is not None:
+            params["modelId"] = model_id
+        return self.client.post("/api/conversion/uploads", params=params,
                                 content=payload, headers=self.headers)
+
+    def test_stable_model_id_is_reused_for_new_versions_without_hash_or_name_auto_merge(self):
+        first = self.upload(model_id="helmet-family", version="1.0.0").json()
+        self.assertEqual("helmet-family", first["model_id"])
+        self.assertEqual("succeeded", self.wait(first["job"])["status"])
+        second = self.upload(payload=b"new-version", model_id="helmet-family", version="2.0.0").json()
+        self.assertEqual("helmet-family", second["model_id"])
+        self.assertEqual("succeeded", self.wait(second["job"])["status"])
+        self.assertEqual({"1.0.0", "2.0.0"}, {item["version"] for item in self.catalog.versions("helmet-family")})
+
+        # A missing modelId remains an isolated upload family, even when its
+        # name and source bytes happen to match an existing release.
+        isolated = self.upload(version="3.0.0").json()
+        self.assertEqual("succeeded", self.wait(isolated["job"])["status"])
+        self.assertTrue(isolated["model_id"].startswith("uploaded-"))
+        self.assertEqual(2, len(self.catalog.versions("helmet-family")))
+        self.assertEqual("3.0.0", self.catalog.get(isolated["model_id"])["version"])
 
     @staticmethod
     def calibration_zip(*, unsafe_name: str | None = None) -> bytes:

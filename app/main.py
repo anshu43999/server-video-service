@@ -137,6 +137,20 @@ class CreateStreamRequest(BaseModel):
     enabled: bool = True
 
 
+class ModelLifecycleRequest(BaseModel):
+    reason: str | None = Field(default=None, max_length=512)
+
+
+class ModelMigrationRequest(BaseModel):
+    targetModelId: str = Field(
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+    )
+    version: str = Field(min_length=1, max_length=50)
+    reason: str | None = Field(default=None, max_length=512)
+
+
 class YoloRequest(BaseModel):
     enabled: bool
 
@@ -550,8 +564,67 @@ async def model_detail(model_id: str, _: None = Depends(require_catalog_access))
     return model
 
 
-@app.delete("/api/models/{model_id}")
-async def uninstall_model(model_id: str, _: None = Depends(require_admin)):
+@app.get("/api/models/{model_id}/versions")
+async def model_versions(model_id: str, _: None = Depends(require_catalog_access)):
+    try:
+        return {"modelId": model_id, "versions": model_catalog.versions(model_id)}
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "model_not_found", "message": "model not found"},
+        )
+
+
+@app.get("/api/models/{model_id}/versions/{version}")
+async def model_version_detail(model_id: str, version: str, _: None = Depends(require_catalog_access)):
+    try:
+        return model_catalog.get(model_id, version)
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "model_not_found", "message": "model release not found"},
+        )
+
+
+@app.post("/api/models/{model_id}/migrate")
+async def migrate_model_release(
+    model_id: str,
+    request: ModelMigrationRequest,
+    raw_request: Request,
+    _: None = Depends(require_admin),
+):
+    """Move one explicitly named historical release to a stable model family."""
+    bound_streams = await _bound_model_streams(model_id)
+    if bound_streams:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "model_in_use",
+                "message": "source model family is bound to one or more video streams",
+                "streamIds": bound_streams,
+            },
+        )
+    actor = raw_request.headers.get("x-operator-id") or raw_request.headers.get("x-actor") or "admin"
+    try:
+        return model_catalog.migrate_release(
+            model_id,
+            request.targetModelId,
+            request.version,
+            request.reason,
+            actor,
+        )
+    except KeyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "model_release_not_found", "message": "source model release not found"},
+        ) from exc
+    except ValueError as exc:
+        message = str(exc)
+        code = "migration_conflict" if "already exists" in message else "invalid_migration"
+        raise HTTPException(status_code=409, detail={"code": code, "message": message}) from exc
+
+
+async def _bound_model_streams(model_id: str) -> list[str]:
     runtime_bindings = {
         stream_id
         for stream_id, stream in streams.items()
@@ -565,7 +638,65 @@ async def uninstall_model(model_id: str, _: None = Depends(require_admin)):
         }
     except Exception as exc:
         raise _storage_error(exc) from exc
-    bound_streams = sorted(runtime_bindings | persisted_bindings)
+    return sorted(runtime_bindings | persisted_bindings)
+
+
+@app.delete("/api/models/{model_id}/versions/{version}")
+async def uninstall_model_version(model_id: str, version: str, _: None = Depends(require_admin)):
+    bound_streams = await _bound_model_streams(model_id)
+    if bound_streams:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "model_in_use",
+                "message": "model family is bound to one or more video streams",
+                "streamIds": bound_streams,
+            },
+        )
+    try:
+        return model_catalog.uninstall(model_id, version)
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "model_not_found", "message": "model release not found"},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": "model_in_use", "message": str(exc)})
+
+
+@app.post("/api/models/{model_id}/versions/{version}/deprecate")
+async def deprecate_model_version(
+    model_id: str,
+    version: str,
+    request: ModelLifecycleRequest | None = None,
+    _: None = Depends(require_admin),
+):
+    try:
+        return model_catalog.set_release_status(model_id, version, "DEPRECATED", request.reason if request else None)
+    except KeyError:
+        raise HTTPException(status_code=404, detail={"code": "model_not_found", "message": "model release not found"})
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": "invalid_model_state", "message": str(exc)})
+
+
+@app.post("/api/models/{model_id}/versions/{version}/revoke")
+async def revoke_model_version(
+    model_id: str,
+    version: str,
+    request: ModelLifecycleRequest | None = None,
+    _: None = Depends(require_admin),
+):
+    try:
+        return model_catalog.set_release_status(model_id, version, "REVOKED", request.reason if request else None)
+    except KeyError:
+        raise HTTPException(status_code=404, detail={"code": "model_not_found", "message": "model release not found"})
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail={"code": "invalid_model_state", "message": str(exc)})
+
+
+@app.delete("/api/models/{model_id}")
+async def uninstall_model(model_id: str, _: None = Depends(require_admin)):
+    bound_streams = await _bound_model_streams(model_id)
     if bound_streams:
         raise HTTPException(
             status_code=409,
@@ -583,6 +714,11 @@ async def uninstall_model(model_id: str, _: None = Depends(require_admin)):
             detail={"code": "model_not_found", "message": "model not found"},
         )
     except ValueError as exc:
+        if "multiple" in str(exc) or "version required" in str(exc):
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "version_required", "message": "model has multiple releases; specify model version"},
+            )
         raise HTTPException(
             status_code=409,
             detail={"code": "model_in_use", "message": str(exc)},
@@ -689,6 +825,56 @@ async def download_model_artifact(
     content_type = str(artifact.get("contentType") or "application/octet-stream")
     # The basename has already passed the models-root containment check.  Quote
     # it for a standards-compliant header and prevent CR/LF injection.
+    safe_name = quote(path.name.replace("\r", "").replace("\n", ""), safe="")
+
+    async def body():
+        try:
+            with path.open("rb") as handle:
+                while True:
+                    chunk = handle.read(max(1024, int(settings.model_download_chunk_size)))
+                    if not chunk:
+                        break
+                    yield chunk
+        finally:
+            _release_model_download()
+
+    return StreamingResponse(
+        body(),
+        media_type=content_type,
+        headers={
+            "Content-Length": str(expected_size),
+            "Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}",
+            "X-Model-SHA256": expected_hash,
+        },
+    )
+
+
+@app.get("/api/models/{model_id}/versions/{version}/artifacts/{artifact_id}/download")
+async def download_model_version_artifact(
+    model_id: str,
+    version: str,
+    artifact_id: str,
+    request: Request,
+    _: None = Depends(require_catalog_access),
+):
+    """Download an immutable versioned artifact using the same integrity guardrails."""
+    try:
+        artifact, path = model_catalog.get_artifact(model_id, artifact_id, version)
+    except KeyError:
+        raise HTTPException(
+            status_code=404,
+            detail={"error": {"code": "model_not_found", "message": "model release or artifact not found", "retryable": False}},
+        )
+    except (OSError, ValueError):
+        raise HTTPException(
+            status_code=409,
+            detail={"error": {"code": "model_not_available", "message": "artifact is unavailable or failed integrity check", "retryable": True}},
+        )
+
+    _acquire_model_download(request)
+    expected_size = int(artifact["sizeBytes"])
+    expected_hash = str(artifact["sha256"])
+    content_type = str(artifact.get("contentType") or "application/octet-stream")
     safe_name = quote(path.name.replace("\r", "").replace("\n", ""), safe="")
 
     async def body():

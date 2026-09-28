@@ -34,6 +34,12 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertIn('ENV_FILE="${AIYOLO_ENV_FILE:-${PROJECT_ROOT}/.env}"', script)
         self.assertIn("ADMIN_TOKEN|MOBILE_TOKEN", script)
         self.assertIn("development-only", script)
+        self.assertIn("pg_dump --no-password --format=custom", script)
+        self.assertIn("pg_dump is required for cloud database backups", script)
+        self.assertIn('database_url="${DATABASE_URL:-}"', script)
+        self.assertIn('"${ENV_FILE}"', script)
+        self.assertIn("postgresql+psycopg:", script)
+        self.assertNotIn("compose exec -T postgres", script)
 
     def test_runtime_image_is_non_root_and_self_checking(self) -> None:
         self.assertIn("USER app", self.dockerfile)
@@ -71,13 +77,13 @@ class DockerDeploymentTests(unittest.TestCase):
                     )
 
     def test_compose_has_database_media_and_application_health_gates(self) -> None:
-        for service in ("postgres:", "mediamtx:", "model-converter:", "video-service:"):
+        for service in ("mediamtx:", "model-converter:", "video-service:"):
             self.assertIn(service, self.compose)
-        self.assertIn("image: postgres:16-alpine", self.compose)
         self.assertIn("image: bluenviron/mediamtx:1.20.1", self.compose)
         self.assertIn('test: ["CMD", "/mediamtx", "--version"]', self.compose)
-        self.assertGreaterEqual(self.compose.count("condition: service_healthy"), 3)
-        self.assertIn("postgres-data:/var/lib/postgresql/data", self.compose)
+        self.assertEqual(2, self.compose.count("condition: service_healthy"))
+        self.assertNotIn("postgres:", self.compose)
+        self.assertNotIn("postgres-data", self.compose)
         self.assertIn("model-data:/app/models", self.compose)
         self.assertIn("evidence-data:/app/evidence", self.compose)
         self.assertIn("converter-data:/data", self.compose)
@@ -139,10 +145,7 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertNotIn("9997:9997", self.compose)
         self.assertIn("read_only: true", self.compose)
         self.assertIn("no-new-privileges:true", self.compose)
-        postgres_block = self.compose.split("  postgres:", 1)[1].split("\n  mediamtx:", 1)[0]
-        self.assertIn("seccomp=unconfined", postgres_block)
-        self.assertIn("no-new-privileges:true", postgres_block)
-        self.assertEqual(1, self.compose.count("seccomp=unconfined"))
+        self.assertNotIn("seccomp=unconfined", self.compose)
         self.assertIn('max-size: "20m"', self.compose)
 
     def test_production_environment_rejects_missing_security_settings(self) -> None:
@@ -166,7 +169,7 @@ class DockerDeploymentTests(unittest.TestCase):
         with tempfile.NamedTemporaryFile() as model:
             errors = validate_environment({
                 "DEPLOYMENT_ENV": "production",
-                "DATABASE_URL": "postgresql+psycopg://user:pass@postgres/db",
+                "DATABASE_URL": "postgresql+psycopg://user:pass@db.example.com:5432/db?sslmode=require",
                 "MEDIAMTX_ENABLED": "true",
                 "MEDIAMTX_WHEP_URL": "https://video.example.com:8889",
                 "MEDIAMTX_LLHLS_URL": "https://video.example.com:8888",
@@ -177,13 +180,16 @@ class DockerDeploymentTests(unittest.TestCase):
 
     def test_example_requires_operator_owned_values(self) -> None:
         for field in (
-            "POSTGRES_PASSWORD", "DATABASE_URL", "CONVERTER_TOKEN", "MEDIA_PUBLIC_HOST",
+            "DATABASE_URL", "CONVERTER_TOKEN", "MEDIA_PUBLIC_HOST",
             "CONVERSION_DEFAULT_CALIBRATION_DATASET_ID", "CALIBRATION_MAX_UPLOAD_BYTES",
             "CALIBRATION_MAX_EXPANDED_BYTES", "CALIBRATION_MAX_FILES",
         ):
             self.assertIn(f"{field}=", self.env_example)
         self.assertNotIn("ADMIN_TOKEN=", self.env_example)
         self.assertNotIn("MOBILE_TOKEN=", self.env_example)
+        self.assertNotIn("POSTGRES_PASSWORD=", self.env_example)
+        self.assertIn("CHANGE_ME_DATABASE_HOST", self.env_example)
+        self.assertIn("sslmode=require", self.env_example)
         placeholder_lines = [line for line in self.env_example.splitlines() if "CHANGE_ME" in line]
         self.assertTrue(placeholder_lines)
         self.assertTrue(all(not line.lstrip().startswith("#") for line in placeholder_lines))

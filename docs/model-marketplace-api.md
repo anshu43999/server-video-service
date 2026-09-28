@@ -1,7 +1,11 @@
 # 模型市场目录与下载 API 契约
 
-版本：`v1`（M09-T01，MVP）  
-状态：冻结，供 `server-video-service` 与 Android App `M14-T02/M14-T03` 共用。
+版本：`v2`（M98-T01，模型版本生命周期扩展）
+状态：冻结，供 `server-video-service` 与 Android App `M14-T02/M14-T03/M98-T03/M98-T04` 共用。
+
+v2 在保留 v1 顶层目录字段和旧下载路径的同时，将发布对象唯一键提升为
+`modelId + version`。完整生命周期、端云对账状态和升级回滚语义见
+`E:/aiyolo/mobile-app/docs/模型版本生命周期与端云对账契约.md`。
 
 当前版本：独立 `/api/conversion/*` 管理接口负责 PT 上传、后台处理、校准集和环境配置；目录/下载
 路径保持兼容。成对产物条目以 PT 为服务端主产物，App 必须从 `artifacts` 中选择 Android
@@ -146,6 +150,31 @@ Android 动态安装要求客户端校验目录中的 SHA-256，并在 `androidR
 ```
 
 目录条目移除后若个别文件因操作系统占用无法删除，`cleanupFailures` 返回安全文件名，响应不暴露绝对路径。
+
+### 4.5 多版本目录、下载和生命周期
+
+v2 新增以下接口：
+
+```text
+GET    /api/models/{modelId}/versions
+GET    /api/models/{modelId}/versions/{version}
+GET    /api/models/{modelId}/versions/{version}/artifacts/{artifactId}/download
+DELETE /api/models/{modelId}/versions/{version}
+POST   /api/models/{modelId}/versions/{version}/deprecate
+POST   /api/models/{modelId}/versions/{version}/revoke
+```
+
+同一 `modelId` 可以保留多个不可变 `version`。`GET /api/models` 默认返回模型族的
+最新可安装版本；版本列表接口返回完整历史。目录对象新增 `status`、`latestVersion`、
+`availableVersions`、`isLatest`、`manifestSha256`、`revokeReason` 和 `versionedUrl`，
+未知字段由旧 App 忽略。
+
+版本级卸载只允许删除未被服务端 active 模型、视频流绑定或进行中下载使用的版本，
+并写入 `UNINSTALLED` 历史墓碑。旧 `DELETE /api/models/{modelId}` 在只有一个版本时
+兼容映射；同一模型族存在多个版本时返回 `409 version_required`，禁止隐式删除整个模型族。
+
+`DEPRECATED` 版本停止新安装但不强制中断已激活的端侧模型；`REVOKED` 版本禁止新安装、
+升级和服务端新绑定，移动端显示撤回原因且不会因目录刷新静默删除本地文件。
 
 ## 5. 错误响应与重试
 

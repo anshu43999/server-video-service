@@ -47,8 +47,19 @@ class AdminModelUploadTests(unittest.TestCase):
 
     def test_static_asset_version_and_javascript_syntax(self) -> None:
         self.assertIn("conversion.css?v=20260921-conversion-progress", self.index)
-        self.assertIn("conversion.js?v=20260921-conversion-progress", self.index)
+        self.assertIn("conversion.js?v=20260923-model-family-dropdown", self.index)
         subprocess.run(["node", "--check", str(self.script_path)], check=True, capture_output=True)
+
+    def test_model_family_uses_catalog_dropdown_and_explicit_new_family_mode(self) -> None:
+        for marker in (
+            'id="conversion-model-family-select"',
+            'value="__new__"',
+            "renderModelFamilyOptions()",
+            "families.has(model.modelId)",
+            "选择已有模型族可避免 ID 输入错误",
+            "const modelId = (familySelect.value === NEW_MODEL_FAMILY",
+        ):
+            self.assertIn(marker, self.script)
 
 
 if __name__ == "__main__":

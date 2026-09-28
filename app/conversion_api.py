@@ -23,6 +23,8 @@ from .config import settings
 
 class UploadMetadata(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+    model_id: str | None = Field(default=None, min_length=1, max_length=128,
+                                 pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     version: str = Field(default="1.0.0", min_length=1, max_length=50)
     scenario: str = Field(default="general-detection", min_length=1, max_length=100)
     purpose: Literal["development", "business"] = "development"
@@ -55,7 +57,9 @@ class ModelJobs:
             raise ValueError("上传的 PT 已变化，请重新上传")
         directory.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(original, directory / "source.pt")
-        model_id = "uploaded-" + upload_id
+        # The model family identity is supplied by the administrator and is
+        # deliberately kept separate from this upload attempt identity.
+        model_id = metadata.get("model_id") or "uploaded-" + upload_id
         action = job["action"]
         if action == "inspect":
             # PT must actually load in the server runtime, independent of WSL/export readiness.
@@ -266,13 +270,16 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
     async def upload(request: Request, filename: str = Query(min_length=1, max_length=200),
                      name: str = Query(min_length=1, max_length=100), version: str = Query(default="1.0.0", min_length=1, max_length=50),
                      scenario: str = Query(default="general-detection", min_length=1, max_length=100),
-                     purpose: Literal["development", "business"] = "development"):
+                     purpose: Literal["development", "business"] = "development",
+                     model_id: str | None = Query(default=None, alias="modelId", min_length=1, max_length=128,
+                                                  pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")):
         if Path(filename).suffix.lower() != ".pt":
             raise HTTPException(422, "请上传训练完成的 .pt 目标检测权重")
         if uploading.locked():
             raise HTTPException(429, "已有上传正在进行，请稍后重试")
         try:
-            metadata = UploadMetadata(name=name.strip(), version=version.strip(), scenario=scenario.strip(), purpose=purpose).model_dump()
+            metadata = UploadMetadata(name=name.strip(), version=version.strip(), scenario=scenario.strip(),
+                                      purpose=purpose, model_id=model_id.strip() if model_id else None).model_dump(exclude_none=True)
         except ValueError as exc:
             raise HTTPException(422, "模型名称、版本与场景不能为空白") from exc
         upload_id = uuid.uuid4().hex
@@ -296,8 +303,9 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
                     raise HTTPException(422, "模型文件为空")
                 metadata.update(source_sha256=digest.hexdigest(), upload_id=upload_id)
                 atomic_json(upload_dir / "metadata.json", metadata)
-                job = submit("inspect", {"upload_id": upload_id, "name": name, "version": version})
-                return {"upload_id": upload_id, "model_id": "uploaded-" + upload_id, "job": job}
+                job = submit("inspect", {"upload_id": upload_id, "model_id": metadata.get("model_id"),
+                                          "name": name, "version": version})
+                return {"upload_id": upload_id, "model_id": metadata.get("model_id") or "uploaded-" + upload_id, "job": job}
             except BaseException:
                 # This directory was just created by this request, contains no registered artifact.
                 target.unlink(missing_ok=True)
@@ -312,7 +320,9 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
     ):
         try:
             pipeline.upload_path(upload_id)
-            model = catalog.get("uploaded-" + upload_id)
+            upload_metadata = json.loads((pipeline.upload_path(upload_id) / "metadata.json").read_text(encoding="utf-8"))
+            model_id = upload_metadata.get("model_id") or "uploaded-" + upload_id
+            model = catalog.get(model_id)
         except (KeyError, ValueError) as exc:
             raise HTTPException(404, "未找到已验证的上传模型") from exc
         with service._guard:
@@ -330,6 +340,7 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
                 raise HTTPException(422, str(exc)) from exc
             return submit("mobile", {
                 "upload_id": upload_id,
+                "model_id": model_id,
                 "name": model["name"],
                 "version": model["version"],
                 "calibration_dataset": calibration,

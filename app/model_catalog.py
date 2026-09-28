@@ -13,6 +13,17 @@ from .conversion import atomic_json
 
 _mutation_lock = threading.RLock()
 
+MODEL_RELEASE_STATUSES = {
+    "DRAFT",
+    "CONVERTING",
+    "READY",
+    "PUBLISHED",
+    "DEPRECATED",
+    "REVOKED",
+    "UNINSTALLED",
+}
+_SEMVER = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$")
+
 
 def serialized_mutation(method):
     @wraps(method)
@@ -47,6 +58,61 @@ class ModelCatalog:
 
     def _save(self, registry: dict[str, Any]) -> None:
         atomic_json(self.registry_path, registry)
+
+    @staticmethod
+    def release_key(item: dict[str, Any]) -> str:
+        return f"{item.get('modelId')}@{item.get('version')}"
+
+    @staticmethod
+    def _status(item: dict[str, Any]) -> str:
+        status = str(item.get("status") or "").upper()
+        if status in MODEL_RELEASE_STATUSES:
+            return status
+        # v1 registries predate lifecycle state. A release-eligible item is
+        # treated as published; all other legacy entries remain diagnostically
+        # visible but cannot be selected as a production latest version.
+        return "PUBLISHED" if item.get("releaseEligible") else "READY"
+
+    @staticmethod
+    def _version_sort_key(version: Any) -> tuple:
+        value = str(version or "")
+        match = _SEMVER.fullmatch(value)
+        if match:
+            major, minor, patch, prerelease = match.groups()
+            # Stable releases sort after prereleases for the same numbers.
+            pre_key = (1, "") if not prerelease else (0, prerelease)
+            return (2, int(major), int(minor), int(patch), pre_key, value)
+        return (1, 0, 0, 0, (0, ""), value)
+
+    def _entries_for_model(self, registry: dict[str, Any], model_id: str) -> list[dict[str, Any]]:
+        return [item for item in registry.get("models", []) if item.get("modelId") == model_id]
+
+    def _latest_published(self, registry: dict[str, Any], model_id: str) -> dict[str, Any] | None:
+        candidates = [
+            item for item in self._entries_for_model(registry, model_id)
+            if self._status(item) == "PUBLISHED" and bool(item.get("releaseEligible", True))
+        ]
+        return max(candidates, key=lambda item: self._version_sort_key(item.get("version")), default=None)
+
+    def _find_entry(
+        self,
+        registry: dict[str, Any],
+        model_id: str,
+        version: str | None = None,
+    ) -> dict[str, Any] | None:
+        entries = self._entries_for_model(registry, model_id)
+        if version is not None:
+            return next((item for item in entries if str(item.get("version")) == version), None)
+        active = self._resolve_active_reference(registry)
+        if active and active.startswith(f"{model_id}@"):
+            active_item = next((item for item in entries if self.release_key(item) == active), None)
+            if active_item is not None:
+                return active_item
+        return self._latest_published(registry, model_id) or max(
+            entries,
+            key=lambda item: self._version_sort_key(item.get("version")),
+            default=None,
+        )
 
     @property
     def project_root(self) -> Path:
@@ -85,10 +151,12 @@ class ModelCatalog:
             model_id = model.get("modelId")
             if not isinstance(model_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", model_id):
                 errors.append(f"{prefix}.modelId is invalid")
-            elif model_id in seen:
-                errors.append(f"duplicate modelId: {model_id}")
+            version = model.get("version")
+            release_key = f"{model_id}@{version}"
+            if release_key in seen:
+                errors.append(f"duplicate release: {release_key}")
             else:
-                seen.add(model_id)
+                seen.add(release_key)
             for field in ("version", "scenario", "runtime", "labels"):
                 value = model.get(field)
                 if field == "labels":
@@ -205,7 +273,15 @@ class ModelCatalog:
                     "contentType": "application/octet-stream",
                 }],
             }
-            old = next((entry for entry in existing if entry.get("modelId") == model_id), None)
+            old = next(
+                (
+                    entry
+                    for entry in existing
+                    if entry.get("modelId") == model_id
+                    and str(entry.get("version")) == str(item.get("version"))
+                ),
+                None,
+            )
             if old is None:
                 existing.append(item)
             else:
@@ -238,6 +314,10 @@ class ModelCatalog:
             artifact_copy = dict(artifact)
             artifact_path = self._artifact_path(artifact)
             artifact_copy["url"] = f"/api/models/{item.get('modelId')}/artifacts/{artifact.get('artifactId')}/download"
+            artifact_copy["versionedUrl"] = (
+                f"/api/models/{item.get('modelId')}/versions/{item.get('version')}"
+                f"/artifacts/{artifact.get('artifactId')}/download"
+            )
             artifact_copy["exists"] = artifact_path.is_file()
             artifact_copy["hashValid"] = artifact_copy["exists"] and self.sha256(artifact_path).lower() == str(artifact.get("sha256", "")).lower()
             artifact_copy.pop("path", None)
@@ -248,30 +328,43 @@ class ModelCatalog:
             "exists": exists,
             "hashValid": exists and actual_hash == item.get("sha256"),
             "actualSha256": actual_hash,
-            "active": active_name == item.get("modelId"),
+            "active": active_name in {item.get("modelId"), self.release_key(item)},
         }
         if inspected_artifacts:
             result["artifacts"] = inspected_artifacts
         return result
 
-    def _resolve_active_model_id(self, registry: dict[str, Any]) -> str | None:
-        """Resolve both new modelId and legacy basename active references."""
+    def _resolve_active_reference(self, registry: dict[str, Any]) -> str | None:
+        """Resolve modelId@version and legacy modelId/basename references."""
         active_ref = str(registry.get("activeServerModel") or "")
         if not active_ref:
             return None
         models = registry.get("models", [])
-        if any(item.get("modelId") == active_ref for item in models):
+        if any(self.release_key(item) == active_ref for item in models):
             return active_ref
+        if any(item.get("modelId") == active_ref for item in models):
+            entries = self._entries_for_model(registry, active_ref)
+            item = self._latest_published(registry, active_ref) or max(
+                entries,
+                key=lambda candidate: self._version_sort_key(candidate.get("version")),
+                default=None,
+            )
+            return self.release_key(item) if item is not None else active_ref
         # Legacy catalogs stored only the basename. Select the first matching
         # server model, preserving the historical default without collisions.
         for item in models:
             if item.get("format") in {"pt", "onnx"} and Path(str(item.get("path", ""))).name == Path(active_ref).name:
-                return str(item.get("modelId"))
+                return self.release_key(item)
         return None
+
+    def _resolve_active_model_id(self, registry: dict[str, Any]) -> str | None:
+        reference = self._resolve_active_reference(registry)
+        return reference.split("@", 1)[0] if reference else None
 
     def list_models(self) -> list[dict[str, Any]]:
         registry = self._load()
-        return [self.public_inspect(item, self._resolve_active_model_id(registry)) for item in registry.get("models", [])]
+        active_reference = self._resolve_active_reference(registry)
+        return [self.public_inspect(item, active_reference, registry) for item in registry.get("models", [])]
 
     def calibration_references(self, dataset_id: str) -> list[str]:
         registry = self._load()
@@ -282,11 +375,11 @@ class ModelCatalog:
             and item["calibrationDataset"].get("datasetId") == dataset_id
         ]
 
-    def get(self, model_id: str) -> dict[str, Any]:
+    def get(self, model_id: str, version: str | None = None) -> dict[str, Any]:
         registry = self._load()
-        for item in registry.get("models", []):
-            if item.get("modelId") == model_id:
-                return self.public_inspect(item, self._resolve_active_model_id(registry))
+        item = self._find_entry(registry, model_id, version)
+        if item is not None:
+            return self.public_inspect(item, self._resolve_active_reference(registry), registry)
         raise KeyError(model_id)
 
     def _model_paths(self, item: dict[str, Any]) -> set[Path]:
@@ -306,16 +399,19 @@ class ModelCatalog:
         return paths
 
     @serialized_mutation
-    def uninstall(self, model_id: str) -> dict[str, Any]:
-        """Remove a catalog entry and delete only files no remaining entry uses."""
+    def uninstall(self, model_id: str, version: str | None = None) -> dict[str, Any]:
+        """Remove one release, preserving a small immutable audit tombstone."""
         registry = self._load()
         models = registry.get("models", [])
-        target = next((item for item in models if item.get("modelId") == model_id), None)
+        matches = self._entries_for_model(registry, model_id)
+        if version is None and len(matches) > 1:
+            raise ValueError("version required when model has multiple releases")
+        target = self._find_entry(registry, model_id, version)
         if target is None:
             raise KeyError(model_id)
 
-        if self._resolve_active_model_id(registry) == model_id:
-            raise ValueError("active model cannot be uninstalled")
+        if self.release_key(target) == self._resolve_active_reference(registry):
+            raise ValueError("active model release cannot be uninstalled")
 
         remaining = [item for item in models if item is not target]
         target_paths = self._model_paths(target)
@@ -325,6 +421,18 @@ class ModelCatalog:
         removable_paths = target_paths - shared_paths
 
         registry["models"] = remaining
+        history = registry.setdefault("modelHistory", [])
+        tombstone = dict(target)
+        tombstone["status"] = "UNINSTALLED"
+        tombstone["uninstalledAt"] = date.today().isoformat()
+        history.append({
+            key: tombstone[key]
+            for key in (
+                "modelId", "version", "status", "manifestSha256", "artifacts",
+                "releaseEligible", "publishedAt", "uninstalledAt",
+            )
+            if key in tombstone
+        })
         registry["updatedAt"] = date.today().isoformat()
         self._save(registry)
 
@@ -352,6 +460,7 @@ class ModelCatalog:
 
         return {
             "modelId": model_id,
+            "version": target.get("version"),
             "uninstalled": True,
             "deletedFiles": deleted,
             "missingFiles": missing,
@@ -359,7 +468,107 @@ class ModelCatalog:
             "cleanupFailures": cleanup_failures,
         }
 
-    def get_artifact(self, model_id: str, artifact_id: str) -> tuple[dict[str, Any], Path]:
+    def versions(self, model_id: str) -> list[dict[str, Any]]:
+        registry = self._load()
+        entries = self._entries_for_model(registry, model_id)
+        if not entries:
+            raise KeyError(model_id)
+        active_reference = self._resolve_active_reference(registry)
+        return [
+            self.public_inspect(item, active_reference, registry)
+            for item in sorted(entries, key=lambda entry: self._version_sort_key(entry.get("version")), reverse=True)
+        ]
+
+    @serialized_mutation
+    def migrate_release(
+        self,
+        source_model_id: str,
+        target_model_id: str,
+        version: str,
+        reason: str | None = None,
+        actor: str = "admin",
+    ) -> dict[str, Any]:
+        """Explicitly move one historical release into a stable model family.
+
+        This operation is intentionally never inferred from name, source hash,
+        or version.  A release is moved only when an administrator names both
+        identities and the exact version, and an existing target release is
+        never overwritten.
+        """
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", target_model_id):
+            raise ValueError("target modelId is invalid")
+        if source_model_id == target_model_id:
+            raise ValueError("source and target modelId must differ")
+        registry = self._load()
+        if any(
+            item.get("modelId") == target_model_id and str(item.get("version")) == str(version)
+            for item in registry.get("models", [])
+        ):
+            raise ValueError("target modelId and version already exists")
+        source = self._find_entry(registry, source_model_id, version)
+        if source is None:
+            raise KeyError(source_model_id)
+        source["modelId"] = target_model_id
+        source["migratedFromModelId"] = source_model_id
+        source["migratedAt"] = date.today().isoformat()
+        history = registry.setdefault("modelHistory", [])
+        history.append({
+            "modelId": target_model_id,
+            "version": version,
+            "status": "MIGRATED",
+            "sourceModelId": source_model_id,
+            "targetModelId": target_model_id,
+            "reason": (reason or "explicit administrator migration").strip()[:512],
+            "actor": actor.strip()[:128] or "admin",
+            "changedAt": date.today().isoformat(),
+        })
+        registry["updatedAt"] = date.today().isoformat()
+        self._save(registry)
+        result = self.public_inspect(source, self._resolve_active_reference(registry), registry)
+        result["migratedFromModelId"] = source_model_id
+        return result
+
+    @serialized_mutation
+    def set_release_status(
+        self,
+        model_id: str,
+        version: str,
+        status: str,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
+        status = status.upper()
+        if status not in {"DEPRECATED", "REVOKED"}:
+            raise ValueError("unsupported release status")
+        registry = self._load()
+        target = self._find_entry(registry, model_id, version)
+        if target is None:
+            raise KeyError(model_id)
+        current = self._status(target)
+        if current in {"UNINSTALLED", "REVOKED"} and status != "REVOKED":
+            raise ValueError(f"release is already {current.lower()}")
+        target["status"] = status
+        if status == "DEPRECATED":
+            target["deprecatedAt"] = date.today().isoformat()
+        else:
+            target["revokedAt"] = date.today().isoformat()
+            target["revokeReason"] = (reason or "operator revoked release").strip()[:512]
+        registry["updatedAt"] = date.today().isoformat()
+        registry.setdefault("modelHistory", []).append({
+            "modelId": model_id,
+            "version": version,
+            "status": status,
+            "reason": reason,
+            "changedAt": date.today().isoformat(),
+        })
+        self._save(registry)
+        return self.public_inspect(target, self._resolve_active_reference(registry), registry)
+
+    def get_artifact(
+        self,
+        model_id: str,
+        artifact_id: str,
+        version: str | None = None,
+    ) -> tuple[dict[str, Any], Path]:
         """Resolve a registered artifact for download without exposing its path.
 
         The returned file is revalidated immediately before serving.  A changed
@@ -367,7 +576,7 @@ class ModelCatalog:
         satisfy the catalog's advertised size/hash contract.
         """
         registry = self._load()
-        model = next((entry for entry in registry.get("models", []) if entry.get("modelId") == model_id), None)
+        model = self._find_entry(registry, model_id, version)
         if model is None:
             raise KeyError(model_id)
         artifact = next((item for item in model.get("artifacts", []) if isinstance(item, dict) and item.get("artifactId") == artifact_id), None)
@@ -384,7 +593,12 @@ class ModelCatalog:
             raise ValueError("artifact integrity check failed")
         return artifact, path
 
-    def public_inspect(self, item: dict[str, Any], active_name: str | None = None) -> dict[str, Any]:
+    def public_inspect(
+        self,
+        item: dict[str, Any],
+        active_name: str | None = None,
+        registry: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """Return the API-safe representation of a catalog entry.
 
         Registry paths are implementation details and must never cross the API
@@ -394,6 +608,9 @@ class ModelCatalog:
         fields and do not expose filesystem locations.
         """
         inspected = self.inspect(item, active_name)
+        registry = registry or self._load()
+        siblings = self._entries_for_model(registry, str(item.get("modelId")))
+        latest = self._latest_published(registry, str(item.get("modelId")))
         artifacts = inspected.get("artifacts", [])
         public_artifacts: list[dict[str, Any]] = []
         for artifact in artifacts:
@@ -401,7 +618,7 @@ class ModelCatalog:
                 continue
             allowed = {
                 key: artifact[key]
-                for key in ("artifactId", "format", "platform", "url", "sizeBytes", "sha256", "contentType", "exists", "hashValid")
+                for key in ("artifactId", "format", "platform", "url", "versionedUrl", "sizeBytes", "sha256", "contentType", "exists", "hashValid")
                 if key in artifact
             }
             public_artifacts.append(allowed)
@@ -432,6 +649,23 @@ class ModelCatalog:
             "exists": bool(inspected.get("exists", False)),
             "hashValid": bool(inspected.get("hashValid", False)),
             "active": bool(inspected.get("active", False)),
+            "status": self._status(item),
+            "versionOrder": self._version_sort_key(item.get("version")),
+            "isLatest": latest is not None and self.release_key(latest) == self.release_key(item),
+            "latestVersion": latest.get("version") if latest is not None else None,
+            "availableVersions": [
+                str(entry.get("version"))
+                for entry in sorted(
+                    siblings,
+                    key=lambda entry: self._version_sort_key(entry.get("version")),
+                    reverse=True,
+                )
+            ],
+            "publishedAt": item.get("publishedAt"),
+            "deprecatedAt": item.get("deprecatedAt"),
+            "revokedAt": item.get("revokedAt"),
+            "revokeReason": item.get("revokeReason"),
+            "manifestSha256": item.get("manifestSha256"),
             "inputSize": inspected.get("inputSize"),
             "serverReady": inspected.get("serverReady", False),
             "androidReady": inspected.get("androidReady", False),
@@ -451,40 +685,42 @@ class ModelCatalog:
         return result
 
     @serialized_mutation
-    def activate(self, model_id: str) -> dict[str, Any]:
+    def activate(self, model_id: str, version: str | None = None) -> dict[str, Any]:
         registry = self._load()
-        target = next((item for item in registry.get("models", []) if item.get("modelId") == model_id), None)
+        target = self._find_entry(registry, model_id, version)
         if target is None:
             raise KeyError(model_id)
+        if self._status(target) in {"DEPRECATED", "REVOKED", "UNINSTALLED"}:
+            raise ValueError(f"model release is {self._status(target).lower()}")
         if target.get("placeholder"):
             raise ValueError("placeholder models cannot be activated")
-        inspected = self.inspect(target, self._resolve_active_model_id(registry))
+        inspected = self.inspect(target, self._resolve_active_reference(registry))
         if not inspected["exists"]:
             raise ValueError("model file does not exist")
         if not inspected["hashValid"]:
             raise ValueError("model SHA-256 does not match registry")
         if target.get("format") not in {"pt", "onnx"}:
             raise ValueError("only server model formats pt and onnx can be activated")
-        registry["activeServerModel"] = model_id
+        registry["activeServerModel"] = self.release_key(target) if version is not None else model_id
         self._save(registry)
-        return self.inspect(target, model_id)
+        return self.inspect(target, self._resolve_active_reference(registry))
 
     def active_server_path(self) -> str:
         registry = self._load()
-        active_id = self._resolve_active_model_id(registry)
+        active_reference = self._resolve_active_reference(registry)
         for item in registry.get("models", []):
-            if item.get("modelId") == active_id and item.get("format") in {"pt", "onnx"}:
+            if self.release_key(item) == active_reference and item.get("format") in {"pt", "onnx"}:
                 return str((self.registry_path.parents[1] / item["path"]).resolve())
         return str((self.registry_path.parents[1] / "models" / "yolo11n.pt").resolve())
 
-    def resolve_server_model(self, model_id: str) -> tuple[dict[str, Any], Path]:
+    def resolve_server_model(self, model_id: str, version: str | None = None) -> tuple[dict[str, Any], Path]:
         """Resolve a registered, hash-valid PT/ONNX model for a stream binding.
 
         TFLite/mobile-only entries are deliberately rejected so a stream can never
         switch to an artifact that the server detector cannot load.
         """
         registry = self._load()
-        item = next((entry for entry in registry.get("models", []) if entry.get("modelId") == model_id), None)
+        item = self._find_entry(registry, model_id, version)
         if item is None:
             raise KeyError(model_id)
         if item.get("format") not in {"pt", "onnx"}:
@@ -507,7 +743,15 @@ class ModelCatalog:
         """Append validated artifacts to a single logical model version; never auto-activate."""
         registry = self._load()
         entries = registry.setdefault("models", [])
-        item = next((row for row in entries if row["modelId"] == model_id), None)
+        version = str(metadata.get("version") or result.get("version") or "0.0.0-legacy")
+        item = next(
+            (
+                row
+                for row in entries
+                if row.get("modelId") == model_id and str(row.get("version")) == version
+            ),
+            None,
+        )
         relative = path.resolve().relative_to((self.project_root / "models").resolve())
         relative_path = "models/" + relative.as_posix()
         digest = self.sha256(path)
@@ -521,7 +765,7 @@ class ModelCatalog:
             if item and item["sha256"] != digest:
                 raise ValueError("已登记版本的 PT 内容不可覆盖")
             if not item:
-                item = {"modelId": model_id, "name": metadata["name"], "version": metadata["version"],
+                item = {"modelId": model_id, "name": metadata["name"], "version": version,
                         "scenario": metadata["scenario"], "purpose": metadata["purpose"],
                         "format": "pt", "path": relative_path, "sizeBytes": path.stat().st_size,
                         "sha256": digest, "runtime": "server-pt", "labels": result["labels"],
@@ -529,7 +773,8 @@ class ModelCatalog:
                         "compatibleDevices": [], "artifacts": [artifact], "releaseEligible": False,
                         "licenseStatus": "internal-functional-testing-only" if metadata["purpose"] == "development" else "requires-review",
                         "sourceSha256": digest, "source": "administrator-upload",
-                        "upstreamVersion": result["ultralytics"], "serverReady": True, "androidReady": False}
+                        "upstreamVersion": result["ultralytics"], "serverReady": True, "androidReady": False,
+                        "status": "READY"}
                 entries.append(item)
         else:
             if not item or not item.get("serverReady"):
@@ -554,4 +799,4 @@ class ModelCatalog:
                         androidContract={key: result[key] for key in ("input", "output", "quantization", "input_size")},
                         calibrationDataset=result.get("calibration_dataset"))
         self._save(registry)
-        return self.get(model_id)
+        return self.get(model_id, version)

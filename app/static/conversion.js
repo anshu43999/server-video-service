@@ -43,8 +43,10 @@
     </details>
     <div class="conversion-grid"><form id="conversion-upload-form">
         <label class="conversion-drop" id="conversion-drop"><input id="conversion-file" type="file" accept=".pt" required><span class="conversion-file-mark" aria-hidden="true">PT</span><b id="conversion-file-title">把 .pt 文件拖到这里，或点击选择</b><small id="conversion-file-name" aria-live="polite">尚未选择文件</small><span class="conversion-file-meta" id="conversion-file-meta">仅支持 PyTorch .pt 权重文件</span></label>
-        <div class="conversion-fields"><label class="field">模型名称<input id="conversion-name" maxlength="100" required placeholder="例如：工地安全帽检测"></label><label class="field">版本<input id="conversion-version" maxlength="50" value="1.0.0" required></label></div>
-        <div class="conversion-fields"><label class="field">场景<input id="conversion-scenario" maxlength="100" value="general-detection" required></label><label class="field">用途<select id="conversion-purpose"><option value="development">功能测试</option><option value="business">业务候选</option></select></label></div>
+        <div class="conversion-fields"><label class="field">模型名称<input id="conversion-name" maxlength="100" required placeholder="例如：工地安全帽检测"></label><label class="field">模型族<select id="conversion-model-family-select"><option value="__new__">+ 新建模型族</option></select><small>选择已有模型族可避免 ID 输入错误；新建模型族时再填写稳定 ID。</small></label></div>
+        <label class="field" id="conversion-model-id-field">新模型族 ID<input id="conversion-model-id" maxlength="128" pattern="[A-Za-z0-9][A-Za-z0-9._-]{0,127}" placeholder="例如：helmet-family"><small>首次创建后，后续版本请从上方下拉选择同一模型族。</small></label>
+        <div class="conversion-fields"><label class="field">版本<input id="conversion-version" maxlength="50" value="1.0.0" required></label><label class="field">场景<input id="conversion-scenario" maxlength="100" value="general-detection" required></label></div>
+        <label class="field">用途<select id="conversion-purpose"><option value="development">功能测试</option><option value="business">业务候选</option></select></label>
         <label class="field">本次移动端转换校准集<select id="conversion-calibration-select" required></select></label>
         <p class="conversion-note">这里仅选择已登记校准集。新增、查看版本或删除校准集请前往“校准集”页签。</p>
         <p class="conversion-note">上传不会替换正在运行的视频流。COCO 仅用于功能测试。</p>
@@ -114,6 +116,9 @@
   function resetModelUploadState() {
     byId('conversion-file').value = '';
     byId('conversion-name').value = '';
+    const familySelect = byId('conversion-model-family-select');
+    if (familySelect) familySelect.value = NEW_MODEL_FAMILY;
+    renderModelFamilyFields();
     renderSelectedModelFile(null);
     const progress = byId('conversion-progress');
     progress.value = 0;
@@ -150,6 +155,40 @@
     byId('conversion-jobs').querySelectorAll('button').forEach(button => button.disabled = !live);
     byId('calibration-list').querySelectorAll('button').forEach(button => button.disabled = !live);
   }
+  const NEW_MODEL_FAMILY = '__new__';
+  function renderModelFamilyFields() {
+    const select = byId('conversion-model-family-select');
+    const input = byId('conversion-model-id');
+    const field = byId('conversion-model-id-field');
+    const creating = !select || select.value === NEW_MODEL_FAMILY;
+    if (field) field.hidden = !creating;
+    if (input) input.required = creating;
+    if (input && !creating) input.value = select.value;
+  }
+  function renderModelFamilyOptions() {
+    const select = byId('conversion-model-family-select');
+    if (!select) return;
+    const selected = select.value || NEW_MODEL_FAMILY;
+    const families = new Map();
+    (state.models || []).forEach(model => {
+      if (!model?.modelId || families.has(model.modelId)) return;
+      const siblings = (state.models || []).filter(item => item?.modelId === model.modelId);
+      const latest = siblings.find(item => item.isLatest === true) ||
+        siblings.find(item => item.version && item.version === model.latestVersion) || model;
+      families.set(model.modelId, {
+        modelId: model.modelId,
+        name: latest.name || model.name || model.modelId,
+        version: latest.version || model.latestVersion || '未知',
+      });
+    });
+    const options = [...families.values()].sort((left, right) =>
+      `${left.name}${left.modelId}`.localeCompare(`${right.name}${right.modelId}`),
+    ).map(family => `<option value="${safe(family.modelId)}">${safe(family.name)} · ${safe(family.modelId)} · 当前 v${safe(family.version)}</option>`).join('');
+    select.innerHTML = `<option value="${NEW_MODEL_FAMILY}">+ 新建模型族</option>${options}`;
+    select.value = [...families.keys()].includes(selected) || selected === NEW_MODEL_FAMILY ? selected : NEW_MODEL_FAMILY;
+    renderModelFamilyFields();
+  }
+  byId('conversion-model-family-select').addEventListener('change', renderModelFamilyFields);
   const datasetLabel = item => `${item.name} · ${item.version}${item.builtin ? ' · 测试' : ''}`;
   function renderCalibrationDatasets() {
     const defaultSelect = byId('conversion-default-calibration');
@@ -303,6 +342,11 @@
     uploading = true; liveControls();
     const params = new URLSearchParams({filename:file.name, name:byId('conversion-name').value.trim(),
       version:byId('conversion-version').value.trim(), scenario:byId('conversion-scenario').value.trim(), purpose:byId('conversion-purpose').value});
+    const familySelect = byId('conversion-model-family-select');
+    const modelId = (familySelect.value === NEW_MODEL_FAMILY
+      ? byId('conversion-model-id').value
+      : familySelect.value).trim();
+    if (modelId) params.set('modelId', modelId);
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/conversion/uploads?' + params);
     xhr.timeout = 310000;
@@ -373,8 +417,8 @@
     });
   };
   refreshLiveModels = async () => {
-    try { state.models = (await api('/api/models')).models || []; txt('model-catalog-state', state.models.length ? `Live API · ${state.models.length} 个真实模型` : 'Live API · 目录为空'); renderModels(); renderStreamBindings(); }
-    catch (error) { state.models = []; renderModels(); txt('model-catalog-state', `目录不可用 · ${error.message}`); }
+    try { state.models = (await api('/api/models')).models || []; txt('model-catalog-state', state.models.length ? `Live API · ${state.models.length} 个真实模型` : 'Live API · 目录为空'); renderModels(); renderStreamBindings(); renderModelFamilyOptions(); }
+    catch (error) { state.models = []; renderModels(); renderStreamBindings(); renderModelFamilyOptions(); txt('model-catalog-state', `目录不可用 · ${error.message}`); }
   };
   const originalBind = bindStreamModel;
   bindStreamModel = async (streamId, modelId) => {
@@ -395,6 +439,7 @@
   setInterval(() => { liveControls(); if (!document.hidden && host.classList.contains('active-view')) refresh(); }, 4000);
   liveControls();
   renderModeFields();
+  renderModelFamilyOptions();
   byId('refresh-models-btn')?.addEventListener('click', () => refreshLiveModels());
   // The login gate dispatches this event after the account session is ready.
   window.addEventListener('aiyolo-authenticated', connect, {once:true});

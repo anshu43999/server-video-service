@@ -1,6 +1,6 @@
 # Linux Docker 部署
 
-根目录唯一的 `compose.yml` 同时编排 `server-video-service`、独立 `model-converter`、PostgreSQL 16 和 MediaMTX 1.20.1。支持具备 Docker Engine 与 Compose 插件的主流 Linux；CentOS Stream 9、Rocky Linux 9、AlmaLinux 9 和 Ubuntu 共用同一套文件。CentOS Linux 7 已于 2024-06-30 结束维护，不作为生产部署目标。
+根目录唯一的 `compose.yml` 编排 `video-service`、独立 `model-converter` 和 MediaMTX 1.20.1；PostgreSQL 由云厂商托管，通过 `DATABASE_URL` 连接，不随应用容器启停或重建。支持具备 Docker Engine 与 Compose 插件的主流 Linux；CentOS Stream 9、Rocky Linux 9、AlmaLinux 9 和 Ubuntu 共用同一套文件。CentOS Linux 7 已于 2024-06-30 结束维护，不作为生产部署目标。
 
 ## 1. 主机准备
 
@@ -33,7 +33,9 @@ chmod 0600 .env
 
 编辑 `.env`，必须替换全部 `CHANGE_ME`：
 
-- `POSTGRES_PASSWORD` 与 `DATABASE_URL` 中的密码必须一致；URL 中的保留字符需要百分号编码。
+- `DATABASE_URL` 填云数据库提供的 PostgreSQL 连接信息，驱动格式为 `postgresql+psycopg://...`；密码中的保留字符需要百分号编码。生产连接应启用 TLS，优先使用云厂商 CA 和 `sslmode=verify-full`；`sslmode=require` 至少保证加密传输。
+- 为应用创建最小权限的独立数据库账号，不使用云数据库管理员账号。配置云数据库网络白名单/安全组，只允许部署主机出口地址连接；不要将数据库端口向公网开放。
+- 在云数据库控制台启用自动备份和时间点恢复（PITR），并设置符合业务要求的保留周期。部署主机另需安装与 PostgreSQL 版本兼容的 `pg_dump` 客户端，供 `backup-db` 生成逻辑备份。
 - 不要在生产 `.env` 中设置 `ADMIN_TOKEN` 或 `MOBILE_TOKEN`。生产环境通过 `/api/auth/setup`、`/api/auth/login` 签发动态账号 Session；容器入口会拒绝误配置的静态客户端令牌。
 - `MEDIA_PUBLIC_HOST` 填 App 实际可访问的服务器 DNS 名或 IP，不能填 `127.0.0.1`。
 - `MODEL_MOUNT_PATH` 默认 `./models`，容器内以只读方式挂载到 `/models`。
@@ -61,7 +63,6 @@ Dockerfile 不复制 `.env`、密钥、业务校准数据或历史日志。模�
 | 8189 | UDP | WebRTC 媒体 | 对 App 网络开放 |
 | 8888 | TCP | LL-HLS 回退 | 对 App 网络开放 |
 | 8554 | TCP | RTSP 诊断 | 仅 `127.0.0.1` |
-| 5432 | TCP | PostgreSQL | 不发布到主机 |
 | 9997 | TCP | MediaMTX API | 不发布到主机 |
 | 8090 | TCP | 模型转换 HTTP API | 仅 Compose 内部网络，不发布到主机 |
 
@@ -83,7 +84,7 @@ bash deploy/deploy.sh up
 bash deploy/deploy.sh status
 ```
 
-预期四个服务最终均为 `healthy`。从服务器本机验证：
+预期三个 Compose 服务最终均为 `healthy`。`video-service` 的 `/healthz` 同时检查数据库连接；云数据库实例状态、备份策略和网络连接还应在云厂商控制台单独确认。从服务器本机验证：
 
 ```bash
 curl --fail http://127.0.0.1:18080/healthz
@@ -102,20 +103,21 @@ Compose 只能启动基础设施，以下项目不会也不应该由镜像替管
 | 项目 | 是否必做 | 操作与验收 |
 |---|---|---|
 | 管理员账号 | 必做 | 打开 `http://服务器:18080/admin/`，按页面引导初始化管理员并使用动态 Session 登录；生产 `.env` 不配置 `ADMIN_TOKEN`、`MOBILE_TOKEN` |
-| 云安全组与主机防火墙 | 必做 | 仅向 App 所在来源开放 `18080/tcp`、`8889/tcp`、`8888/tcp`、`8189/udp`；5432、8090、9997 不对外开放 |
+| 云安全组与主机防火墙 | 必做 | 仅向 App 所在来源开放 `18080/tcp`、`8889/tcp`、`8888/tcp`、`8189/udp`；云数据库只允许部署主机访问，8090、9997 不对外开放 |
 | App 服务地址 | 必做 | App 填 `http://服务器IP:18080`；`8889` 是 WHEP 信令端口，不能替代控制 API 端口 |
 | 转换配置 | 使用模型转换时必做 | 管理后台保存 `remote` 模式、320/416/640 输入尺寸和默认校准集；输入尺寸在 PT 验证成功时冻结，修改只影响之后新上传的 PT |
 | 业务校准集 | 业务 INT8 必做 | 在“模型资产 → 校准集”上传具有代表性的业务图片 ZIP，再在转换任务中选择；`coco8-dev` 只验证链路 |
 | 模型签名 | App 动态安装模型时必做 | 按附录 C 将本地 Ed25519 私钥安全上传并挂载到 `video-service`；只有签名后 `androidReady=true` |
 | 媒体鉴权/TLS | 公网生产必做 | 当前 HTTP 配置只适合受信环境；公网应配置网关 HTTPS、MediaMTX TLS/鉴权以及必要的 STUN/TURN |
-| 备份 | 必做 | 备份 PostgreSQL 和四个业务卷；不要执行 `docker compose down -v` |
+| 备份 | 必做 | 启用云数据库自动备份/PITR，并定期执行 `bash deploy/deploy.sh backup-db`；另备份四个业务卷和宿主机模型目录 |
 
 ### 5.1 验证转换参数确实生效
 
 修改后台下拉框后必须点击“保存配置”。查看 PostgreSQL 中持久化的输入尺寸：
 
 ```bash
-docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select payload->>'"'"'input_size'"'"' from conversion_config where config_key='"'"'default'"'"';"'
+set -a; . .env; set +a
+psql "$DATABASE_URL" -Atc "select payload->>'input_size' from conversion_config where config_key='default';"
 ```
 
 新任务提交后检查转换服务真正收到的尺寸：
@@ -156,13 +158,13 @@ bash deploy/deploy.sh logs mediamtx
 bash deploy/deploy.sh logs model-converter
 ```
 
-数据库备份：
+数据库逻辑备份（需要部署主机安装 `pg_dump`；连接串从 `DATABASE_URL` 环境变量或 `.env` 读取）：
 
 ```bash
 bash deploy/deploy.sh backup-db
 ```
 
-备份文件写入项目的 `backups/`，应转存到独立存储并按组织策略加密。还需要单独备份 Docker 卷 `aiyolo_model-data`、`aiyolo_evidence-data`、`aiyolo_converter-data`、`aiyolo_calibration-data`，以及宿主机只读模型目录。恢复会覆盖业务状态，必须先停止写入并在隔离环境验证备份；校准集数据库记录与 `calibration-data` 卷必须按同一备份点恢复。
+备份文件写入项目的 `backups/`，应转存到独立存储并按组织策略加密。云数据库控制台中的自动备份/PITR 是首要恢复手段；逻辑备份提供额外迁移和离线恢复能力。还需要单独备份 Docker 卷 `aiyolo_model-data`、`aiyolo_evidence-data`、`aiyolo_converter-data`、`aiyolo_calibration-data`，以及宿主机只读模型目录。恢复会覆盖业务状态，必须先停止写入并在隔离环境验证备份；校准集数据库记录与 `calibration-data` 卷必须按同一备份点恢复。
 
 ## 8. 升级和回滚
 
@@ -183,7 +185,7 @@ bash deploy/deploy.sh up
 bash deploy/deploy.sh stop
 ```
 
-不要使用 `docker compose down -v`，该命令会删除 PostgreSQL、模型市场、转换任务/产物、校准集图片和告警证据卷。
+`docker compose down -v` 不会删除云数据库，但会删除模型市场、转换任务/产物、校准集图片和告警证据等本地业务卷，生产环境仍不要使用。
 
 签名部署使用覆盖文件时，升级、状态、日志和停止命令按附录 C 执行。私钥和服务器专用
 覆盖文件不由 Git 管理，迁移新服务器时要通过安全渠道单独恢复。
@@ -218,11 +220,8 @@ dmesg -T | grep -Ei 'oom|out of memory|killed process' | tail -n 30
 本节只用于维护仍在运行旧版 Docker Engine、内核或 Git 的服务器，不属于新服务器的常规
 部署步骤。新部署应优先升级到受支持的软件版本。
 
-部分旧版 Docker Engine 的默认 seccomp 配置会阻止 PostgreSQL 16 创建
-`postmaster.pid` 或 WAL 临时文件，并返回 `Operation not permitted`。当前 `compose.yml`
-已仅为不发布宿主机端口、只连接内部 `control` 网络的 PostgreSQL 容器配置
-`seccomp=unconfined`，其他服务仍使用默认 seccomp。使用当前 Compose 时无需在服务器上
-手工编辑该项；此兼容设置也不能替代 Docker Engine 与内核升级。
+PostgreSQL 使用云数据库，不由 Compose 启动，因此无需在应用主机上调整 PostgreSQL 容器
+seccomp 配置。其他服务继续使用 Docker 默认 seccomp；主机 Docker Engine 与内核应保持受支持版本。
 
 如果旧 Git 不支持 `git restore`，可在确认 `compose.yml` 没有需要保留的本地修改后使用：
 

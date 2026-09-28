@@ -14,7 +14,7 @@ CentOS/RHEL 系宿主机仅需额外处理以下事项：
 仅在启用 Android 模型签名时，外部私钥挂载需要保留 `:ro,Z`，以便 SELinux 为其设置
 正确标签。容器 UID、文件权限和覆盖文件的完整配置见 `docs/docker-deployment.md` 附录 C。
 
-旧版 Docker Engine 的默认 seccomp 配置可能让 PostgreSQL 16 初始化时对 `postmaster.pid` 或 `pg_wal` 写入返回 `Operation not permitted`。根目录统一 `compose.yml` 已将 `seccomp=unconfined` 例外限制在不发布 5432、只加入内部控制网络的 PostgreSQL 容器，并保留 `no-new-privileges`；其他服务仍使用默认 seccomp。该兼容项不能替代主机 Docker Engine 与内核升级。
+业务 PostgreSQL 使用云数据库，不由 Compose 在本机启动，因此不需要为 PostgreSQL 容器配置 `seccomp=unconfined` 或开放 `5432`。请在云数据库安全组中只允许部署主机访问，并保持 TLS 连接；本机 Docker 服务仍使用默认 seccomp，主机 Docker Engine 与内核应保持受支持版本。
 
 CentOS Stream 9 / Rocky Linux 9 / AlmaLinux 9 安装示例：
 

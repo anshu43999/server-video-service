@@ -81,8 +81,17 @@ case "${action}" in
     backup_dir="${PROJECT_ROOT}/backups"
     mkdir -p "${backup_dir}"
     backup_file="${backup_dir}/postgres-$(date -u +%Y%m%dT%H%M%SZ).dump"
-    compose exec -T postgres sh -c \
-      'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' >"${backup_file}"
+    if ! command -v pg_dump >/dev/null 2>&1; then
+      echo "pg_dump is required for cloud database backups; install PostgreSQL client tools first" >&2
+      exit 1
+    fi
+    database_url="${DATABASE_URL:-}"
+    if [[ -z "${database_url}" ]]; then
+      database_url="$(sed -n 's/^DATABASE_URL=//p' "${ENV_FILE}" | head -n 1)"
+    fi
+    pg_dump_url="${database_url:?DATABASE_URL is required in the production env file}"
+    pg_dump_url="${pg_dump_url/postgresql+psycopg:/postgresql:}"
+    pg_dump --no-password --format=custom --file="${backup_file}" --dbname="${pg_dump_url}"
     echo "database backup created: ${backup_file}"
     ;;
   stop)
