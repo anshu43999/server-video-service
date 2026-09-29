@@ -32,6 +32,7 @@ services:
       start_period: 10s
     restart: unless-stopped
     stop_grace_period: 20s
+    pids_limit: "${MEDIAMTX_PIDS_LIMIT:-256}"
     security_opt:
       - no-new-privileges:true
     logging: *default-logging
@@ -68,6 +69,7 @@ services:
       - no-new-privileges:true
     cpus: "${CONVERTER_CPUS:-2.0}"
     mem_limit: "${CONVERTER_MEMORY_LIMIT:-8g}"
+    pids_limit: "${CONVERTER_PIDS_LIMIT:-512}"
     shm_size: "${CONVERTER_SHM_SIZE:-1g}"
     restart: unless-stopped
     stop_grace_period: 45s
@@ -89,6 +91,14 @@ services:
       DATABASE_CONNECT_TIMEOUT_SECONDS: "${DATABASE_CONNECT_TIMEOUT_SECONDS:-10}"
       RUN_DATABASE_MIGRATIONS: "${RUN_DATABASE_MIGRATIONS:-true}"
       AUTH_SESSION_DAYS: "${AUTH_SESSION_DAYS:-30}"
+      MINIO_ENDPOINT: "${MINIO_ENDPOINT:?Set MINIO_ENDPOINT in the production env file}"
+      MINIO_ACCESS_KEY: "${MINIO_ACCESS_KEY:?Set MINIO_ACCESS_KEY in the production env file}"
+      MINIO_SECRET_KEY: "${MINIO_SECRET_KEY:?Set MINIO_SECRET_KEY in the production env file}"
+      MINIO_BUCKET: "${MINIO_BUCKET:-aiyolo-alerts}"
+      MINIO_SECURE: "${MINIO_SECURE:-true}"
+      MINIO_REGION: "${MINIO_REGION:-}"
+      MINIO_ALERT_PREFIX: "${MINIO_ALERT_PREFIX:-alerts}"
+      MINIO_AUTO_CREATE_BUCKET: "${MINIO_AUTO_CREATE_BUCKET:-false}"
       YOLO_MODEL_PATH: "${YOLO_MODEL_PATH:-/models/converted/yolo11n_640.onnx}"
       MODEL_SEED_PATH: /models
       REQUIRE_YOLO_MODEL: "${REQUIRE_YOLO_MODEL:-false}"
@@ -132,6 +142,9 @@ services:
       - "${MODEL_MOUNT_PATH:-./models}:/models:ro,Z"
     tmpfs:
       - /tmp:size=1g,mode=1777
+    cpus: "${VIDEO_SERVICE_CPUS:-4.0}"
+    mem_limit: "${VIDEO_SERVICE_MEMORY_LIMIT:-8g}"
+    pids_limit: "${VIDEO_SERVICE_PIDS_LIMIT:-512}"
     read_only: true
     cap_drop:
       - ALL

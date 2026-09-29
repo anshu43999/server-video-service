@@ -40,6 +40,10 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertIn('"${ENV_FILE}"', script)
         self.assertIn("postgresql+psycopg:", script)
         self.assertNotIn("compose exec -T postgres", script)
+        self.assertIn("pull-up)", script)
+        self.assertIn("--no-build --wait --wait-timeout 300", script)
+        self.assertIn("smoke)", script)
+        self.assertIn("MINIO_OK", script)
 
     def test_runtime_image_is_non_root_and_self_checking(self) -> None:
         self.assertIn("USER app", self.dockerfile)
@@ -147,12 +151,17 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertIn("no-new-privileges:true", self.compose)
         self.assertNotIn("seccomp=unconfined", self.compose)
         self.assertIn('max-size: "20m"', self.compose)
+        self.assertIn("VIDEO_SERVICE_CPUS", self.compose)
+        self.assertIn("VIDEO_SERVICE_MEMORY_LIMIT", self.compose)
+        self.assertIn("VIDEO_SERVICE_PIDS_LIMIT", self.compose)
+        self.assertIn("CONVERTER_PIDS_LIMIT", self.compose)
 
     def test_production_environment_rejects_missing_security_settings(self) -> None:
         errors = validate_environment({"DEPLOYMENT_ENV": "production"})
         for field in (
             "DATABASE_URL", "MEDIAMTX_ENABLED",
             "MEDIAMTX_WHEP_URL", "MEDIAMTX_LLHLS_URL", "YOLO_MODEL_PATH",
+            "MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_BUCKET",
         ):
             self.assertTrue(any(field in error for error in errors), field)
 
@@ -170,6 +179,10 @@ class DockerDeploymentTests(unittest.TestCase):
             errors = validate_environment({
                 "DEPLOYMENT_ENV": "production",
                 "DATABASE_URL": "postgresql+psycopg://user:pass@db.example.com:5432/db?sslmode=require",
+                "MINIO_ENDPOINT": "minio.internal:9000",
+                "MINIO_ACCESS_KEY": "access-key",
+                "MINIO_SECRET_KEY": "secret-key",
+                "MINIO_BUCKET": "aiyolo-alerts",
                 "MEDIAMTX_ENABLED": "true",
                 "MEDIAMTX_WHEP_URL": "https://video.example.com:8889",
                 "MEDIAMTX_LLHLS_URL": "https://video.example.com:8888",
@@ -181,6 +194,7 @@ class DockerDeploymentTests(unittest.TestCase):
     def test_example_requires_operator_owned_values(self) -> None:
         for field in (
             "DATABASE_URL", "CONVERTER_TOKEN", "MEDIA_PUBLIC_HOST",
+            "MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_BUCKET",
             "CONVERSION_DEFAULT_CALIBRATION_DATASET_ID", "CALIBRATION_MAX_UPLOAD_BYTES",
             "CALIBRATION_MAX_EXPANDED_BYTES", "CALIBRATION_MAX_FILES",
         ):

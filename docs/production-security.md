@@ -32,9 +32,27 @@ MOBILE_TOKEN=development-mobile-token
 
 ## 反向代理示例（Nginx）
 
+本服务的 API 根路径固定为 `/aiyoloapi`。当同一个 Nginx 承载多个项目时，直接把该路径原样转发给 FastAPI，不要剥离或重写前缀。管理后台仍通过 `/admin/` 访问，但其 HTTP 和 WebSocket 请求都会直接使用 `/aiyoloapi/...`。完整示例见 `deploy/nginx/aiyolo.conf.example`。
+
 ```nginx
-location /aiyoloapi/streams/ {
-    proxy_pass http://127.0.0.1:8080;
+location /aiyoloapi/ {
+    proxy_pass http://127.0.0.1:18080;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 3600s;
+}
+```
+
+`proxy_pass` 的端口后不要添加 `/`，这样上游会收到完整的 `/aiyoloapi/...` 路径。本地直接访问 `http://127.0.0.1:18080/admin/` 与线上使用相同的 API 契约。
+
+只代理单个 API 路径时也可以使用下面的精简规则：
+
+```nginx
+location /aiyoloapi/ {
+    proxy_pass http://127.0.0.1:18080;
     proxy_http_version 1.1;
     proxy_set_header Upgrade $http_upgrade;
     proxy_set_header Connection "upgrade";

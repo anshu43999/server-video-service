@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: saas-prod
+
+resources:
+  - storage.yaml
+  - mediamtx.yaml
+  - video-service.yaml
+  - model-converter.yaml
+  - services.yaml
+  - ingress.yaml
+
+images:
+  - name: aiyolo-video-service
+    newName: 192.168.0.171:30002/saas-prod/aiyolo-video-service
+    newTag: CHANGE_ME
+  - name: aiyolo-model-converter
+    newName: 192.168.0.171:30002/saas-prod/aiyolo-model-converter
+    newTag: CHANGE_ME

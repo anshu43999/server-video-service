@@ -12,7 +12,7 @@ from typing import Any, Literal
 from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -51,6 +51,7 @@ from .alerts.disposition import alert_disposition_store
 from .alerts.verification import AlertVerificationStore, alert_verification_store
 from .alerts.delivery import AlertDeliveryService
 from .alerts.runtime import ServerAlertRuntime
+from .alert_evidence import AlertEvidenceStore, EvidenceStorageError
 
 streams: dict[str, StreamSession] = {}
 stream_config_store = StreamConfigStore(database if database.enabled else None)
@@ -69,12 +70,14 @@ calibration_catalog = CalibrationDatasetCatalog(
 )
 alert_verification_store.configure_database(database if database.enabled else None)
 alert_delivery = AlertDeliveryService(database_manager=database if database.enabled else None)
+alert_evidence_store = AlertEvidenceStore.from_settings(settings)
 server_alert_runtime = ServerAlertRuntime(
     model_provider=model_catalog.get,
     parameter_store=model_parameter_store,
     event_store=alert_disposition_store,
     delivery_service=alert_delivery,
     evidence_root=model_catalog.project_root / "evidence" / "server-alerts",
+    evidence_store=alert_evidence_store,
 )
 dashboard_stats = DashboardStatsService(
     database if database.enabled else None,
@@ -332,6 +335,7 @@ async def lifespan(_: FastAPI):
     # start when an artifact is missing or changed; never silently fall back.
     model_catalog.validate_startup()
     await asyncio.to_thread(database.verify_schema)
+    await asyncio.to_thread(alert_evidence_store.validate)
     try:
         conversion_service.start()
         await restore_stream_sessions()
@@ -1157,8 +1161,24 @@ async def ingest_mobile_alert(request: MobileAlertIngestRequest, _: None = Depen
             raise HTTPException(status_code=413, detail={
                 "code": "evidence_too_large", "message": "snapshotDataUrl exceeds the 8 MB limit",
             })
-        # A data URL is portable and does not expose the App's private filesystem.
-        evidence["snapshotUri"] = snapshot_data_url
+        if alert_evidence_store.enabled:
+            try:
+                evidence.update(await asyncio.to_thread(
+                    alert_evidence_store.store_data_url,
+                    request.eventId,
+                    snapshot_data_url,
+                ))
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail={
+                    "code": "invalid_evidence", "message": str(exc),
+                }) from exc
+            except EvidenceStorageError as exc:
+                raise HTTPException(status_code=503, detail={
+                    "code": "evidence_storage_unavailable", "message": str(exc),
+                }) from exc
+        else:
+            # Local development compatibility; production requires MinIO.
+            evidence["snapshotUri"] = snapshot_data_url
     evidence.pop("localPath", None)
     mobile_origin = request.origin or (
         "MOBILE_IMAGE"
@@ -1248,6 +1268,19 @@ async def get_alert(event_id: str, _: None = Depends(require_alert_view)):
 
 @app.get("/aiyoloapi/alerts/{event_id}/evidence")
 async def get_server_alert_evidence(event_id: str, _: None = Depends(require_alert_view)):
+    try:
+        event = alert_disposition_store.get(event_id)
+    except KeyError:
+        event = None
+    evidence = (event or {}).get("evidence") or {}
+    if evidence.get("objectStorage"):
+        try:
+            body = await asyncio.to_thread(alert_evidence_store.read, evidence)
+        except EvidenceStorageError as exc:
+            raise HTTPException(status_code=503, detail={
+                "code": "evidence_storage_unavailable", "message": str(exc),
+            }) from exc
+        return Response(content=body.content, media_type=body.content_type)
     path = server_alert_runtime.evidence_path(event_id)
     if path is None:
         raise HTTPException(status_code=404, detail={"code": "evidence_not_found", "message": "alert evidence not found"})

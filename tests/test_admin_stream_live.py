@@ -31,7 +31,7 @@ class AdminStreamLiveContractTests(unittest.TestCase):
         self.assertIn("updateSelectedStreamConfig({enabled:desired})", self.js)
         self.assertIn("if(!saved)input.checked=previous", self.js)
         self.assertIn("body?.detail?.message", self.js)
-        self.assertIn("app.js?v=20260917-stream-preview-stale-frame", self.html)
+        self.assertIn('src="/admin/app.js?v=20260929-live-first"', self.html)
 
     def test_live_preview_uses_authenticated_same_origin_mjpeg(self):
         self.assertIn("`/aiyoloapi/streams/${encodeURIComponent(stream.stream_id)}/mjpeg?connection=${Date.now()}`", self.js)

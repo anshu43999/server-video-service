@@ -45,6 +45,14 @@ class Settings(BaseSettings):
     model_signing_private_key_path: str | None = None
     database_url: str | None = None
     database_connect_timeout_seconds: int = 5
+    minio_endpoint: str | None = None
+    minio_access_key: str | None = None
+    minio_secret_key: str | None = None
+    minio_bucket: str = "aiyolo-alerts"
+    minio_secure: bool = True
+    minio_region: str | None = None
+    minio_alert_prefix: str = "alerts"
+    minio_auto_create_bucket: bool = False
     calibration_root: str = "calibration"
     calibration_max_upload_bytes: int = 512 * 1024 * 1024
     calibration_max_expanded_bytes: int = 2 * 1024 * 1024 * 1024

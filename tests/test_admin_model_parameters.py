@@ -43,7 +43,7 @@ class AdminModelParameterViewTests(unittest.TestCase):
         self.assertIn("querySelectorAll('[data-model-activate]')", self.conversion_js)
         self.assertNotIn("querySelectorAll('[data-model-id]')", self.conversion_js)
         self.assertIn("if(!state.demo)await refreshLiveModels()", self.html)
-        self.assertIn("conversion.js?v=20260921-conversion-progress", self.html)
+        self.assertIn('src="/admin/conversion.js?v=20260923-model-family-dropdown"', self.html)
 
     def test_detection_terms_have_accessible_explanations(self):
         for marker in (

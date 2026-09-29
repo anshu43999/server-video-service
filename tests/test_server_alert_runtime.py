@@ -22,7 +22,40 @@ class CaptureDelivery:
         return ["delivery-test"]
 
 
+class CaptureEvidenceStore:
+    enabled = True
+
+    def __init__(self):
+        self.saved = []
+
+    def store_bytes(self, event_id, content, content_type):
+        self.saved.append((event_id, content, content_type))
+        return {
+            "snapshotUri": f"/aiyoloapi/alerts/{event_id}/evidence",
+            "objectStorage": {"provider": "minio", "objectKey": f"alerts/{event_id}.jpg"},
+        }
+
+
 class ServerAlertRuntimeTests(unittest.TestCase):
+    def test_server_evidence_uses_object_storage_when_configured(self):
+        with tempfile.TemporaryDirectory() as temp:
+            evidence = CaptureEvidenceStore()
+            runtime = ServerAlertRuntime(
+                model_provider=lambda model_id: MODEL,
+                parameter_store=ModelParameterStore(Path(temp) / "profiles.json"),
+                event_store=AlertDispositionStore(),
+                delivery_service=CaptureDelivery(),
+                evidence_root=Path(temp) / "evidence",
+                evidence_store=evidence,
+            )
+            reference = runtime._save_evidence(
+                "evt-server-minio", np.zeros((10, 10, 3), dtype=np.uint8)
+            )
+            self.assertEqual(reference["objectStorage"]["provider"], "minio")
+            self.assertEqual(evidence.saved[0][0], "evt-server-minio")
+            self.assertEqual(evidence.saved[0][2], "image/jpeg")
+            self.assertFalse((Path(temp) / "evidence").exists())
+
     def test_model_defaults_generate_confirmed_event_end_it_and_save_evidence(self):
         with tempfile.TemporaryDirectory() as temp:
             events = AlertDispositionStore()

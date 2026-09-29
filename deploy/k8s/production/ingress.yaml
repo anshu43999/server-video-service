@@ -1,0 +1,53 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aiyolo-video-service
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 600m
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [CHANGE_ME_PUBLIC_HOST]
+      secretName: CHANGE_ME_TLS_SECRET
+  rules:
+    - host: CHANGE_ME_PUBLIC_HOST
+      http:
+        paths:
+          - path: /aiyoloapi
+            pathType: Prefix
+            backend:
+              service:
+                name: aiyolo-video-service
+                port:
+                  name: http
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: aiyolo-video-service
+                port:
+                  name: http
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: aiyolo-video-service
+                port:
+                  name: http
+          - path: /openapi.json
+            pathType: Exact
+            backend:
+              service:
+                name: aiyolo-video-service
+                port:
+                  name: http
+          - path: /healthz
+            pathType: Exact
+            backend:
+              service:
+                name: aiyolo-video-service
+                port:
+                  name: http

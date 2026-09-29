@@ -68,7 +68,13 @@ case "${action}" in
   up)
     compose config --quiet
     compose build --pull video-service model-converter
-    compose up -d --remove-orphans
+    compose up -d --remove-orphans --wait --wait-timeout 300
+    compose ps
+    ;;
+  pull-up)
+    compose config --quiet
+    compose pull video-service model-converter mediamtx
+    compose up -d --remove-orphans --no-build --wait --wait-timeout 300
     compose ps
     ;;
   status)
@@ -76,6 +82,11 @@ case "${action}" in
     ;;
   logs)
     compose logs --tail 200 -f "${2:-video-service}"
+    ;;
+  smoke)
+    compose exec -T video-service python -m app.container_healthcheck
+    compose exec -T video-service python -c 'from app.alert_evidence import AlertEvidenceStore; from app.config import settings; store=AlertEvidenceStore.from_settings(settings); store.validate(); print("MINIO_OK", settings.minio_bucket)'
+    compose exec -T video-service python -c 'import os,urllib.request; name=os.environ.get("CONVERSION_REMOTE_TOKEN_ENV","AIYOLO_REMOTE_CONVERSION_TOKEN"); url=os.environ["CONVERSION_REMOTE_ENDPOINT"].rstrip("/")+"/v1/health"; request=urllib.request.Request(url,headers={"Authorization":"Bearer "+os.environ[name]}); response=urllib.request.urlopen(request,timeout=10); print("CONVERTER_OK",response.status)'
     ;;
   backup-db)
     backup_dir="${PROJECT_ROOT}/backups"
@@ -104,8 +115,10 @@ Usage: bash deploy/deploy.sh <command>
 Commands:
   config             validate Compose and required environment values
   up                 build and start the production stack
+  pull-up            pull immutable registry images and start without building
   status             show container and health state
   logs [service]     follow recent logs (default: video-service)
+  smoke              verify application, MinIO and converter connectivity
   backup-db          create a PostgreSQL custom-format backup in backups/
   stop               stop containers without deleting persistent volumes
 EOF

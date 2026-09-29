@@ -8,3 +8,4 @@ cryptography>=43,<47
 SQLAlchemy>=2.0,<3
 alembic>=1.14,<2
 psycopg[binary]>=3.2,<4
+minio>=7.2,<8

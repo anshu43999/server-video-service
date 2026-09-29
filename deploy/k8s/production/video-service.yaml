@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiyolo-video-service
+  labels:
+    app.kubernetes.io/name: aiyolo-video-service
+    app.kubernetes.io/part-of: aiyolo
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: aiyolo-video-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: aiyolo-video-service
+        app.kubernetes.io/part-of: aiyolo
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: seed-model-volume
+          image: aiyolo-video-service:production
+          command: [/bin/sh, -c]
+          args:
+            - cp -an /app/models/. /seed-target/ || true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: model-data
+              mountPath: /seed-target
+            - name: temp
+              mountPath: /tmp
+      containers:
+        - name: video-service
+          image: aiyolo-video-service:production
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: aiyolo-runtime-config
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: aiyolo-runtime-secret
+                  key: DATABASE_URL
+            - name: MINIO_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: aiyolo-runtime-secret
+                  key: MINIO_ENDPOINT
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aiyolo-runtime-secret
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aiyolo-runtime-secret
+                  key: MINIO_SECRET_KEY
+            - name: AIYOLO_REMOTE_CONVERSION_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: aiyolo-runtime-secret
+                  key: CONVERTER_TOKEN
+            - name: CONVERSION_REMOTE_ENDPOINT
+              value: http://aiyolo-model-converter:8090
+            - name: CONVERSION_REMOTE_TOKEN_ENV
+              value: AIYOLO_REMOTE_CONVERSION_TOKEN
+            - name: CONVERSION_REMOTE_ALLOW_INSECURE_HTTP
+              value: "true"
+            - name: CONVERSION_VERIFIER_PYTHON
+              value: /usr/local/bin/python
+            - name: MEDIAMTX_RTSP_URL
+              value: rtsp://aiyolo-mediamtx:8554
+            - name: MEDIAMTX_API_URL
+              value: http://aiyolo-mediamtx:9997
+          resources:
+            requests:
+              cpu: "1"
+              memory: 2Gi
+            limits:
+              cpu: "4"
+              memory: 8Gi
+          startupProbe:
+            exec:
+              command: [python, -m, app.container_healthcheck]
+            periodSeconds: 5
+            timeoutSeconds: 4
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command: [python, -m, app.container_healthcheck]
+            periodSeconds: 10
+            timeoutSeconds: 4
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: model-data
+              mountPath: /app/models
+            - name: calibration-data
+              mountPath: /app/calibration
+            - name: temp
+              mountPath: /tmp
+            - name: model-signing-key
+              mountPath: /app/model-signing
+              readOnly: true
+      volumes:
+        - name: model-data
+          persistentVolumeClaim:
+            claimName: aiyolo-model-data
+        - name: calibration-data
+          persistentVolumeClaim:
+            claimName: aiyolo-calibration-data
+        - name: temp
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: model-signing-key
+          secret:
+            secretName: aiyolo-model-signing
+            optional: true
+            defaultMode: 0400

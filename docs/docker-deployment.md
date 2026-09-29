@@ -1,6 +1,6 @@
 # Linux Docker 部署
 
-根目录唯一的 `compose.yml` 编排 `video-service`、独立 `model-converter` 和 MediaMTX 1.20.1；PostgreSQL 由云厂商托管，通过 `DATABASE_URL` 连接，不随应用容器启停或重建。支持具备 Docker Engine 与 Compose 插件的主流 Linux；CentOS Stream 9、Rocky Linux 9、AlmaLinux 9 和 Ubuntu 共用同一套文件。CentOS Linux 7 已于 2024-06-30 结束维护，不作为生产部署目标。
+根目录唯一的 `compose.yml` 编排 `video-service`、独立 `model-converter` 和 MediaMTX 1.20.1；PostgreSQL 由云厂商托管，通过 `DATABASE_URL` 连接，告警证据图片写入公司 MinIO，二者都不随应用容器启停或重建。支持具备 Docker Engine 与 Compose 插件的主流 Linux；CentOS Stream 9、Rocky Linux 9、AlmaLinux 9 和 Ubuntu 共用同一套文件。CentOS Linux 7 已于 2024-06-30 结束维护，不作为生产部署目标。
 
 ## 1. 主机准备
 
@@ -35,6 +35,8 @@ chmod 0600 .env
 
 - `DATABASE_URL` 填云数据库提供的 PostgreSQL 连接信息，驱动格式为 `postgresql+psycopg://...`；密码中的保留字符需要百分号编码。生产连接应启用 TLS，优先使用云厂商 CA 和 `sslmode=verify-full`；`sslmode=require` 至少保证加密传输。
 - 为应用创建最小权限的独立数据库账号，不使用云数据库管理员账号。配置云数据库网络白名单/安全组，只允许部署主机出口地址连接；不要将数据库端口向公网开放。
+- `MINIO_ENDPOINT` 填 S3 API 的 `host:port`，不填管理控制台端口；Access Key 和 Secret Key 使用项目专用服务账号。当前本地联调已验证私有 Bucket `yolo-system` 和 `alerts` 前缀可正常上传、读取，生产可以继续使用该专用 Bucket；如果它同时承载其他系统，应改建独立 `aiyolo-alerts` Bucket。
+- 公司 MinIO 当前如果仅在可信内网提供 HTTP，可暂时设置 `MINIO_SECURE=false`；公网或跨网络生产链路应启用可信 TLS，并改为 `true`。
 - 在云数据库控制台启用自动备份和时间点恢复（PITR），并设置符合业务要求的保留周期。部署主机另需安装与 PostgreSQL 版本兼容的 `pg_dump` 客户端，供 `backup-db` 生成逻辑备份。
 - 不要在生产 `.env` 中设置 `ADMIN_TOKEN` 或 `MOBILE_TOKEN`。生产环境通过 `/aiyoloapi/auth/setup`、`/aiyoloapi/auth/login` 签发动态账号 Session；容器入口会拒绝误配置的静态客户端令牌。
 - `MEDIA_PUBLIC_HOST` 填 App 实际可访问的服务器 DNS 名或 IP，不能填 `127.0.0.1`。
@@ -45,6 +47,7 @@ chmod 0600 .env
 - 校准集元数据写入 PostgreSQL，图片、生成的 YAML 和内容哈希写入 `calibration-data` 命名卷。视频服务读写该卷，转换容器只读挂载到 `/calibration`，无需在宿主机手工创建 `dataset.yaml`。
 - `CALIBRATION_MAX_UPLOAD_BYTES`、`CALIBRATION_MAX_EXPANDED_BYTES` 和 `CALIBRATION_MAX_FILES` 分别限制 ZIP 大小、解压后总量和文件数。
 - `CONVERTER_CPUS`、`CONVERTER_MEMORY_LIMIT`、`CONVERTER_TMPFS_SIZE` 按服务器资源和模型大小调整，避免转换挤占实时视频推理。
+- `VIDEO_SERVICE_CPUS`、`VIDEO_SERVICE_MEMORY_LIMIT` 和三个 `*_PIDS_LIMIT` 控制容器资源上限，避免视频解码、转换子进程或异常连接耗尽整台主机。
 
 后端容器固定使用 UID/GID `10001`，转换容器固定使用 UID/GID `10002`。外部模型仍需为对应 UID/GID 提供只读权限；CentOS/RHEL 上 Compose 的 `:Z` 会设置 SELinux 挂载标签。校准集由后台写入 Docker 命名卷，不依赖宿主机 SELinux 路径标签。
 
@@ -82,9 +85,10 @@ cd /opt/aiyolo/server-video-service
 bash deploy/deploy.sh config
 bash deploy/deploy.sh up
 bash deploy/deploy.sh status
+bash deploy/deploy.sh smoke
 ```
 
-预期三个 Compose 服务最终均为 `healthy`。`video-service` 的 `/healthz` 同时检查数据库连接；云数据库实例状态、备份策略和网络连接还应在云厂商控制台单独确认。从服务器本机验证：
+`up` 会在本机重新构建业务镜像并等待三个服务健康；已经由 CI 构建并推送不可变镜像时，使用 `bash deploy/deploy.sh pull-up` 拉取镜像并禁止本机重新构建。预期三个 Compose 服务最终均为 `healthy`，`smoke` 还会验证应用健康、MinIO Bucket 和内部转换服务。`video-service` 的 `/healthz` 同时检查数据库连接；云数据库实例状态、备份策略和网络连接还应在云厂商控制台单独确认。从服务器本机验证：
 
 ```bash
 curl --fail http://127.0.0.1:18080/healthz
@@ -174,7 +178,7 @@ bash deploy/deploy.sh backup-db
 bash deploy/deploy.sh backup-db
 # 修改 .env 中的 VIDEO_SERVICE_IMAGE 和 MODEL_CONVERTER_IMAGE
 bash deploy/deploy.sh config
-bash deploy/deploy.sh up
+bash deploy/deploy.sh pull-up
 ```
 
 升级后检查 `/healthz`、转换服务健康状态、登录、模型目录、持久视频流恢复、真实转换和真实播放。应用回滚时把两个镜像变量改回上一标签并重新执行 `up`。数据库迁移默认只向前执行；若新版本已执行不兼容迁移，必须进入维护窗口，使用升级前备份恢复数据库后再启动旧镜像。禁止只降级应用、继续使用未经确认兼容的新数据库结构。

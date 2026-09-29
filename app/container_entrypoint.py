@@ -40,6 +40,10 @@ def validate_environment(environ: Mapping[str, str]) -> list[str]:
     if not database_url.startswith(("postgresql://", "postgresql+psycopg://")):
         errors.append("DATABASE_URL must be a PostgreSQL URL")
 
+    for name in ("MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_BUCKET"):
+        if not environ.get(name, "").strip():
+            errors.append(f"{name} is required in production")
+
     for name in ("ADMIN_TOKEN", "MOBILE_TOKEN"):
         if environ.get(name, "").strip():
             errors.append(f"{name} must not be set in production; use account sessions")

@@ -14,12 +14,13 @@ class ServerAlertRuntime:
     """Evaluate model camera defaults and persist only confirmed event state."""
 
     def __init__(self, model_provider: Callable[[str], dict[str, Any]], parameter_store,
-                 event_store, delivery_service, evidence_root: Path) -> None:
+                 event_store, delivery_service, evidence_root: Path, evidence_store=None) -> None:
         self.model_provider = model_provider
         self.parameter_store = parameter_store
         self.event_store = event_store
         self.delivery_service = delivery_service
         self.evidence_root = evidence_root
+        self.evidence_store = evidence_store
         self._lock = threading.RLock()
         self._candidates: dict[str, dict[str, int]] = {}
         self._active: dict[str, str] = {}
@@ -52,21 +53,24 @@ class ServerAlertRuntime:
                 self._active[key] = event["eventId"]
         self._hydrated_sources.add(source_id)
 
-    def _save_evidence(self, event_id: str, frame: Any) -> str | None:
+    def _save_evidence(self, event_id: str, frame: Any) -> dict[str, Any]:
         if frame is None:
-            return None
+            return {}
         ok, encoded = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
         if not ok:
-            return None
+            return {}
+        content = encoded.tobytes()
+        if self.evidence_store is not None and self.evidence_store.enabled:
+            return self.evidence_store.store_bytes(event_id, content, "image/jpeg")
         self.evidence_root.mkdir(parents=True, exist_ok=True)
         target = self.evidence_root / f"{event_id}.jpg"
         temporary = target.with_name(target.name + "." + uuid.uuid4().hex + ".tmp")
         try:
-            temporary.write_bytes(encoded.tobytes())
+            temporary.write_bytes(content)
             temporary.replace(target)
         finally:
             temporary.unlink(missing_ok=True)
-        return f"/aiyoloapi/alerts/{event_id}/evidence"
+        return {"snapshotUri": f"/aiyoloapi/alerts/{event_id}/evidence"}
 
     def evidence_path(self, event_id: str) -> Path | None:
         if not event_id.startswith("evt-server-"):
@@ -125,7 +129,7 @@ class ServerAlertRuntime:
                     self._candidates.pop(key, None)
                     continue
                 event_id = self._event_id(key, candidate["startedAtUs"])
-                snapshot_uri = self._save_evidence(event_id, frame)
+                evidence = self._save_evidence(event_id, frame)
                 event = {
                     "eventId": event_id,
                     "origin": "SERVER_STREAM",
@@ -153,7 +157,7 @@ class ServerAlertRuntime:
                     },
                     "detectionResults": matches,
                     "model": {"modelId": model_id, "version": model.get("version")},
-                    "evidence": {"snapshotUri": snapshot_uri, "capturedAtUs": captured_at_us},
+                    "evidence": {**evidence, "capturedAtUs": captured_at_us},
                     "disposition": {"status": "OPEN", "actor": None, "actedAtUs": None},
                 }
                 registered = self.event_store.register(event)
