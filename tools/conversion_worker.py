@@ -20,6 +20,18 @@ import uuid
 from pathlib import Path
 
 
+def replace_with_retry(source: Path, target: Path) -> None:
+    """Retry transient Windows sharing/permission failures during atomic replace."""
+    for attempt in range(6):
+        try:
+            source.replace(target)
+            return
+        except PermissionError:
+            if attempt == 5:
+                raise
+            time.sleep(min(0.05 * (2 ** attempt), 0.5))
+
+
 def write_progress(directory: Path, stage: str, message: str, progress: int | None = None) -> None:
     payload = {
         "stage": stage,
@@ -31,12 +43,13 @@ def write_progress(directory: Path, stage: str, message: str, progress: int | No
     temporary = target.with_name(target.name + "." + uuid.uuid4().hex + ".tmp")
     try:
         temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-        temporary.replace(target)
+        replace_with_retry(temporary, target)
     finally:
         temporary.unlink(missing_ok=True)
 
 
 def environment() -> dict:
+    configure_cpu_environment()
     import ultralytics
     import torch
     packages = {name: importlib.metadata.version(name) for name in ("ultralytics", "torch")}
@@ -50,11 +63,17 @@ def environment() -> dict:
             mobile, reason = True, "依赖已就绪；实际模型导出结果仍需独立验证"
         except ImportError as exc:
             reason = f"缺少移动端转换依赖：{exc}"
-    return {"ok": True, "python": platform.python_version(), "platform": platform.system(),
+    return {"ok": True, "device": "cpu", "python": platform.python_version(), "platform": platform.system(),
             "packages": packages, "server_available": True, "mobile_available": mobile, "message": reason}
 
 
+def configure_cpu_environment() -> None:
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    os.environ["JAX_PLATFORMS"] = "cpu"
+
+
 def execute(action: str, directory: Path) -> dict:
+    configure_cpu_environment()
     if action == "check":
         write_progress(directory, "checking_environment", "正在检测 Python 与转换依赖")
         return environment()

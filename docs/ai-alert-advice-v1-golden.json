@@ -1,0 +1,66 @@
+{
+  "contractVersion": "1.0",
+  "normalization": [
+    {
+      "input": {"alertTypeId": " PPE_NO_HELMET ", "recognitionCategoryId": "head"},
+      "expected": {"alertTypeId": "PPE_NO_HELMET", "recognitionCategoryId": "HEAD"}
+    }
+  ],
+  "exactMatchCases": [
+    {"knowledge": ["PPE_NO_HELMET", "HEAD"], "request": ["ppe_no_helmet", "head"], "matched": true},
+    {"knowledge": ["PPE_NO_HELMET", "HEAD"], "request": ["PPE_NO_HELMET", "HELMET"], "matched": false},
+    {"knowledge": ["PPE_NO_HELMET", "HEAD"], "request": ["PPE_HELMET_OK", "HEAD"], "matched": false}
+  ],
+  "generated": {
+    "contractVersion": "1.0",
+    "generationId": "advice-0001",
+    "projectId": "project-a",
+    "eventId": "event-helmet-1",
+    "requestedBy": "account-operator",
+    "idempotencyKey": "11111111-1111-4111-8111-111111111111",
+    "retryOfGenerationId": null,
+    "status": "GENERATED",
+    "reasonCode": null,
+    "matchKey": {"alertTypeId": "PPE_NO_HELMET", "recognitionCategoryId": "HEAD"},
+    "advice": {
+      "title": "未佩戴安全帽处置建议（模拟）",
+      "steps": [
+        {"stepId": "pause-work", "order": 1, "title": "提醒并暂停相关作业", "instruction": "请现场人员先离开可能存在坠物或碰撞风险的作业区域。"}
+      ],
+      "cautions": ["请结合现场条件和适用制度核实；本建议不构成违规认定。"]
+    },
+    "references": [
+      {
+        "referenceId": "mock-ppe-management-v1",
+        "documentTitle": "个人防护用品管理制度（模拟资料）",
+        "documentNumber": null,
+        "documentVersion": "demo-v1",
+        "chapter": null,
+        "clauseId": "模拟条款 PPE-01",
+        "excerpt": "进入指定作业区域时，应按现场要求正确佩戴适用的个人防护用品。",
+        "sourceName": "AI YOLO 演示模拟知识库",
+        "sourceType": "MOCK_KNOWLEDGE_BASE",
+        "effectiveDate": null
+      }
+    ],
+    "knowledgeEntryId": "mock-ppe-no-helmet-head",
+    "knowledgeRevision": 1,
+    "matchExplanation": "按告警类型和识别类别精确匹配的模拟参考内容。",
+    "retrievalProvider": "SIMULATED_KNOWLEDGE_BASE",
+    "generationProvider": "SIMULATED_LLM",
+    "sourceNotice": "本结果来自模拟知识资料与模拟生成器，仅供演示和人工处置参考。",
+    "error": null,
+    "createdAt": "2026-10-27T10:00:00+08:00",
+    "completedAt": "2026-10-27T10:00:01+08:00"
+  },
+  "noMatch": {"status": "NO_MATCH", "reasonCode": "KNOWLEDGE_NOT_MATCHED", "advice": null, "references": []},
+  "eventKeyUnavailable": {"status": "NO_MATCH", "reasonCode": "EVENT_MATCH_KEY_UNAVAILABLE", "matchKey": null, "advice": null, "references": []},
+  "partial": {
+    "status": "PARTIAL",
+    "reasonCode": "GENERATION_FAILED_REFERENCES_AVAILABLE",
+    "advice": null,
+    "referencesMustBePreserved": true,
+    "error": {"stage": "GENERATING", "code": "SIMULATED_GENERATOR_FAILURE", "retryable": true}
+  },
+  "forbiddenFields": ["evidenceBytes", "snapshotDataUrl", "localPath", "objectStorageCredentials", "internalPrompt"]
+}

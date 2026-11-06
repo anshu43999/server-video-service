@@ -30,7 +30,7 @@ class BusinessPersistenceTests(unittest.TestCase):
                 "subjectKind": "frame", "requires": ["BOX"]}
         self.assertEqual(registry.upsert(rule, actor="one")["ruleVersion"], 1)
         self.assertTrue(registry.bind("ppe-head", "camera:1", ["BOX"], actor="two")["accepted"])
-        self.assertEqual(registry.upsert({**rule, "enabled": False}, actor="three")["ruleVersion"], 2)
+        self.assertEqual(registry.upsert({**rule, "enabled": False}, actor="three")["ruleVersion"], 3)
 
         reopened = RuleRegistry(DatabaseManager(self.database.url))
         self.assertFalse(reopened.get("ppe-head")["enabled"])

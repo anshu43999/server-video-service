@@ -1,0 +1,29 @@
+{
+  "paths": {
+    "/aiyoloapi/models/{model_id}/versions/{version}/publish": {"post": {"request": "ModelPublishRequest", "success": [200]}},
+    "/aiyoloapi/projects/{project_id}/scenes": {"get": {"request": null, "success": [200]}, "post": {"request": "SceneCreate", "success": [201]}},
+    "/aiyoloapi/projects/{project_id}/scenes/{scene_id}": {"get": {"request": null, "success": [200]}, "patch": {"request": "ScenePatch", "success": [200]}},
+    "/aiyoloapi/projects/{project_id}/scenes/{scene_id}/models": {"put": {"request": "SceneModels", "success": [200]}},
+    "/aiyoloapi/projects/{project_id}/scenes/{scene_id}/plans": {"put": {"request": "ScenePlans", "success": [200]}},
+    "/aiyoloapi/projects/{project_id}/scenes/{scene_id}/plans/{plan_id}": {"get": {"request": null, "success": [200]}},
+    "/aiyoloapi/projects/{project_id}/scenes/{scene_id}/installation": {"get": {"request": null, "success": [200]}},
+    "/aiyoloapi/projects/{project_id}/scenes/{scene_id}/installation/prepare": {"post": {"request": "SceneInstallationRequest", "success": [200]}},
+    "/aiyoloapi/projects/{project_id}/scenes/{scene_id}/approval": {"post": {"request": "SceneApproval", "success": [200]}},
+    "/aiyoloapi/projects/{project_id}/scenes/{scene_id}/models/{model_id}/versions/{version}/artifacts/{artifact_id}/download": {"get": {"request": null, "success": [200]}},
+    "/aiyoloapi/projects/{project_id}/scenes/{scene_id}/resolve": {"post": {"request": "SceneResolution", "success": [200]}},
+    "/aiyoloapi/projects/{project_id}/scenes/{scene_id}/plans/{plan_id}/resolve": {"post": {"request": "ScenePlanResolution", "success": [200]}}
+  },
+  "schemas": {
+    "ModelPublishRequest": {"required": ["targets", "licenseApproved", "reason"], "fields": ["licenseApproved", "reason", "targets"], "enums": {"targets": ["pc", "mobile"]}},
+    "SceneCreate": {"required": ["sceneId", "name", "inputTypes", "models", "expectedRevision"], "fields": ["enabled", "expectedRevision", "inputTypes", "models", "name", "plans", "sceneId"], "enums": {"inputTypes": ["image", "video"]}},
+    "ScenePatch": {"required": ["expectedRevision"], "fields": ["enabled", "expectedRevision", "inputTypes", "name", "plans"], "enums": {"inputTypes": ["image", "video"]}},
+    "SceneModels": {"required": ["models", "expectedRevision"], "fields": ["expectedRevision", "models"], "enums": {}},
+    "SceneApproval": {"required": ["approved", "expectedRevision", "reason"], "fields": ["approved", "expectedRevision", "reason"], "enums": {}},
+    "SceneResolution": {"required": ["expectedRevision", "target", "inputType"], "fields": ["expectedRevision", "inputType", "target"], "enums": {"inputType": ["image", "video"], "target": ["pc", "mobile"]}},
+    "SceneMember": {"required": ["modelId", "version", "position"], "fields": ["execution", "inputTypes", "memberId", "modelId", "position", "target", "version"], "enums": {"execution": ["single", "sync", "async"], "inputTypes": ["image", "video"], "target": ["pc", "mobile"]}},
+    "ScenePlan": {"required": ["planId", "name", "inputTypes", "memberIds"], "fields": ["enabled", "execution", "inputTypes", "memberIds", "name", "planId"], "enums": {"execution": ["single", "sync", "async"], "inputTypes": ["image", "video"]}},
+    "ScenePlans": {"required": ["plans", "expectedRevision"], "fields": ["expectedRevision", "plans"], "enums": {}},
+    "ScenePlanResolution": {"required": ["planId", "expectedRevision", "target", "inputType"], "fields": ["clientContractVersion", "expectedRevision", "inputType", "planId", "supportedExecutionModes", "target"], "enums": {"inputType": ["image", "video"], "supportedExecutionModes": ["single", "sync", "async"], "target": ["pc", "mobile"]}},
+    "SceneInstallationRequest": {"required": ["expectedRevision", "target"], "fields": ["expectedRevision", "memberIds", "planId", "target"], "enums": {"target": ["pc", "mobile"]}}
+  }
+}

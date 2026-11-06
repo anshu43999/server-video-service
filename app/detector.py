@@ -88,13 +88,18 @@ def build_detections(
 class YoloDetector:
     """Lazy YOLO adapter. Importing the service does not require ultralytics."""
 
-    def __init__(self, model_path: str, confidence: float = 0.25, imgsz: int = 640, device: str = "auto", classes: list[str] | None = None, model_id: str | None = None):
+    def __init__(self, model_path: str, confidence: float = 0.25, imgsz: int = 640, device: str = "cpu", classes: list[str] | None = None, model_id: str | None = None, *, iou: float | None = None, max_detections: int | None = None, enabled_labels: list[str] | None = None):
         self.model_path = model_path
         self._catalog_model_id = model_id
         self.confidence = confidence
+        self.iou = iou
+        self.max_detections = max_detections
         self.imgsz = imgsz
-        self.device = None if device in ("", "auto") else device
+        # Retain the argument for old persisted/API settings; every model uses CPU.
+        self.device = "cpu"
         self.classes = classes
+        # Session-scoped runtime policy; never change the complete label mapping.
+        self.enabled_labels = None if enabled_labels is None else frozenset(enabled_labels)
         self._model: Any | None = None
         self._load_error: str | None = None
         self._last_provides: tuple[str, ...] = ()
@@ -143,14 +148,23 @@ class YoloDetector:
         if self._model is None:
             self._last_provides = ()
             return InferenceResult.unavailable(self._load_error or "model not loaded", width, height)
-        kwargs: dict[str, Any] = {"conf": self.confidence, "imgsz": self.imgsz, "verbose": False}
-        if self.device is not None:
-            kwargs["device"] = self.device
+        kwargs: dict[str, Any] = {"conf": self.confidence, "imgsz": self.imgsz, "verbose": False, "device": "cpu"}
+        if self.iou is not None:
+            kwargs["iou"] = self.iou
+        if self.max_detections is not None:
+            kwargs["max_det"] = self.max_detections
+        class_names = self.class_names
+        if self.enabled_labels is not None:
+            kwargs["classes"] = [index for index, label in enumerate(class_names) if label in self.enabled_labels]
         started_at = time.perf_counter()
-        results = self._model.predict(frame, **kwargs)
+        # Ultralytics applies classes after best-class decoding, before NMS/max_det.
+        # An explicitly empty selection must never become its default all-classes mode.
+        results = [] if kwargs.get("classes") == [] else self._model.predict(frame, **kwargs)
         elapsed_ms = (time.perf_counter() - started_at) * 1000
         class_names = self.class_names
         detections = build_detections(results[0], width, height, class_names) if results else ()
+        if self.enabled_labels is not None:
+            detections = tuple(item for item in detections if item.label in self.enabled_labels)
         provides = derive_provides(detections)
         self._last_provides = provides
         return InferenceResult(
@@ -171,9 +185,12 @@ class YoloDetector:
             "model_exists": path.exists(),
             "model_size_bytes": path.stat().st_size if path.exists() else None,
             "confidence": self.confidence,
+            "iou": self.iou,
+            "max_detections": self.max_detections,
             "imgsz": self.imgsz,
-            "device": self.device or "auto",
+            "device": "cpu",
             "classes": list(self.class_names),
+            "enabled_labels": None if self.enabled_labels is None else sorted(self.enabled_labels),
             "loaded": self._model is not None,
             "load_error": self._load_error,
             # 上一帧实际推导出的能力；没推理过时为空，不预先承诺。

@@ -1,0 +1,5 @@
+--find-links https://download.pytorch.org/whl/cpu/torch/
+--find-links https://download.pytorch.org/whl/cpu/torchvision/
+-c constraints-cpu.txt
+torch
+torchvision

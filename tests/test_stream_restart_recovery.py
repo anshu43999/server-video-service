@@ -1,8 +1,10 @@
 import asyncio
 import tempfile
 import unittest
+from contextlib import ExitStack
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
@@ -13,9 +15,21 @@ from app.config import settings
 from app.database import Base, DatabaseManager
 from app.main import app, streams
 from app.stream_config import StreamConfiguration, StreamConfigStore
+from app.project_model_assignments import ProjectModelAssignments
+from app.project_business import _memory_model_assignments
+from app.project_auth import set_memory_project, reset_memory_project_authorization_for_tests
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PROJECT_CONTEXT = SimpleNamespace(project_id="00000000-0000-0000-0000-000000000001")
+
+
+def resolved_stream_plan(project_id, scene_id, plan_id, revision):
+    return {"projectId": project_id, "sceneId": scene_id, "planId": plan_id, "revision": revision,
+            "execution": "single", "members": [{"modelId": "model-b", "version": "1.0.0", "target": "pc",
+                "parameterSnapshot": {"modelId": "model-b", "modelVersion": "1.0.0", "platform": "server",
+                                      "detection": {"confidenceThreshold": 0.47, "iouThreshold": 0.45,
+                                                    "maxDetections": 100}}}]}
 
 
 def config(
@@ -30,7 +44,11 @@ def config(
         display_name=f"Camera {stream_id}",
         source_type="rtsp" if source_url else "websocket",
         source_url=source_url,
-        model_id=None,
+        model_id="model-b",
+        model_version="1.0.0",
+        scene_id="safety",
+        plan_id="pc-live",
+        scene_revision=1,
         yolo_enabled=yolo_enabled,
         confidence=0.47,
         max_fps=13.0,
@@ -49,6 +67,26 @@ class StreamRestartRecoveryTests(unittest.TestCase):
         Base.metadata.create_all(self.database.engine)
         self.old_store = main_module.stream_config_store
         main_module.stream_config_store = StreamConfigStore(self.database)
+        set_memory_project(PROJECT_CONTEXT.project_id, "default")
+        self.addCleanup(reset_memory_project_authorization_for_tests)
+        assignment = {"modelId": "model-b", "modelVersion": "1.0.0", "enabled": True,
+                      "parameterPlatform": "server", "scenario": "test", "parameterSnapshot": {
+                          "modelId": "model-b", "modelVersion": "1.0.0", "platform": "server", "revision": 0,
+                          "detection": {"confidenceThreshold": 0.47, "iouThreshold": 0.45, "maxDetections": 100},
+                          "alertRules": []}}
+        self.patches = ExitStack()
+        self.addCleanup(self.patches.close)
+        self.patches.enter_context(patch.dict(_memory_model_assignments,
+                                              {(PROJECT_CONTEXT.project_id, "test"): assignment}, clear=True))
+        self.patches.enter_context(patch.object(main_module, "project_model_assignments",
+                     ProjectModelAssignments(None, main_module.model_catalog, main_module.model_parameter_store)))
+        self.patches.enter_context(patch.object(main_module, "_resolve_stream_plan", side_effect=resolved_stream_plan))
+        self.patches.enter_context(patch.object(main_module.model_catalog, "resolve_server_model",
+                                                return_value=({"modelId": "model-b", "version": "1.0.0"}, ROOT / "models" / "model-b.pt")))
+        self.patches.enter_context(patch.object(main_module.project_model_assignments, "snapshot", return_value={
+            "detection": {"confidenceThreshold": 0.47, "iouThreshold": 0.45, "maxDetections": 100},
+            "alertRules": [], "modelVersion": "1.0.0", "platform": "server", "revision": 0,
+        }))
 
     def tearDown(self):
         async def close_streams():
@@ -64,8 +102,10 @@ class StreamRestartRecoveryTests(unittest.TestCase):
     def test_restart_restores_only_enabled_stream_and_keeps_parameters(self):
         main_module.stream_config_store.create(config("enabled", enabled=True, yolo_enabled=True))
         main_module.stream_config_store.create(config("disabled", enabled=False))
+        before = main_module.stream_config_store.list_all()
 
-        with patch("app.detector.YoloDetector._load"):
+        with patch("app.detector.YoloDetector._load"), patch.object(main_module.model_catalog, "resolve_server_model", return_value=(
+            {"modelId": "model-b", "version": "1.0.0"}, ROOT / "models" / "model-b.pt")):
             asyncio.run(main_module.restore_stream_sessions())
 
         self.assertIn("enabled", streams)
@@ -75,8 +115,11 @@ class StreamRestartRecoveryTests(unittest.TestCase):
         self.assertEqual(restored.detector.confidence, 0.47)
         self.assertEqual(restored.max_fps, 13.0)
         self.assertFalse(restored.overlay_enabled)
+        self.assertEqual("1.0.0", restored.model_version)
+        self.assertEqual(before, main_module.stream_config_store.list_all())
+        self.assertFalse(hasattr(restored, "publisher"))
 
-        listed = asyncio.run(main_module.list_streams(None))
+        listed = asyncio.run(main_module.list_streams(PROJECT_CONTEXT))
         by_id = {item["stream_id"]: item for item in listed}
         self.assertTrue(by_id["enabled"]["runtime_available"])
         self.assertEqual(by_id["enabled"]["configuration_state"], "enabled")
@@ -115,21 +158,20 @@ class StreamRestartRecoveryTests(unittest.TestCase):
         main_module.stream_config_store.create(config("offline", enabled=False))
         updated = asyncio.run(main_module.update_stream_config(
             "offline",
-            main_module.StreamConfigRequest(confidence=0.63, display_name="Offline Camera"),
+            main_module.StreamConfigRequest(display_name="Offline Camera"),
+            PROJECT_CONTEXT,
         ))
-        self.assertEqual(updated["confidence"], 0.63)
+        self.assertEqual(updated["confidence"], 0.47)
         self.assertFalse(updated["runtime_available"])
 
-        with patch.object(main_module.model_catalog, "resolve_server_model", return_value=(
-            {"modelId": "model-b", "name": "Model B"}, ROOT / "models" / "model-b.pt",
-        )), patch.object(main_module.model_catalog, "get", return_value={"modelId": "model-b", "name": "Model B"}):
+        with patch.object(main_module.model_catalog, "get", return_value={"modelId": "model-b", "name": "Model B", "version": "1.0.0"}):
             bound = asyncio.run(main_module.bind_stream_model(
-                "offline", main_module.StreamModelRequest(model_id="model-b")
+                "offline", main_module.StreamModelRequest(sceneId="safety", planId="pc-live", sceneRevision=1), PROJECT_CONTEXT
             ))
         self.assertEqual(bound["model"]["modelId"], "model-b")
         self.assertEqual(main_module.stream_config_store.get("offline").model_id, "model-b")
 
-        asyncio.run(main_module.delete_stream("offline"))
+        asyncio.run(main_module.delete_stream("offline", PROJECT_CONTEXT))
         asyncio.run(main_module.restore_stream_sessions())
         self.assertIsNone(main_module.stream_config_store.get("offline"))
         self.assertNotIn("offline", streams)
@@ -140,13 +182,13 @@ class StreamRestartRecoveryTests(unittest.TestCase):
 
         for _ in range(2):
             disabled = asyncio.run(main_module.update_stream_config(
-                "cycle", main_module.StreamConfigRequest(enabled=False)
+                "cycle", main_module.StreamConfigRequest(enabled=False), PROJECT_CONTEXT
             ))
             self.assertFalse(disabled["enabled"])
             self.assertTrue(streams["cycle"].closed)
 
             enabled = asyncio.run(main_module.update_stream_config(
-                "cycle", main_module.StreamConfigRequest(enabled=True)
+                "cycle", main_module.StreamConfigRequest(enabled=True), PROJECT_CONTEXT
             ))
             self.assertTrue(enabled["enabled"])
             self.assertTrue(enabled["runtime_available"])
@@ -157,7 +199,7 @@ class StreamRestartRecoveryTests(unittest.TestCase):
         with patch("app.main._session_from_configuration", side_effect=RuntimeError("start failed")):
             with self.assertRaises(HTTPException) as raised:
                 asyncio.run(main_module.update_stream_config(
-                    "broken", main_module.StreamConfigRequest(enabled=True)
+                    "broken", main_module.StreamConfigRequest(enabled=True), PROJECT_CONTEXT
                 ))
         self.assertEqual(raised.exception.status_code, 503)
         self.assertFalse(main_module.stream_config_store.get("broken").enabled)
@@ -178,10 +220,15 @@ class StreamRestartRecoveryTests(unittest.TestCase):
         main_module.stream_config_store.create(StreamConfiguration(
             **{**bound.__dict__, "model_id": "protected-model"}
         ))
-        with self.assertRaises(HTTPException) as raised:
-            asyncio.run(main_module.uninstall_model("protected-model", None))
-        self.assertEqual(raised.exception.status_code, 409)
-        self.assertEqual(raised.exception.detail["streamIds"], ["bound-offline"])
+        removal = main_module._model_removal()
+        with patch.object(removal, "_release", return_value=({}, {"version": "1.0.0", "lifecycleRevision": 1})), \
+                patch.object(removal.assignments, "references", return_value=[]), \
+                patch.object(removal.scenes, "references", return_value=[]), \
+                patch.object(removal.catalog, "release_key", return_value="inactive"), \
+                patch.object(removal.catalog, "_resolve_active_reference", return_value=None):
+            impact = removal._impact("protected-model", None)
+        self.assertEqual(impact["dependentCounts"]["streams"], 1)
+        self.assertFalse(impact["safeToRemove"])
 
     def test_persisted_listing_still_requires_authentication(self):
         main_module.stream_config_store.create(config("protected", enabled=False))
@@ -194,10 +241,13 @@ class StreamRestartRecoveryTests(unittest.TestCase):
                 with TestClient(app) as client:
                     self.assertEqual(client.get("/aiyoloapi/streams").status_code, 401)
                     response = client.get(
-                        "/aiyoloapi/streams", headers={"X-Admin-Token": "restart-test-admin"}
+                        "/aiyoloapi/streams",
+                        headers={
+                            "X-Admin-Token": "restart-test-admin",
+                            "X-Project-Id": PROJECT_CONTEXT.project_id,
+                        },
                     )
-                    self.assertEqual(response.status_code, 200)
-                    self.assertEqual(response.json()[0]["stream_id"], "protected")
+                    self.assertEqual(response.status_code, 401)
         finally:
             settings.admin_token = old_admin
 

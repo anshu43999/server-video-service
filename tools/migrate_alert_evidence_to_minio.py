@@ -13,11 +13,12 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.alert_evidence import AlertEvidenceStore
+from app.alerts.disposition import public_training_entry
 from app.config import settings
 from app.database import (
     AlertEventRecord,
@@ -62,18 +63,26 @@ def migrate(
         raise ValueError("MinIO configuration is required unless --dry-run is used")
 
     scanned = candidates = migrated = feedback_updated = selected = 0
-    last_event_id: str | None = None
+    last_key: tuple[str, str] | None = None
     stop = False
     while not stop:
         with database.session() as session:
-            query = select(AlertEventRecord).order_by(AlertEventRecord.event_id).limit(batch_size)
-            if last_event_id is not None:
-                query = query.where(AlertEventRecord.event_id > last_event_id)
+            query = select(AlertEventRecord).order_by(
+                AlertEventRecord.project_id, AlertEventRecord.event_id
+            ).limit(batch_size)
+            if last_key is not None:
+                query = query.where(or_(
+                    AlertEventRecord.project_id > last_key[0],
+                    and_(
+                        AlertEventRecord.project_id == last_key[0],
+                        AlertEventRecord.event_id > last_key[1],
+                    ),
+                ))
             rows = session.scalars(query).all()
             if not rows:
                 break
             for row in rows:
-                last_event_id = row.event_id
+                last_key = (row.project_id, row.event_id)
                 scanned += 1
                 payload = deepcopy(dict(row.payload))
                 data_url = _inline_data_url(payload)
@@ -88,7 +97,8 @@ def migrate(
                     continue
 
                 assert store is not None
-                reference = store.store_data_url(row.event_id, data_url)
+                reference = store.store_data_url(row.event_id, data_url, row.project_id)
+                payload["projectId"] = row.project_id
                 evidence = dict(payload.get("evidence") or {})
                 evidence.pop("snapshotDataUrl", None)
                 if isinstance(evidence.get("snapshotUri"), str) and evidence["snapshotUri"].startswith("data:image/"):
@@ -99,6 +109,7 @@ def migrate(
 
                 feedback_rows = session.scalars(
                     select(FalsePositiveFeedbackRecord).where(
+                        FalsePositiveFeedbackRecord.project_id == row.project_id,
                         FalsePositiveFeedbackRecord.event_id == row.event_id
                     )
                 ).all()
@@ -106,6 +117,8 @@ def migrate(
                     updated = _replace_feedback_data_urls(
                         dict(feedback.payload), reference["snapshotUri"]
                     )
+                    updated.update(projectId=row.project_id, eventId=row.event_id)
+                    updated = public_training_entry(updated, row.project_id)
                     if updated != feedback.payload:
                         feedback.payload = updated
                         feedback_updated += 1

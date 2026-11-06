@@ -10,10 +10,10 @@
 
 ## 权限
 
-- `GET /aiyoloapi/alerts`、`GET /aiyoloapi/alerts/{eventId}` 和误报导出允许管理员或操作员动态 Session，
-  移动端可通过 `X-Video-Service-Token` 兼容头传递动态访问令牌。
-- `POST` 处置接口只允许管理员动态 Session。操作人从 `X-Operator-Id`（兼容
-  `X-Actor`）读取，不接受请求体中的 actor，避免伪造审计身份。
+- 当前正式路径为 `/aiyoloapi/projects/{projectId}/alerts/...`，查询、证据读取、
+  处置与导出均按项目成员及对应 capability 鉴权；旧无项目路径仅为兼容别名。
+- 处置要求 `PROJECT_ALERTS_DISPOSE`，操作者来自已鉴权上下文；请求体或
+  `X-Operator-Id` / `X-Actor` 不能替代会话身份，也不能绕过项目隔离。
 
 ## 管理后台告警中心
 
@@ -47,6 +47,18 @@ token/secret/password/authorization 等字段，并将 Windows、Unix 和 `file:
 路径转换为 `evidence/<basename>`；不会泄漏服务端工作目录。
 
 误报动作会将事件置为 `ENDED`，但保留原始事实字段和完整操作历史，便于审计。
+
+## M37-T05 证据引用与历史图片
+
+- 反馈持久化、反馈/API 元数据和训练导出不携带 data URL 或原始图片字节。
+  旧 API 引用按真实项目/事件改写为鉴权证据地址，并保留独立图片类型/版本。
+- 本地绝对路径变为便携引用，重复的 `evidence/evidence/` 被折叠；URL 的
+  用户信息、查询参数及 fragment 不进入反馈。便携路径不代表已完成物理迁移。
+- 无图时返回 `evidenceUnavailableReason`；图片晚于误报处置上传时，反馈更新为
+  可读取的独立图片引用。已知删除/过期原因不会被泛化成“未上传”。
+- 元数据脱敏不等于删除原始 backing：历史事件唯一的内联图片仍由鉴权图片
+  端点读取。历史对象迁移使用 `tools/migrate_alert_evidence_to_minio.py` 显式执行；
+  本次仅验证隔离 fixture，未对真实业务历史执行批量迁移或删除。
 
 ## 本地启动与迁移
 

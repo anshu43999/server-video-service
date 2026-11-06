@@ -1,29 +1,59 @@
 import importlib
 import tempfile
 import unittest
+from contextlib import ExitStack
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.model_parameters import ModelParameterStore
+from app.model_catalog import ModelCatalog
+from app.database import DatabaseManager
+import app.auth as auth_module
 
 
 main_module = importlib.import_module("app.main")
 ROOT = Path(__file__).resolve().parents[1]
-HELMET_MODEL_ID = "uploaded-7051800b60ad4c7080d6693367d9c0a9"
+HELMET_MODEL_ID = "parameter-test-model"
 
 
 class ModelParameterApiTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(dir=ROOT / ".test-convert")
         self.original_store = main_module.model_parameter_store
+        self.isolation = ExitStack()
+        self.addCleanup(self.isolation.close)
+        models_dir = Path(self.temp.name) / "models"
+        models_dir.mkdir()
+        artifact = models_dir / "parameter-test.pt"
+        artifact.write_bytes(b"parameter-test-model")
+        registry = models_dir / "registry.json"
+        registry.write_text(__import__('json').dumps({"activeServerModel": HELMET_MODEL_ID, "models": [{
+            "modelId": HELMET_MODEL_ID, "name": "Parameter test", "version": "1.0.0",
+            "scenario": "test", "purpose": "development", "runtime": "server-pt",
+            "format": "pt", "path": "models/parameter-test.pt", "sizeBytes": artifact.stat().st_size,
+            "sha256": __import__('hashlib').sha256(artifact.read_bytes()).hexdigest(),
+            "labels": ["head", "helmet"], "releaseEligible": False,
+            "artifacts": [{"artifactId": "server", "format": "pt", "platform": "server",
+                "path": "models/parameter-test.pt", "sizeBytes": artifact.stat().st_size,
+                "sha256": __import__('hashlib').sha256(artifact.read_bytes()).hexdigest()}],
+        }]}), encoding="utf-8")
+        self.isolation.enter_context(patch('app.main.model_catalog', ModelCatalog(registry)))
+        self.isolation.enter_context(patch('app.auth.database', DatabaseManager(None)))
+        self.isolation.enter_context(patch.dict(auth_module._memory_accounts, {}, clear=True))
+        self.isolation.enter_context(patch.dict(auth_module._memory_sessions, {}, clear=True))
         self.original_admin = settings.admin_token
         self.original_mobile = settings.mobile_token
         main_module.model_parameter_store = ModelParameterStore(Path(self.temp.name) / "profiles.json")
         settings.admin_token = None
         settings.mobile_token = None
         self.client = TestClient(main_module.app)
+        response = self.client.post('/aiyoloapi/auth/setup', json={
+            'username': 'parameter-admin', 'password': 'temporary-test-password',
+        })
+        self.assertEqual(response.status_code, 200)
 
     def tearDown(self):
         self.client.close()
@@ -34,8 +64,10 @@ class ModelParameterApiTests(unittest.TestCase):
 
     def test_get_returns_versioned_default_profile_for_catalog_clients(self):
         settings.mobile_token = "mobile-secret"
-        denied = self.client.get(f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters")
+        anonymous = TestClient(main_module.app)
+        denied = anonymous.get(f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters")
         self.assertEqual(denied.status_code, 401)
+        anonymous.close()
         response = self.client.get(
             f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters",
             headers={"X-Video-Service-Token": "mobile-secret"},
@@ -121,7 +153,9 @@ class ModelParameterApiTests(unittest.TestCase):
             "detection": profile["detection"],
             "alertRules": profile["alertRules"],
         }
-        self.assertEqual(self.client.put(f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters?platform=server", json=payload).status_code, 401)
+        anonymous = TestClient(main_module.app)
+        self.assertEqual(anonymous.put(f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters?platform=server", json=payload).status_code, 401)
+        anonymous.close()
         saved = self.client.put(
             f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters?platform=server",
             json=payload,
@@ -133,7 +167,9 @@ class ModelParameterApiTests(unittest.TestCase):
             headers={"X-Admin-Token": "admin-secret"},
         )
         self.assertEqual(saved.status_code, 200)
-        self.assertEqual(saved.json()["updatedBy"], "safety-admin")
+        account_id = self.client.get('/aiyoloapi/auth/me').json()['accountId']
+        self.assertEqual(saved.json()["updatedBy"], account_id)
+        self.assertNotEqual(saved.json()["updatedBy"], "safety-admin")
         self.assertEqual(stale.status_code, 409)
         self.assertEqual(stale.json()["detail"]["code"], "revision_conflict")
 
@@ -149,7 +185,7 @@ class ModelParameterApiTests(unittest.TestCase):
             f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters",
             json={"expectedRevision": 0, "detection": profile["detection"], "alertRules": profile["alertRules"]},
         )
-        reset = self.client.delete(f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters")
+        reset = self.client.delete(f"/aiyoloapi/models/{HELMET_MODEL_ID}/parameters?expectedRevision=1")
         self.assertEqual(rejected.status_code, 422)
         self.assertEqual(rejected.json()["detail"]["code"], "alert_label_mismatch")
         self.assertEqual(saved.status_code, 200)

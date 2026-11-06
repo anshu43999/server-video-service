@@ -1,0 +1,347 @@
+[
+  {
+    "entryId": "mock-ppe-no-helmet-head",
+    "alertTypeId": "PPE_NO_HELMET",
+    "recognitionCategoryId": "HEAD",
+    "status": "ACTIVE",
+    "title": "未佩戴安全帽现场核实与处置参考（模拟）",
+    "riskDescription": "安全帽模型将画面中的目标识别为 head，并由安全帽告警规则触发事件。该结果仅提示需核实头部防护，不表示已经确认未佩戴、人员身份或作业违规。",
+    "adviceTemplate": {
+      "title": "未佩戴安全帽处置建议（模拟）",
+      "steps": [
+        {
+          "stepId": "verify-context",
+          "order": 1,
+          "title": "核实人员与作业要求",
+          "instruction": "结合告警发生时间和证据画面，核实目标人员是否处于要求佩戴安全帽的作业区域，排除遮挡、拍摄角度和历史画面造成的误判。"
+        },
+        {
+          "stepId": "pause-and-remind",
+          "order": 2,
+          "title": "提醒并暂停相关风险作业",
+          "instruction": "如现场确认防护不符合要求，按现场管理流程提醒人员到安全位置补齐防护；无法安全核实时联系现场负责人。"
+        },
+        {
+          "stepId": "check-helmet",
+          "order": 3,
+          "title": "检查佩戴状态",
+          "instruction": "由现场人员依适用作业要求检查安全帽及帽带等部件，确认正确佩戴后再按现场流程恢复相关作业。"
+        },
+        {
+          "stepId": "record-review",
+          "order": 4,
+          "title": "复查并记录",
+          "instruction": "记录核实结果、采取的措施及复查情况；如属误报，按现有人工处置流程记录，不因建议生成而自动改变告警状态。"
+        }
+      ],
+      "cautions": [
+        "本建议及引用均为模拟内容，不构成正式制度、违规认定或作业恢复批准。",
+        "head 与 no_helmet 是不同识别类别，必须使用各自的精确匹配条目。"
+      ]
+    },
+    "references": [
+      {
+        "referenceId": "demo-ppe-helmet-01",
+        "documentTitle": "头部防护用品管理说明（模拟资料）",
+        "documentNumber": "DEMO-PPE-01",
+        "documentVersion": "demo-2026-11-v1",
+        "chapter": "模拟第二章 头部防护",
+        "clauseId": "模拟条款 2.1",
+        "excerpt": "【模拟条款】进入要求头部防护的作业区域前，应按现场要求选用、检查并正确佩戴安全帽。",
+        "sourceName": "AI YOLO 演示模拟知识库",
+        "sourceType": "MOCK_KNOWLEDGE_BASE",
+        "effectiveDate": null
+      },
+      {
+        "referenceId": "demo-ppe-review-01",
+        "documentTitle": "巡检告警人工核实与记录流程（模拟资料）",
+        "documentNumber": "DEMO-ALERT-01",
+        "documentVersion": "demo-2026-11-v1",
+        "chapter": "模拟第一章 现场核实",
+        "clauseId": "模拟条款 1.1",
+        "excerpt": "【模拟条款】图像告警应结合现场情况人工核实，记录处置与复查结果；无法确认的情况应交由现场负责人判断。",
+        "sourceName": "AI YOLO 演示模拟知识库",
+        "sourceType": "MOCK_KNOWLEDGE_BASE",
+        "effectiveDate": null
+      }
+    ],
+    "applicability": "仅适用于规范化匹配键 PPE_NO_HELMET + HEAD。资料不限定模型显示名；模型身份和适用区域由项目告警规则管理。",
+    "sourceType": "MOCK_KNOWLEDGE_BASE"
+  },
+  {
+    "entryId": "mock-ppe-no-helmet-no-helmet",
+    "alertTypeId": "PPE_NO_HELMET",
+    "recognitionCategoryId": "NO_HELMET",
+    "status": "ACTIVE",
+    "title": "PPE 未佩戴安全帽核实与处置参考（模拟）",
+    "riskDescription": "PPE 模型识别到 no_helmet 类别。是否存在防护缺失及是否适用头部防护要求，需结合目标人员、现场工序和画面质量人工核实。",
+    "adviceTemplate": {
+      "title": "PPE 未佩戴安全帽处置建议（模拟）",
+      "steps": [
+        {
+          "stepId": "verify-ppe-target",
+          "order": 1,
+          "title": "核实告警对象",
+          "instruction": "核对画面对应的人员、告警时间和作业区域，确认未因遮挡或拍摄角度把已佩戴安全帽识别为缺失。"
+        },
+        {
+          "stepId": "notify-and-pause",
+          "order": 2,
+          "title": "提醒现场人员",
+          "instruction": "若现场确认当前作业要求头部防护且防护缺失，按现场流程暂停相关风险作业并提醒人员到安全位置补齐。"
+        },
+        {
+          "stepId": "verify-head-protection",
+          "order": 3,
+          "title": "落实头部防护",
+          "instruction": "按现场适用要求检查安全帽和帽带等防护部件，正确佩戴后由现场负责人按既有流程确认。"
+        },
+        {
+          "stepId": "record-ppe-review",
+          "order": 4,
+          "title": "记录与复查",
+          "instruction": "记录核实、整改或误报原因，并复查防护状态；仍无法判断时提交现场负责人处理。"
+        }
+      ],
+      "cautions": [
+        "本内容为模拟处置参考，不代表已经确认人员未佩戴或已经违规。",
+        "资料中的 ACTIVE 表示导入后的资料状态，不会启用模型规则，也不代表目标项目已完成导入。"
+      ]
+    },
+    "references": [
+      {
+        "referenceId": "demo-ppe-helmet-01",
+        "documentTitle": "头部防护用品管理说明（模拟资料）",
+        "documentNumber": "DEMO-PPE-01",
+        "documentVersion": "demo-2026-11-v1",
+        "chapter": "模拟第二章 头部防护",
+        "clauseId": "模拟条款 2.1",
+        "excerpt": "【模拟条款】进入要求头部防护的作业区域前，应按现场要求选用、检查并正确佩戴安全帽。",
+        "sourceName": "AI YOLO 演示模拟知识库",
+        "sourceType": "MOCK_KNOWLEDGE_BASE",
+        "effectiveDate": null
+      },
+      {
+        "referenceId": "demo-ppe-review-01",
+        "documentTitle": "巡检告警人工核实与记录流程（模拟资料）",
+        "documentNumber": "DEMO-ALERT-01",
+        "documentVersion": "demo-2026-11-v1",
+        "chapter": "模拟第一章 现场核实",
+        "clauseId": "模拟条款 1.1",
+        "excerpt": "【模拟条款】图像告警应结合现场情况人工核实，记录处置与复查结果；无法确认的情况应交由现场负责人判断。",
+        "sourceName": "AI YOLO 演示模拟知识库",
+        "sourceType": "MOCK_KNOWLEDGE_BASE",
+        "effectiveDate": null
+      }
+    ],
+    "applicability": "仅适用于 PPE_NO_HELMET + NO_HELMET，对应 PPE 原始标签 no_helmet 的默认事件码。项目若使用自定义规则 ID，须按真实告警快照另行核对。",
+    "sourceType": "MOCK_KNOWLEDGE_BASE"
+  },
+  {
+    "entryId": "mock-ppe-no-goggle-no-goggle",
+    "alertTypeId": "PPE_NO_GOGGLE",
+    "recognitionCategoryId": "NO_GOGGLE",
+    "status": "ACTIVE",
+    "title": "未佩戴护目镜核实与处置参考（模拟）",
+    "riskDescription": "PPE 模型识别到 no_goggle 类别，提示人工核实眼部防护。画面无法单独判断是否存在飞溅或颗粒物危害，也不能据此确认未佩戴或违规。",
+    "adviceTemplate": {
+      "title": "未佩戴护目镜处置建议（模拟）",
+      "steps": [
+        {
+          "stepId": "verify-eye-risk",
+          "order": 1,
+          "title": "核实作业与眼部防护要求",
+          "instruction": "核对告警对象和当前工序，由现场负责人按风险告知或作业指导确认是否要求眼面部防护。"
+        },
+        {
+          "stepId": "pause-eye-risk-work",
+          "order": 2,
+          "title": "按现场流程提醒与处理",
+          "instruction": "若确认眼部防护缺失且当前工序要求佩戴，依现场流程暂停相关作业，避免人员继续处于未落实防护的状态。"
+        },
+        {
+          "stepId": "check-eye-protection",
+          "order": 3,
+          "title": "选用并检查防护用品",
+          "instruction": "按适用作业指导选择护目镜或其他规定的眼面部防护用品，检查完整性、佩戴状态和视野；不凭模型标签替代用品选型。"
+        },
+        {
+          "stepId": "record-eye-review",
+          "order": 4,
+          "title": "复查与记录",
+          "instruction": "记录适用要求、人工核实结果及处理情况；如护目镜已佩戴但被遮挡，记录误报原因供后续核查。"
+        }
+      ],
+      "cautions": [
+        "模拟资料不证明现场已经存在飞溅、粉尘或化学危害。",
+        "默认事件码是 PPE_NO_GOGGLE；PPE_NO_GOGGLES 不会自动作为别名匹配。"
+      ]
+    },
+    "references": [
+      {
+        "referenceId": "demo-ppe-eye-01",
+        "documentTitle": "眼面部防护管理说明（模拟资料）",
+        "documentNumber": "DEMO-PPE-02",
+        "documentVersion": "demo-2026-11-v1",
+        "chapter": "模拟第二章 用品选择与使用",
+        "clauseId": "模拟条款 2.1",
+        "excerpt": "【模拟条款】眼面部防护用品应根据具体作业风险选用，使用前检查用品状态、适配性与佩戴情况。",
+        "sourceName": "AI YOLO 演示模拟知识库",
+        "sourceType": "MOCK_KNOWLEDGE_BASE",
+        "effectiveDate": null
+      },
+      {
+        "referenceId": "demo-ppe-review-01",
+        "documentTitle": "巡检告警人工核实与记录流程（模拟资料）",
+        "documentNumber": "DEMO-ALERT-01",
+        "documentVersion": "demo-2026-11-v1",
+        "chapter": "模拟第一章 现场核实",
+        "clauseId": "模拟条款 1.1",
+        "excerpt": "【模拟条款】图像告警应结合现场情况人工核实，记录处置与复查结果；无法确认的情况应交由现场负责人判断。",
+        "sourceName": "AI YOLO 演示模拟知识库",
+        "sourceType": "MOCK_KNOWLEDGE_BASE",
+        "effectiveDate": null
+      }
+    ],
+    "applicability": "仅适用于 PPE_NO_GOGGLE + NO_GOGGLE，对应原始标签 no_goggle 的默认事件码；不适用于 goggles 或其他正常防护用品类别。",
+    "sourceType": "MOCK_KNOWLEDGE_BASE"
+  },
+  {
+    "entryId": "mock-ppe-no-gloves-no-gloves",
+    "alertTypeId": "PPE_NO_GLOVES",
+    "recognitionCategoryId": "NO_GLOVES",
+    "status": "ACTIVE",
+    "title": "未佩戴手套核实与处置参考（模拟）",
+    "riskDescription": "PPE 模型识别到 no_gloves 类别。手部防护是否适用取决于设备、材料和工序；不得仅凭识别结果要求所有人员统一戴手套。",
+    "adviceTemplate": {
+      "title": "未佩戴手套处置建议（模拟）",
+      "steps": [
+        {
+          "stepId": "verify-hand-requirement",
+          "order": 1,
+          "title": "核实工序及手套适用性",
+          "instruction": "核对目标人员正在进行的工序，由现场负责人确认作业指导对手部防护的要求，以及是否存在不适用手套的设备操作情形。"
+        },
+        {
+          "stepId": "handle-hand-risk",
+          "order": 2,
+          "title": "按核实结果处理",
+          "instruction": "如现场要求手套且确认缺失，按既有流程暂停相关风险作业；若手套不适用或现场无法判断，交由现场负责人决定，不以本模拟建议直接指挥佩戴。"
+        },
+        {
+          "stepId": "check-gloves",
+          "order": 3,
+          "title": "按作业要求落实防护",
+          "instruction": "在确认适用后，按材料和作业指导选择相应用品，检查完整性、尺寸与使用状态；具体选型遵循现场要求。"
+        },
+        {
+          "stepId": "record-hand-review",
+          "order": 4,
+          "title": "记录适用性与复查结果",
+          "instruction": "记录适用要求、已采取措施或无需处理原因；排除遮挡等误报后，按人工流程保存复查结果。"
+        }
+      ],
+      "cautions": [
+        "本模拟建议不构成手套选型依据；设备操作和现场作业指导优先。",
+        "识别到 no_gloves 不代表已经证实防护不合规。"
+      ]
+    },
+    "references": [
+      {
+        "referenceId": "demo-ppe-hand-01",
+        "documentTitle": "手部防护适用性管理说明（模拟资料）",
+        "documentNumber": "DEMO-PPE-03",
+        "documentVersion": "demo-2026-11-v1",
+        "chapter": "模拟第二章 适用性核实",
+        "clauseId": "模拟条款 2.1",
+        "excerpt": "【模拟条款】手部防护应按设备、材料和工序要求确定；确认适用后选择相应用品并检查状态，不适用情形按作业指导执行。",
+        "sourceName": "AI YOLO 演示模拟知识库",
+        "sourceType": "MOCK_KNOWLEDGE_BASE",
+        "effectiveDate": null
+      },
+      {
+        "referenceId": "demo-ppe-review-01",
+        "documentTitle": "巡检告警人工核实与记录流程（模拟资料）",
+        "documentNumber": "DEMO-ALERT-01",
+        "documentVersion": "demo-2026-11-v1",
+        "chapter": "模拟第一章 现场核实",
+        "clauseId": "模拟条款 1.1",
+        "excerpt": "【模拟条款】图像告警应结合现场情况人工核实，记录处置与复查结果；无法确认的情况应交由现场负责人判断。",
+        "sourceName": "AI YOLO 演示模拟知识库",
+        "sourceType": "MOCK_KNOWLEDGE_BASE",
+        "effectiveDate": null
+      }
+    ],
+    "applicability": "仅适用于 PPE_NO_GLOVES + NO_GLOVES，对应原始标签 no_gloves 的默认事件码；不得用于 gloves 正常类别或无适用要求的工序。",
+    "sourceType": "MOCK_KNOWLEDGE_BASE"
+  },
+  {
+    "entryId": "mock-ppe-no-boots-no-boots",
+    "alertTypeId": "PPE_NO_BOOTS",
+    "recognitionCategoryId": "NO_BOOTS",
+    "status": "ACTIVE",
+    "title": "未穿安全鞋核实与处置参考（模拟）",
+    "riskDescription": "PPE 模型识别到 no_boots 类别，提示核实足部防护。画面可能看不清鞋类，防护鞋是否适用及是否合规需结合现场作业要求确认。",
+    "adviceTemplate": {
+      "title": "未穿安全鞋处置建议（模拟）",
+      "steps": [
+        {
+          "stepId": "verify-foot-protection",
+          "order": 1,
+          "title": "核实画面与足部防护要求",
+          "instruction": "核对目标人员、区域和工序，确认足部是否被遮挡，并由现场负责人核实该作业要求的足部防护用品。"
+        },
+        {
+          "stepId": "remind-foot-risk",
+          "order": 2,
+          "title": "按现场流程提醒",
+          "instruction": "若确认防护缺失且适用要求明确，按现场流程暂停相关风险作业或安排到安全位置补齐防护，无法确认时升级现场负责人。"
+        },
+        {
+          "stepId": "check-footwear",
+          "order": 3,
+          "title": "检查防护鞋状态",
+          "instruction": "依现场适用要求检查防护鞋类型、完整性与穿着状态，不以外观标签或本模拟建议替代产品合规检查。"
+        },
+        {
+          "stepId": "record-foot-review",
+          "order": 4,
+          "title": "复核并记录",
+          "instruction": "由现场流程确认后记录处理结果；如因裤脚或遮挡导致误报，记录核实依据并按人工处置流程处理。"
+        }
+      ],
+      "cautions": [
+        "本内容仅为模拟参考，不构成具体防护鞋选型建议或合规证明。",
+        "不得把画面未识别到靴子直接等同于人员没有穿鞋或已经违规。"
+      ]
+    },
+    "references": [
+      {
+        "referenceId": "demo-ppe-foot-01",
+        "documentTitle": "足部防护管理说明（模拟资料）",
+        "documentNumber": "DEMO-PPE-04",
+        "documentVersion": "demo-2026-11-v1",
+        "chapter": "模拟第二章 用品核实",
+        "clauseId": "模拟条款 2.1",
+        "excerpt": "【模拟条款】足部防护用品应依作业区域风险与现场要求选择，使用前核实用品适用性和完好状态。",
+        "sourceName": "AI YOLO 演示模拟知识库",
+        "sourceType": "MOCK_KNOWLEDGE_BASE",
+        "effectiveDate": null
+      },
+      {
+        "referenceId": "demo-ppe-review-01",
+        "documentTitle": "巡检告警人工核实与记录流程（模拟资料）",
+        "documentNumber": "DEMO-ALERT-01",
+        "documentVersion": "demo-2026-11-v1",
+        "chapter": "模拟第一章 现场核实",
+        "clauseId": "模拟条款 1.1",
+        "excerpt": "【模拟条款】图像告警应结合现场情况人工核实，记录处置与复查结果；无法确认的情况应交由现场负责人判断。",
+        "sourceName": "AI YOLO 演示模拟知识库",
+        "sourceType": "MOCK_KNOWLEDGE_BASE",
+        "effectiveDate": null
+      }
+    ],
+    "applicability": "仅适用于 PPE_NO_BOOTS + NO_BOOTS，对应原始标签 no_boots 的默认事件码；不适用于 boots 正常类别。",
+    "sourceType": "MOCK_KNOWLEDGE_BASE"
+  }
+]

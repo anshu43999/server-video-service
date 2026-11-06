@@ -11,6 +11,7 @@ import json
 import re
 import unittest
 from pathlib import Path
+from unittest.mock import Mock
 
 import cv2
 import numpy as np
@@ -54,10 +55,10 @@ class FakeResult:
 
 
 def protocol_detection_example() -> dict:
-    """取 docs/video-protocol.md §6.2 里的检测消息示例，作为线上格式的唯一来源。"""
-    section = PROTOCOL.split("### 6.2")[1]
+    """Internal serialization compatibility; the old public WS is retired."""
+    section = PROTOCOL.split("### 5.1 内部检测序列化兼容")[1]
     block = re.search(r"```json(.*?)```", section, re.S)
-    assert block, "§6.2 缺少 JSON 示例"
+    assert block, "§5.1 缺少内部检测 JSON 示例"
     return json.loads(block.group(1).strip())
 
 
@@ -380,6 +381,7 @@ class StreamStructuredOutputTests(unittest.TestCase):
 
     def _stub_session(self, stream_id: str, overlay_enabled: bool) -> StreamSession:
         session = StreamSession(stream_id)
+        session.alert_runtime = Mock()
         session.yolo_enabled = True
         session.overlay_enabled = overlay_enabled
         session.detector.infer = lambda frame: InferenceResult(
@@ -397,30 +399,33 @@ class StreamStructuredOutputTests(unittest.TestCase):
     async def _wait_for_frame(session: StreamSession, timeout: float = 2.0) -> None:
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
+        # Analysis is complete without a preview encoder or consumer.
         while session.latest_detections is None and loop.time() < deadline:
             await asyncio.sleep(0.01)
 
-    def test_overlay_off_publishes_the_untouched_frame_but_keeps_detections(self):
+    def test_overlay_off_keeps_original_alert_evidence_without_live_output(self):
         async def scenario():
             payload = sample_jpeg()
             session = self._stub_session("overlay-off", False)
             session._last_input = 0
             await session.ingest_jpeg(payload)
             await self._wait_for_frame(session)
-            self.assertEqual(session.latest_jpeg, expected_publish_bytes(payload))
+            self.assertIsNone(session.latest_jpeg)
+            np.testing.assert_array_equal(session.alert_runtime.process.call_args.kwargs["frame"], decode_image(payload))
             self.assertEqual(session.latest_detections.result.detection_count, 1)
             self.assertEqual(session.frames_processed, 1)
 
         asyncio.run(scenario())
 
-    def test_overlay_on_changes_the_published_frame(self):
+    def test_overlay_on_changes_alert_evidence_without_live_output(self):
         async def scenario():
             payload = sample_jpeg()
             session = self._stub_session("overlay-on", True)
             session._last_input = 0
             await session.ingest_jpeg(payload)
             await self._wait_for_frame(session)
-            self.assertNotEqual(session.latest_jpeg, expected_publish_bytes(payload))
+            self.assertIsNone(session.latest_jpeg)
+            self.assertFalse(np.array_equal(session.alert_runtime.process.call_args.kwargs["frame"], decode_image(payload)))
             self.assertEqual(session.latest_detections.result.detection_count, 1)
 
         asyncio.run(scenario())
@@ -478,9 +483,9 @@ class StreamStructuredOutputTests(unittest.TestCase):
             await session.ingest_jpeg(sample_jpeg())
             loop = asyncio.get_running_loop()
             deadline = loop.time() + 2.0
-            while session.latest_jpeg is None and loop.time() < deadline:
+            while session.frames_fallback == 0 and loop.time() < deadline:
                 await asyncio.sleep(0.01)
-            self.assertIsNotNone(session.latest_jpeg)
+            self.assertIsNone(session.latest_jpeg)
             self.assertIsNone(session.latest_detections)
             self.assertEqual(session.frames_fallback, 1)
             self.assertEqual(session.frames_processed, 0)

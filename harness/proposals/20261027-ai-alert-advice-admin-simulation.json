@@ -1,0 +1,28 @@
+{
+  "major": {
+    "id": "M41",
+    "title": "管理后台 AI 告警处置建议模拟闭环",
+    "requirement": "FR-10",
+    "dependsOn": ["M38"],
+    "acceptanceDocument": "harness/acceptance/M41-ai-alert-advice-simulation.md"
+  },
+  "review": {
+    "decision": "new-scope",
+    "rationale": "Android M114 仅完成手机端本地模拟建议，明确排除后台资料管理、后台建议同步和真实知识库/大模型。用户要求为后端管理系统正式创建对应任务，因此在服务端独立建立 M41，避免把新范围回写为 M114 已交付。",
+    "scope": "交付服务端与 PC 管理后台的模拟知识资料管理、主动建议生成、制度依据展示、历史快照、权限审计和浏览器验收；不修改 Android，不接真实向量库、文档解析或在线大模型，不自动判责或改变告警处置，不执行生产部署。"
+  },
+  "taskIds": [
+    "M41-T01",
+    "M41-T02",
+    "M41-T03",
+    "M41-T04",
+    "M41-T05",
+    "M41-T06",
+    "M41-T07",
+    "M41-T08",
+    "M41-T09",
+    "M41-T10"
+  ],
+  "createdAt": "2026-10-27T17:50:37+08:00",
+  "createdBy": "codex"
+}

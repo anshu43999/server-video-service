@@ -1,10 +1,29 @@
 # Linux Docker 部署
 
-根目录唯一的 `compose.yml` 编排 `video-service`、独立 `model-converter` 和 MediaMTX 1.20.1；PostgreSQL 由云厂商托管，通过 `DATABASE_URL` 连接，告警证据图片写入公司 MinIO，二者都不随应用容器启停或重建。支持具备 Docker Engine 与 Compose 插件的主流 Linux；CentOS Stream 9、Rocky Linux 9、AlmaLinux 9 和 Ubuntu 共用同一套文件。CentOS Linux 7 已于 2024-06-30 结束维护，不作为生产部署目标。
+> 2026-10-15 / M34-T04：先完成本地真实验收，再经批准部署。当前任务只验证配置，不执行本文件中的部署、迁移、重启或防火墙命令。升级旧服务先阅读 [分发退役升级/回退](media-retirement-upgrade.md)。
+
+根目录唯一的 `compose.yml` 编排 `video-service` 与独立 `model-converter`；PostgreSQL 由云厂商托管，通过 `DATABASE_URL` 连接，告警证据图片写入公司 MinIO，二者都不随应用容器启停或重建。支持具备 Docker Engine 与 Compose 插件的主流 Linux；CentOS Stream 9、Rocky Linux 9、AlmaLinux 9 和 Ubuntu 共用同一套文件。CentOS Linux 7 已于 2024-06-30 结束维护，不作为生产部署目标。
 
 ## 1. 主机准备
 
-不启用转换时最低建议为 4 核 CPU、8 GB 内存和 40 GB 可用磁盘；同机执行 LiteRT 转换建议至少 8 核 CPU、16 GB 内存和 80 GB 可用磁盘。默认给转换容器限制 2 CPU、8 GB 内存和 4 GB 临时空间，可按模型大小调整。真实流数、分辨率、FPS 和 CPU/GPU 编码方式会改变容量，正式上线前仍需执行 `docs/capacity-benchmark.md` 的目标服务器压测。
+<a id="cpu-only"></a>
+
+### CPU 运行与镜像依赖
+
+视频服务和模型转换器均使用 CPU，不需要 NVIDIA 显卡、驱动或 Container Toolkit。视频推理、流模型切换、PT 检查、ONNX/LiteRT 导出与 TFLite 复验均固定 CPU；旧环境中的 `YOLO_DEVICE=auto`、`cuda` 或设备编号统一按 CPU 处理，Compose 固定传入 `cpu`，Kubernetes 配置示例同样使用 `cpu`。
+
+`requirements-cpu.txt` 从 PyTorch 官方 CPU 索引安装运行库；`constraints-cpu.txt` 固定兼容的 PyTorch、TorchVision 与 Ultralytics 版本。镜像设置 `PIP_CONSTRAINT`，后续 exporter 的 pip 调用也不能改回 GPU 版。每次构建都执行 `pip check` 和 `tools/check_cpu_runtime.py`：拒绝 CUDA/NVIDIA 计算库、Triton 和 GPU 版推理包，核验 PyTorch 没有 CUDA/ROCm 编译支持，并实际执行 CPU TorchVision NMS；转换器还检查 JAX 设备只有 CPU。Ultralytics 的小型 `nvidia-ml-py` 监控客户端不属于显卡计算库，可以保留。
+
+升级必须重新构建并替换**两个**镜像，仅修改 `YOLO_DEVICE=cpu` 或重启旧容器不会移除旧镜像里的 GPU 依赖。按本文原有本地验收与部署门禁发布新版本，保留现有命名卷和外部数据库；不需要删除数据卷。发布前可对两个新镜像分别运行以下只读审计（替换镜像标签）：
+
+```bash
+docker run --rm --entrypoint python aiyolo-video-service:YOUR_CPU_TAG tools/check_cpu_runtime.py
+docker run --rm --entrypoint python aiyolo-model-converter:YOUR_CPU_TAG tools/check_cpu_runtime.py
+```
+
+审计结果应为 `device=cpu`、`torch_cuda=null`、`cuda_available=false`、`gpu_packages=[]`、`nms=passed`。CPU 不改变模型输入尺寸、阈值、校准和告警语义；推理吞吐和转换耗时仍须在目标服务器按实际流数验证。镜像仍包含模型推理/转换库和 FFmpeg，最终大小以重建结果为准。
+
+不启用转换时最低建议为 4 核 CPU、8 GB 内存和 40 GB 可用磁盘；同机执行 LiteRT 转换建议至少 8 核 CPU、16 GB 内存和 80 GB 可用磁盘。默认给转换容器限制 2 CPU、8 GB 内存和 4 GB 临时空间，可按模型大小调整。真实流数、分辨率、FPS 和 推理设备及 PC 预览负载会改变容量，正式上线前仍需执行 `docs/capacity-benchmark.md` 的目标服务器压测。
 
 服务器需要已安装 Docker Engine 与 Compose 插件。CentOS/RHEL 的安装、firewalld 和 SELinux 命令见 `deploy/centos/README.md`。确认版本：
 
@@ -23,7 +42,7 @@ sudo docker compose version
 
 ## 2. 配置目录和模型
 
-将仓库部署到固定目录，例如 `/opt/aiyolo/server-video-service`。仓库已包含转换后的 ONNX/TFLite 测试资产，不包含 PT 源权重；默认允许后端在没有可用服务端推理模型时启动并提供原始视频：
+将仓库部署到固定目录，例如 `/opt/aiyolo/server-video-service`。仓库已包含转换后的 ONNX/TFLite 测试资产，不包含 PT 源权重；默认允许后端在没有可用服务端推理模型时启动并提供 PC 原画面预览：
 
 ```bash
 cd /opt/aiyolo/server-video-service
@@ -39,7 +58,6 @@ chmod 0600 .env
 - 公司 MinIO 当前如果仅在可信内网提供 HTTP，可暂时设置 `MINIO_SECURE=false`；公网或跨网络生产链路应启用可信 TLS，并改为 `true`。
 - 在云数据库控制台启用自动备份和时间点恢复（PITR），并设置符合业务要求的保留周期。部署主机另需安装与 PostgreSQL 版本兼容的 `pg_dump` 客户端，供 `backup-db` 生成逻辑备份。
 - 不要在生产 `.env` 中设置 `ADMIN_TOKEN` 或 `MOBILE_TOKEN`。生产环境通过 `/aiyoloapi/auth/setup`、`/aiyoloapi/auth/login` 签发动态账号 Session；容器入口会拒绝误配置的静态客户端令牌。
-- `MEDIA_PUBLIC_HOST` 填 App 实际可访问的服务器 DNS 名或 IP，不能填 `127.0.0.1`。
 - `MODEL_MOUNT_PATH` 默认 `./models`，容器内以只读方式挂载到 `/models`。
 - `YOLO_MODEL_PATH` 预留为转换后的 ONNX 路径；当前运行镜像未安装 ONNX Runtime，因此默认 `REQUIRE_YOLO_MODEL=false`。需要服务器 ONNX 推理时先补充 `requirements-onnx.txt`，再改为 `true`。
 - `CONVERTER_TOKEN` 使用第三个独立随机值，只在 Compose 内部网络用于视频服务调用转换服务。
@@ -47,55 +65,47 @@ chmod 0600 .env
 - 校准集元数据写入 PostgreSQL，图片、生成的 YAML 和内容哈希写入 `calibration-data` 命名卷。视频服务读写该卷，转换容器只读挂载到 `/calibration`，无需在宿主机手工创建 `dataset.yaml`。
 - `CALIBRATION_MAX_UPLOAD_BYTES`、`CALIBRATION_MAX_EXPANDED_BYTES` 和 `CALIBRATION_MAX_FILES` 分别限制 ZIP 大小、解压后总量和文件数。
 - `CONVERTER_CPUS`、`CONVERTER_MEMORY_LIMIT`、`CONVERTER_TMPFS_SIZE` 按服务器资源和模型大小调整，避免转换挤占实时视频推理。
-- `VIDEO_SERVICE_CPUS`、`VIDEO_SERVICE_MEMORY_LIMIT` 和三个 `*_PIDS_LIMIT` 控制容器资源上限，避免视频解码、转换子进程或异常连接耗尽整台主机。
+- `VIDEO_SERVICE_CPUS`、`VIDEO_SERVICE_MEMORY_LIMIT` 和两个 `*_PIDS_LIMIT` 控制容器资源上限，避免视频解码、转换子进程或异常连接耗尽整台主机。
 
 后端容器固定使用 UID/GID `10001`，转换容器固定使用 UID/GID `10002`。外部模型仍需为对应 UID/GID 提供只读权限；CentOS/RHEL 上 Compose 的 `:Z` 会设置 SELinux 挂载标签。校准集由后台写入 Docker 命名卷，不依赖宿主机 SELinux 路径标签。
 
 Dockerfile 不复制 `.env`、密钥、业务校准数据或历史日志。模型市场数据和上传产物写入 `model-data` 卷，校准图片写入 `calibration-data` 卷；仓库中的转换资产和外部交付模型通过 `/models` 只读挂载。
 
-视频服务每次启动都会校验 `/models/registry.json`，并将尚未登记的 Git 模型及其已校验产物增量导入 `model-data` 卷。导入以 `modelId` 为键，已有模型、文件和当前激活选择不会被覆盖；同一路径存在不同内容时服务会拒绝启动并报告冲突。该流程对已有 `model-data` 卷同样生效，因此升级时不需要也不应删除模型卷。自备模型目录没有注册表时跳过导入，不影响仅提供原始视频的部署。
+视频服务每次启动都会校验 `/models/registry.json`，并将尚未登记的 Git 模型及其已校验产物增量导入 `model-data` 卷。导入以 `modelId` 为键，已有模型、文件和当前激活选择不会被覆盖；同一路径存在不同内容时服务会拒绝启动并报告冲突。该流程对已有 `model-data` 卷同样生效，因此升级时不需要也不应删除模型卷。自备模型目录没有注册表时跳过导入，不影响仅提供 PC 原画面预览的部署。
 
 ## 3. 网络和防火墙
 
-默认端口策略：
+| 端口 | 用途 | 暴露 |
+|---|---|---|
+| 8080（容器），18080（示例宿主机） | 控制 API、PC 同源预览/后台、告警通知及证据 | 公网经 HTTPS 网关；直接 HTTP 仅限受信网络并限制来源 |
+| 8090 | 独立模型转换器 | 仅内部网络，不发布宿主机端口 |
 
-| 端口 | 协议 | 用途 | 默认暴露 |
-|---|---|---|---|
-| 18080 | TCP | FastAPI/管理后台 | `.env.example` 直接 HTTP 部署时对外监听，必须用安全组或防火墙限制来源 |
-| 8889 | TCP | WebRTC/WHEP 信令 | 对 App 网络开放 |
-| 8189 | UDP | WebRTC 媒体 | 对 App 网络开放 |
-| 8888 | TCP | LL-HLS 回退 | 对 App 网络开放 |
-| 8554 | TCP | RTSP 诊断 | 仅 `127.0.0.1` |
-| 9997 | TCP | MediaMTX API | 不发布到主机 |
-| 8090 | TCP | 模型转换 HTTP API | 仅 Compose 内部网络，不发布到主机 |
+分发端口 8889/TCP、8888/TCP、8189/UDP、8554/TCP、9997/TCP、8890/UDP 不再由本服务发布；移除旧防火墙规则前确认归属，不能误断其他系统或输入摄像机。
+RTSP 摄像机、托管 PostgreSQL、MinIO 和转换器所需的出站访问必须保留。Compose 的历史网络名 `media` 仅作为普通出站网络保留以兼容升级，不表示有分发服务；`control` 仍为 internal 网络，不能把所有网络都设为 internal。
 
-`.env.example` 面向当前直接 HTTP 联调场景，使用 `CONTROL_BIND_ADDRESS=0.0.0.0` 和 `CONTROL_PORT=18080`。如果部署了 Nginx/Caddy/TLS 网关，应将控制面改回仅本机绑定，并让网关上游指向该端口。媒体端口冲突时修改对应的 `MEDIA_*_PORT`，同时更新防火墙和客户端地址。未提供 `.env` 覆盖时，Compose 仍使用仅本机 `8080` 作为安全回退值。
-
-按实际来源网段收紧云安全组和主机防火墙。CentOS/RHEL 的 `firewall-cmd` 命令见
-`deploy/centos/README.md`；其他发行版使用各自的防火墙工具。
-
-公网部署必须在 8080 前配置 Nginx/Caddy/负载均衡器，启用 HTTPS、动态账号 Session 鉴权、限流和访问日志。WHEP/LL-HLS 也应通过 MediaMTX 原生 TLS 或独立媒体反向代理启用 HTTPS；在 TLS 完成前只应在受信任内网使用 `MEDIA_PUBLIC_SCHEME=http`。跨 NAT 的公网 WebRTC 还需要按实际拓扑部署 STUN/TURN，当前 Compose 不宣称已解决 NAT 穿透。
+默认控制绑定为 `127.0.0.1:8080`；`.env.example` 的 `0.0.0.0:18080` 是受信内网示例。网关转发 Cookie 和原始 Host，不缓存 `/preview`，不为预览开启跨域；所有项目权限仍由服务端验证。生产 HTTPS、账号鉴权、限流、访问日志不因取消分发而豁免。
 
 ## 4. 启动和验收
 
-部署脚本会先执行 `docker compose config --quiet`，不会把展开后的密钥打印到终端；后端入口会再次校验数据库、公共播放地址、模型和转换接线，并确认生产环境未启用开发静态客户端令牌，然后运行 Alembic 迁移。转换容器会校验独立的 `CONVERTER_TOKEN`，并以单 Worker、单转换任务串行执行。
+部署脚本的 `up/pull-up` 要求 `AIYOLO_LOCAL_ACCEPTANCE_RECORD` 指向非空、已人工审阅的本地验收记录；静态配置日志不能代替本地联合验收。部署脚本会先执行 `docker compose config --quiet`，不会把展开后的密钥打印到终端；后端入口会再次校验数据库、MinIO、模型和转换接线，并确认生产环境未启用开发静态客户端令牌。生产入口拒绝 `RUN_DATABASE_MIGRATIONS=true`：必须先按 [M33-T17 发布、升级与回滚演练手册](m33-t17-release-runbook.md) 在停写窗口外的隔离副本完成备份、恢复验证和迁移，再启动已验证版本。转换容器会校验独立的 `CONVERTER_TOKEN`，并以单 Worker、单转换任务串行执行。
 
 ```bash
 cd /opt/aiyolo/server-video-service
 bash deploy/deploy.sh config
+export AIYOLO_LOCAL_ACCEPTANCE_RECORD=/approved/path/local-acceptance.md
 bash deploy/deploy.sh up
 bash deploy/deploy.sh status
 bash deploy/deploy.sh smoke
 ```
 
-`up` 会在本机重新构建业务镜像并等待三个服务健康；已经由 CI 构建并推送不可变镜像时，使用 `bash deploy/deploy.sh pull-up` 拉取镜像并禁止本机重新构建。预期三个 Compose 服务最终均为 `healthy`，`smoke` 还会验证应用健康、MinIO Bucket 和内部转换服务。`video-service` 的 `/healthz` 同时检查数据库连接；云数据库实例状态、备份策略和网络连接还应在云厂商控制台单独确认。从服务器本机验证：
+`up` 会在本机重新构建业务镜像并等待两个服务健康；已经由 CI 构建并推送不可变镜像时，使用 `bash deploy/deploy.sh pull-up` 拉取镜像并禁止本机重新构建。预期两个 Compose 服务最终均为 `healthy`，`smoke` 还会验证应用健康、MinIO Bucket 和内部转换服务。`video-service` 的 `/healthz` 同时检查数据库连接；云数据库实例状态、备份策略和网络连接还应在云厂商控制台单独确认。从服务器本机验证：
 
 ```bash
 curl --fail http://127.0.0.1:18080/healthz
 docker compose --env-file .env -f compose.yml ps
 ```
 
-从 App 所在网络验证 `8889/tcp`、`8888/tcp` 和 `8189/udp`，再创建真实 RTSP 流检查 WHEP 首帧与 LL-HLS 回退。仅看到容器运行不等于视频链路验收通过。
+先在本地验证真实 RTSP 输入、PC 原画面/YOLO 预览、无人观看仍分析并生成正式告警、项目权限及证据查询。获准部署后再复验相同链路；仅看到容器运行不等于验收通过。移动端不再有直播验收。
 
 转换服务不对宿主机发布端口。管理后台首次读取转换配置时会从容器环境得到 `remote` 模式，地址为 `http://model-converter:8090`；这里的明文 HTTP 只允许用于不可从宿主机访问的 Compose 内部网络，并由独立 Bearer Token 保护。可先选择内置 `coco8-dev` 完成一次无需联网下载校准图片的转换冒烟测试；正式验收仍应上传业务校准图片 ZIP 和 PT，再选择该业务校准集执行真实移动端转换，检查任务保存的校准集版本与哈希、TFLite 下载后本地复验和模型目录登记均成功。
 
@@ -107,12 +117,12 @@ Compose 只能启动基础设施，以下项目不会也不应该由镜像替管
 | 项目 | 是否必做 | 操作与验收 |
 |---|---|---|
 | 管理员账号 | 必做 | 打开 `http://服务器:18080/admin/`，按页面引导初始化管理员并使用动态 Session 登录；生产 `.env` 不配置 `ADMIN_TOKEN`、`MOBILE_TOKEN` |
-| 云安全组与主机防火墙 | 必做 | 仅向 App 所在来源开放 `18080/tcp`、`8889/tcp`、`8888/tcp`、`8189/udp`；云数据库只允许部署主机访问，8090、9997 不对外开放 |
-| App 服务地址 | 必做 | App 填 `http://服务器IP:18080`；`8889` 是 WHEP 信令端口，不能替代控制 API 端口 |
+| 云安全组与主机防火墙 | 必做 | 仅允许受信来源访问 API/HTTPS 网关；云数据库只允许部署主机访问，8090 不对外开放；不开放分发端口 |
+| App 服务地址 | 必做 | App 填 API 服务地址，仅用于模型和告警；PC 使用同一源的管理入口与预览 |
 | 转换配置 | 使用模型转换时必做 | 管理后台保存 `remote` 模式、320/416/640 输入尺寸和默认校准集；输入尺寸在 PT 验证成功时冻结，修改只影响之后新上传的 PT |
 | 业务校准集 | 业务 INT8 必做 | 在“模型资产 → 校准集”上传具有代表性的业务图片 ZIP，再在转换任务中选择；`coco8-dev` 只验证链路 |
 | 模型签名 | App 动态安装模型时必做 | 按附录 C 将本地 Ed25519 私钥安全上传并挂载到 `video-service`；只有签名后 `androidReady=true` |
-| 媒体鉴权/TLS | 公网生产必做 | 当前 HTTP 配置只适合受信环境；公网应配置网关 HTTPS、MediaMTX TLS/鉴权以及必要的 STUN/TURN |
+| API/PC预览鉴权及 TLS | 公网生产必做 | HTTPS 网关、账号会话及项目权限；预览仅同源 Cookie，不能开放匿名访问或 Bearer 播放 |
 | 备份 | 必做 | 启用云数据库自动备份/PITR，并定期执行 `bash deploy/deploy.sh backup-db`；另备份四个业务卷和宿主机模型目录 |
 
 ### 5.1 验证转换参数确实生效
@@ -158,7 +168,6 @@ docker compose --env-file .env -f compose.yml exec -T video-service python -c 'i
 
 ```bash
 bash deploy/deploy.sh logs video-service
-bash deploy/deploy.sh logs mediamtx
 bash deploy/deploy.sh logs model-converter
 ```
 
@@ -172,6 +181,12 @@ bash deploy/deploy.sh backup-db
 
 ## 8. 升级和回滚
 
+多项目版本的完整停写、默认项目回填、孤立投递回执处置、设备凭据轮换、审计留存和
+告警排障顺序见 [M33-T17 发布、升级与回滚演练手册](m33-t17-release-runbook.md)。本节只保留
+Compose 日常入口；任何生产数据库迁移都不得由容器启动钩子自动执行。
+
+管理后台使用 Vue `/admin/`，Docker 构建阶段已包含类型检查、单元测试和正式/预览构建。现有 `.env` 若保留 `ADMIN_FRONTEND_MODE=legacy`，升级前必须设置为 `vue` 并重新创建 `video-service`；现版配置拒绝 legacy。旧代码已移出产品目录并本地归档，回退需先恢复兼容代码再重新构建发布，或恢复上一完整不可变镜像。缓存、深链、构建缺失门禁和归档恢复步骤见 [管理前端发布与回退](admin-frontend-release.md)。
+
 每次发布为视频服务和转换服务都使用不可变镜像标签，例如 `aiyolo-video-service:2026.09.1` 与 `aiyolo-model-converter:2026.09.1`，不要在生产长期使用 `latest`：
 
 ```bash
@@ -181,7 +196,7 @@ bash deploy/deploy.sh config
 bash deploy/deploy.sh pull-up
 ```
 
-升级后检查 `/healthz`、转换服务健康状态、登录、模型目录、持久视频流恢复、真实转换和真实播放。应用回滚时把两个镜像变量改回上一标签并重新执行 `up`。数据库迁移默认只向前执行；若新版本已执行不兼容迁移，必须进入维护窗口，使用升级前备份恢复数据库后再启动旧镜像。禁止只降级应用、继续使用未经确认兼容的新数据库结构。
+升级后检查 `/healthz`、转换服务健康状态、登录、模型目录、持久视频流恢复、真实转换、PC预览及无人观看时的YOLO/告警。应用回滚只允许使用已验证保持 ADR-003 边界的兼容镜像；不能直接恢复带发布器的旧镜像，详见分发退役升级手册。数据库迁移默认只向前执行；若新版本已执行不兼容迁移，必须进入维护窗口，使用升级前备份恢复数据库后再启动旧镜像。禁止只降级应用、继续使用未经确认兼容的新数据库结构。
 
 停止容器但保留数据：
 
@@ -197,7 +212,7 @@ bash deploy/deploy.sh stop
 ## 附录 A：小规格测试服务器补充说明
 
 本节仅适用于约 2 GB RAM 的临时测试服务器，不是通用生产部署建议。正式生产环境应按
-第 1 节容量建议提供足够的物理内存，并根据真实模型、并发流和编码负载完成压测。
+第 1 节容量建议提供足够的物理内存，并根据真实模型、并发流、推理和PC预览负载完成压测。
 
 实际在 1.9 GB RAM、无 Swap 的 CentOS 测试机上，640 INT8 导出在生成中间 TFLite 后被
 内核杀死，后台只看到 `worker_result_missing`。`CONVERTER_MEMORY_LIMIT=8g` 只是容器
@@ -339,7 +354,8 @@ printf '%s\n' /etc/aiyolo/compose-signing.yml > /etc/aiyolo/compose-overrides.li
 部署脚本会自动加载覆盖清单，并重新创建 `video-service`：
 
 ```bash
-bash deploy/deploy.sh config && bash deploy/deploy.sh up
+bash deploy/deploy.sh config && export AIYOLO_LOCAL_ACCEPTANCE_RECORD=/approved/path/local-acceptance.md
+bash deploy/deploy.sh up
 ```
 
 在不输出密钥内容的前提下，验证容器收到正确的 `keyId`，并且能够读取和解析私钥：
@@ -362,6 +378,7 @@ docker compose --env-file .env -f compose.yml -f /etc/aiyolo/compose-signing.yml
 
 ```bash
 bash deploy/deploy.sh config
+export AIYOLO_LOCAL_ACCEPTANCE_RECORD=/approved/path/local-acceptance.md
 bash deploy/deploy.sh up
 bash deploy/deploy.sh status
 ```
@@ -386,7 +403,8 @@ if grep -q '^COMPOSE_FILE=' .env; then sed -i 's#^COMPOSE_FILE=.*#COMPOSE_FILE=c
 
 ```bash
 # 拉取代码、重新构建并更新服务（部署脚本会自动加载清单）
-git pull origin main && bash deploy/deploy.sh up
+git pull origin main && export AIYOLO_LOCAL_ACCEPTANCE_RECORD=/approved/path/local-acceptance.md
+bash deploy/deploy.sh up
 
 # 日常查看状态和日志
 bash deploy/deploy.sh status

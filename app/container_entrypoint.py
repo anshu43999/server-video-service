@@ -5,7 +5,6 @@ from pathlib import Path
 import subprocess
 import sys
 from typing import Mapping
-from urllib.parse import urlparse
 
 from .model_seed import ModelSeedError, seed_model_catalog
 
@@ -19,17 +18,6 @@ def _enabled(value: str | None, *, default: bool = False) -> bool:
     return value.strip().lower() in TRUE_VALUES
 
 
-def _public_http_url(value: str | None) -> bool:
-    if not value:
-        return False
-    parsed = urlparse(value)
-    return (
-        parsed.scheme in {"http", "https"}
-        and bool(parsed.hostname)
-        and parsed.hostname not in {"127.0.0.1", "localhost", "mediamtx"}
-    )
-
-
 def validate_environment(environ: Mapping[str, str]) -> list[str]:
     """Return production configuration errors without exposing secret values."""
     if environ.get("DEPLOYMENT_ENV", "development").strip().lower() != "production":
@@ -39,6 +27,8 @@ def validate_environment(environ: Mapping[str, str]) -> list[str]:
     database_url = environ.get("DATABASE_URL", "").strip()
     if not database_url.startswith(("postgresql://", "postgresql+psycopg://")):
         errors.append("DATABASE_URL must be a PostgreSQL URL")
+    if _enabled(environ.get("RUN_DATABASE_MIGRATIONS")):
+        errors.append("RUN_DATABASE_MIGRATIONS must be false in production; run the verified offline migration before startup")
 
     for name in ("MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_BUCKET"):
         if not environ.get(name, "").strip():
@@ -47,12 +37,6 @@ def validate_environment(environ: Mapping[str, str]) -> list[str]:
     for name in ("ADMIN_TOKEN", "MOBILE_TOKEN"):
         if environ.get(name, "").strip():
             errors.append(f"{name} must not be set in production; use account sessions")
-
-    if not _enabled(environ.get("MEDIAMTX_ENABLED"), default=False):
-        errors.append("MEDIAMTX_ENABLED must be true")
-    for name in ("MEDIAMTX_WHEP_URL", "MEDIAMTX_LLHLS_URL"):
-        if not _public_http_url(environ.get(name)):
-            errors.append(f"{name} must be a client-reachable public HTTP(S) origin")
 
     if _enabled(environ.get("REQUIRE_YOLO_MODEL"), default=True):
         model_path = Path(environ.get("YOLO_MODEL_PATH", ""))
@@ -96,7 +80,7 @@ def main() -> None:
         )
 
     if os.environ.get("DATABASE_URL") and _enabled(
-        os.environ.get("RUN_DATABASE_MIGRATIONS"), default=True
+        os.environ.get("RUN_DATABASE_MIGRATIONS"), default=False
     ):
         subprocess.run(
             [sys.executable, "-m", "alembic", "upgrade", "head"],

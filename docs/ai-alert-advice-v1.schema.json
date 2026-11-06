@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiyolo.local/schemas/ai-alert-advice-v1.schema.json",
+  "title": "AI Alert Advice Simulation Contract v1",
+  "type": "object",
+  "$defs": {
+    "matchKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["alertTypeId", "recognitionCategoryId"],
+      "properties": {
+        "alertTypeId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "recognitionCategoryId": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
+    "adviceStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stepId", "order", "title", "instruction"],
+      "properties": {
+        "stepId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "order": {"type": "integer", "minimum": 1},
+        "title": {"type": "string", "minLength": 1, "maxLength": 200},
+        "instruction": {"type": "string", "minLength": 1, "maxLength": 2000}
+      }
+    },
+    "policyReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["referenceId", "documentTitle", "documentVersion", "excerpt", "sourceName", "sourceType"],
+      "properties": {
+        "referenceId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "documentTitle": {"type": "string", "minLength": 1, "maxLength": 300},
+        "documentNumber": {"type": ["string", "null"], "maxLength": 128},
+        "documentVersion": {"type": "string", "minLength": 1, "maxLength": 128},
+        "chapter": {"type": ["string", "null"], "maxLength": 300},
+        "clauseId": {"type": ["string", "null"], "maxLength": 128},
+        "excerpt": {"type": "string", "minLength": 1, "maxLength": 5000},
+        "sourceName": {"type": "string", "minLength": 1, "maxLength": 300},
+        "sourceType": {"enum": ["MOCK_KNOWLEDGE_BASE", "KNOWLEDGE_BASE"]},
+        "effectiveDate": {"type": ["string", "null"], "format": "date"}
+      }
+    },
+    "adviceContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "steps", "cautions"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 300},
+        "steps": {"type": "array", "items": {"$ref": "#/$defs/adviceStep"}},
+        "cautions": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 1000}}
+      }
+    },
+    "knowledgeEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entryId", "projectId", "matchKey", "title", "riskDescription", "adviceTemplate", "references", "applicability", "status", "revision", "sourceType", "createdAt", "createdBy", "updatedAt", "updatedBy"],
+      "properties": {
+        "entryId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "projectId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "matchKey": {"$ref": "#/$defs/matchKey"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 300},
+        "riskDescription": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "adviceTemplate": {"$ref": "#/$defs/adviceContent"},
+        "references": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/policyReference"}},
+        "applicability": {"type": "string", "minLength": 1, "maxLength": 2000},
+        "status": {"enum": ["ACTIVE", "INACTIVE"]},
+        "revision": {"type": "integer", "minimum": 1},
+        "sourceType": {"const": "MOCK_KNOWLEDGE_BASE"},
+        "createdAt": {"type": "string", "format": "date-time"},
+        "createdBy": {"type": "string", "minLength": 1},
+        "updatedAt": {"type": "string", "format": "date-time"},
+        "updatedBy": {"type": "string", "minLength": 1}
+      }
+    },
+    "generationError": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["stage", "code", "retryable"],
+      "properties": {
+        "stage": {"enum": ["RETRIEVING", "GENERATING"]},
+        "code": {"type": "string", "minLength": 1, "maxLength": 128},
+        "retryable": {"type": "boolean"}
+      }
+    },
+    "adviceGeneration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contractVersion", "generationId", "projectId", "eventId", "requestedBy", "idempotencyKey", "status", "matchKey", "advice", "references", "knowledgeEntryId", "knowledgeRevision", "matchExplanation", "retrievalProvider", "generationProvider", "sourceNotice", "error", "createdAt", "completedAt"],
+      "properties": {
+        "contractVersion": {"const": "1.0"},
+        "generationId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "projectId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "eventId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "requestedBy": {"type": "string", "minLength": 1, "maxLength": 128},
+        "idempotencyKey": {"type": "string", "format": "uuid"},
+        "retryOfGenerationId": {"type": ["string", "null"], "maxLength": 128},
+        "status": {"enum": ["GENERATED", "NO_MATCH", "PARTIAL", "FAILED_RETRIEVAL", "FAILED_GENERATION"]},
+        "reasonCode": {"type": ["string", "null"], "maxLength": 128},
+        "matchKey": {"anyOf": [{"$ref": "#/$defs/matchKey"}, {"type": "null"}]},
+        "advice": {"anyOf": [{"$ref": "#/$defs/adviceContent"}, {"type": "null"}]},
+        "references": {"type": "array", "items": {"$ref": "#/$defs/policyReference"}},
+        "knowledgeEntryId": {"type": ["string", "null"], "maxLength": 128},
+        "knowledgeRevision": {"type": ["integer", "null"], "minimum": 1},
+        "matchExplanation": {"type": ["string", "null"], "maxLength": 2000},
+        "retrievalProvider": {"enum": ["SIMULATED_KNOWLEDGE_BASE", "KNOWLEDGE_BASE"]},
+        "generationProvider": {"enum": ["SIMULATED_LLM", "LLM"]},
+        "sourceNotice": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "error": {"$ref": "#/$defs/generationError"},
+        "createdAt": {"type": "string", "format": "date-time"},
+        "completedAt": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

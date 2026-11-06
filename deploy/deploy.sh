@@ -45,6 +45,11 @@ if grep -Eq '^[[:space:]]*(ADMIN_TOKEN|MOBILE_TOKEN)[[:space:]]*=' "${ENV_FILE}"
   echo "ADMIN_TOKEN and MOBILE_TOKEN are development-only and must be removed from the production environment file" >&2
   exit 1
 fi
+if [[ "${RUN_DATABASE_MIGRATIONS:-}" =~ ^(1|[Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]|[Oo][Nn])$ ]] || \
+   grep -Eiq '^[[:space:]]*RUN_DATABASE_MIGRATIONS[[:space:]]*=[[:space:]]*(1|true|yes|on)[[:space:]]*(#.*)?$' "${ENV_FILE}"; then
+  echo "production deployment refuses automatic database migrations; finish the verified offline migration first" >&2
+  exit 1
+fi
 
 compose() {
   local compose_files=()
@@ -60,6 +65,13 @@ compose() {
 }
 
 action="${1:-help}"
+if [[ "${action}" == "up" || "${action}" == "pull-up" ]]; then
+  # The operator must review a local acceptance record before deployment.
+  if [[ -z "${AIYOLO_LOCAL_ACCEPTANCE_RECORD:-}" || ! -s "${AIYOLO_LOCAL_ACCEPTANCE_RECORD}" ]]; then
+    echo "finish local acceptance first; set AIYOLO_LOCAL_ACCEPTANCE_RECORD to the reviewed record" >&2
+    exit 1
+  fi
+fi
 case "${action}" in
   config)
     compose config --quiet
@@ -68,13 +80,13 @@ case "${action}" in
   up)
     compose config --quiet
     compose build --pull video-service model-converter
-    compose up -d --remove-orphans --wait --wait-timeout 300
+    compose up -d --wait --wait-timeout 300
     compose ps
     ;;
   pull-up)
     compose config --quiet
-    compose pull video-service model-converter mediamtx
-    compose up -d --remove-orphans --no-build --wait --wait-timeout 300
+    compose pull video-service model-converter
+    compose up -d --no-build --wait --wait-timeout 300
     compose ps
     ;;
   status)
@@ -89,6 +101,7 @@ case "${action}" in
     compose exec -T video-service python -c 'import os,urllib.request; name=os.environ.get("CONVERSION_REMOTE_TOKEN_ENV","AIYOLO_REMOTE_CONVERSION_TOKEN"); url=os.environ["CONVERSION_REMOTE_ENDPOINT"].rstrip("/")+"/v1/health"; request=urllib.request.Request(url,headers={"Authorization":"Bearer "+os.environ[name]}); response=urllib.request.urlopen(request,timeout=10); print("CONVERTER_OK",response.status)'
     ;;
   backup-db)
+    umask 077
     backup_dir="${PROJECT_ROOT}/backups"
     mkdir -p "${backup_dir}"
     backup_file="${backup_dir}/postgres-$(date -u +%Y%m%dT%H%M%SZ).dump"
@@ -102,7 +115,8 @@ case "${action}" in
     fi
     pg_dump_url="${database_url:?DATABASE_URL is required in the production env file}"
     pg_dump_url="${pg_dump_url/postgresql+psycopg:/postgresql:}"
-    pg_dump --no-password --format=custom --file="${backup_file}" --dbname="${pg_dump_url}"
+    # libpq accepts a connection URI in PGDATABASE; never put credentials in argv.
+    PGDATABASE="${pg_dump_url}" pg_dump --no-password --format=custom --file="${backup_file}"
     echo "database backup created: ${backup_file}"
     ;;
   stop)
@@ -114,13 +128,16 @@ Usage: bash deploy/deploy.sh <command>
 
 Commands:
   config             validate Compose and required environment values
-  up                 build and start the production stack
-  pull-up            pull immutable registry images and start without building
+  up                 build/start after reviewed local acceptance
+  pull-up            pull/start after reviewed local acceptance
   status             show container and health state
   logs [service]     follow recent logs (default: video-service)
   smoke              verify application, MinIO and converter connectivity
   backup-db          create a PostgreSQL custom-format backup in backups/
   stop               stop containers without deleting persistent volumes
+
+up/pull-up require AIYOLO_LOCAL_ACCEPTANCE_RECORD. Old media containers are not
+automatically removed: follow docs/media-retirement-upgrade.md after approval.
 EOF
     ;;
 esac

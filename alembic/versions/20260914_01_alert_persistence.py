@@ -17,6 +17,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    json_document = sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql")
     op.create_table(
         "alert_events",
         sa.Column("event_id", sa.String(length=255), nullable=False),
@@ -26,7 +27,7 @@ def upgrade() -> None:
         sa.Column("state", sa.String(length=32), nullable=True),
         sa.Column("severity", sa.String(length=32), nullable=True),
         sa.Column("disposition_status", sa.String(length=32), nullable=False),
-        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("payload", json_document, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("event_id"),
@@ -56,7 +57,7 @@ def upgrade() -> None:
         sa.Column("entry_id", sa.String(length=64), nullable=False),
         sa.Column("event_id", sa.String(length=255), nullable=False),
         sa.Column("action_id", sa.BigInteger(), nullable=False),
-        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("payload", json_document, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.ForeignKeyConstraint(["action_id"], ["alert_disposition_actions.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["event_id"], ["alert_events.event_id"], ondelete="CASCADE"),

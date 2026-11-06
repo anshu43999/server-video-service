@@ -8,7 +8,7 @@
 >
 > ADR-001 把 MJPEG / WebSocket JPEG 定为 MVP 与 P1 的输出协议、把 WebRTC 留到 P2 做 PoC。这条路线已被 ADR-002 整体推翻，原因见 ADR-002 的「为什么 ADR-001 的路线是错的」：MJPEG 带宽随观看人数线性放大（720p25 约 15–25 Mbps/人，H.264 约 2–3 Mbps/人），而"一路流多人观看"正是本项目的核心场景；叠加烧进画面丢掉了结构化检测结果；端侧自研 RTSP/H.264 解码把风险压在最难验证的一端；缺少分发层。
 >
-> 当前生效的决策：**WebRTC/WHEP 为唯一生产播放路径，LL-HLS 为过渡与回退，RTSP 仅供诊断，MJPEG / WebSocket JPEG 降级为测试与诊断通道。** 下文的决策、理由、影响和解冻条件均已作废。
+> 历史ADR-002当时的决策（现亦由[ADR-003](adr-003-analysis-alerts-only.md)取代）：**WebRTC/WHEP 为唯一生产播放路径，LL-HLS 为过渡与回退，RTSP 仅供诊断，MJPEG / WebSocket JPEG 降级为测试与诊断通道。** 下文的决策、理由、影响和解冻条件均已作废。
 
 ## 背景
 

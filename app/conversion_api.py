@@ -11,7 +11,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from .auth import require_admin
 from .calibration import CalibrationDatasetCatalog, CalibrationDatasetError
@@ -27,7 +27,12 @@ class UploadMetadata(BaseModel):
                                  pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
     version: str = Field(default="1.0.0", min_length=1, max_length=50)
     scenario: str = Field(default="general-detection", min_length=1, max_length=100)
-    purpose: Literal["development", "business"] = "development"
+    supported_targets: list[Literal["pc", "mobile"]] | None = None
+
+    @field_validator("supported_targets")
+    @classmethod
+    def validate_targets(cls, value):
+        return ModelCatalog.validate_targets(value) if value is not None else None
 
 
 class ModelJobs:
@@ -71,7 +76,8 @@ class ModelJobs:
             })
             self.catalog.publish_upload(model_id, metadata, result, original, "server")
             conversion_error = None
-            if config.auto_convert:
+            targets = metadata.get("supported_targets")
+            if config.auto_convert and (targets is None or "mobile" in targets):
                 try:
                     calibration = self.calibration_catalog.snapshot(
                         config.default_calibration_dataset_id
@@ -84,8 +90,11 @@ class ModelJobs:
                     conversion_error = str(exc)
             return {**result, "model_id": model_id, "server_ready": True,
                     "auto_conversion_error": conversion_error}
-        current = self.catalog.get(model_id)
-        if not current.get("serverReady"):
+        current = self.catalog.get(model_id, metadata["version"])
+        targets = metadata.get("supported_targets")
+        if targets is not None and "mobile" not in targets:
+            raise ValueError("model_target_not_supported: mobile")
+        if not current.get("exists") or not current.get("hashValid"):
             raise ValueError("PT 尚未通过服务端验证")
         if current.get("androidConverted"):
             raise ValueError("该版本已有移动端产物，无需重复转换")
@@ -133,7 +142,12 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
                              max_calibration_upload_bytes: int = 512 * 1024 * 1024,
                              signer: ModelManifestSigner | None = None) -> APIRouter:
     router = APIRouter(prefix="/aiyoloapi/conversion", dependencies=[Depends(require_admin)], tags=["model conversion"])
-    signer = signer or ModelManifestSigner(settings.model_signing_key_id, settings.model_signing_private_key_path)
+    signer = signer or ModelManifestSigner(
+        settings.model_signing_key_id,
+        settings.model_signing_private_key_path,
+        settings.model_signing_trusted_key_ids,
+        settings.model_signing_revoked_key_ids,
+    )
     calibration_catalog = calibration_catalog or CalibrationDatasetCatalog(
         service.root.parents[1] / "calibration"
     )
@@ -147,6 +161,10 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
                 "max_calibration_upload_bytes": max_calibration_upload_bytes,
                 "concurrency": 1, "workspace": str(service.root.resolve()),
                 "supported_modes": ["wsl", "local", "remote"], "remote_service_supported": True}
+
+    @router.get("/signing-status")
+    def signing_status():
+        return signer.diagnostics()
 
     @router.put("/config")
     def save_config(config: ConversionConfig):
@@ -270,7 +288,7 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
     async def upload(request: Request, filename: str = Query(min_length=1, max_length=200),
                      name: str = Query(min_length=1, max_length=100), version: str = Query(default="1.0.0", min_length=1, max_length=50),
                      scenario: str = Query(default="general-detection", min_length=1, max_length=100),
-                     purpose: Literal["development", "business"] = "development",
+                     supported_targets: list[Literal["pc", "mobile"]] | None = Query(default=None, alias="supportedTargets"),
                      model_id: str | None = Query(default=None, alias="modelId", min_length=1, max_length=128,
                                                   pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")):
         if Path(filename).suffix.lower() != ".pt":
@@ -279,9 +297,10 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
             raise HTTPException(429, "已有上传正在进行，请稍后重试")
         try:
             metadata = UploadMetadata(name=name.strip(), version=version.strip(), scenario=scenario.strip(),
-                                      purpose=purpose, model_id=model_id.strip() if model_id else None).model_dump(exclude_none=True)
+                                      supported_targets=supported_targets,
+                                      model_id=model_id.strip() if model_id else None).model_dump(exclude_none=True)
         except ValueError as exc:
-            raise HTTPException(422, "模型名称、版本与场景不能为空白") from exc
+            raise HTTPException(422, "模型名称、版本、场景或目标端声明无效") from exc
         upload_id = uuid.uuid4().hex
         upload_dir = pipeline.upload_path(upload_id)
         async with uploading:
@@ -304,7 +323,8 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
                 metadata.update(source_sha256=digest.hexdigest(), upload_id=upload_id)
                 atomic_json(upload_dir / "metadata.json", metadata)
                 job = submit("inspect", {"upload_id": upload_id, "model_id": metadata.get("model_id"),
-                                          "name": name, "version": version})
+                                          "name": name, "version": version,
+                                          **({"supported_targets": supported_targets} if supported_targets is not None else {})})
                 return {"upload_id": upload_id, "model_id": metadata.get("model_id") or "uploaded-" + upload_id, "job": job}
             except BaseException:
                 # This directory was just created by this request, contains no registered artifact.
@@ -322,10 +342,13 @@ def create_conversion_router(service: ConversionService, catalog: ModelCatalog,
             pipeline.upload_path(upload_id)
             upload_metadata = json.loads((pipeline.upload_path(upload_id) / "metadata.json").read_text(encoding="utf-8"))
             model_id = upload_metadata.get("model_id") or "uploaded-" + upload_id
-            model = catalog.get(model_id)
+            model = catalog.get(model_id, upload_metadata["version"])
         except (KeyError, ValueError) as exc:
             raise HTTPException(404, "未找到已验证的上传模型") from exc
         with service._guard:
+            targets = upload_metadata.get("supported_targets")
+            if targets is not None and "mobile" not in targets:
+                raise HTTPException(409, detail={"code": "model_target_not_supported", "message": "model does not support mobile"})
             if model.get("androidConverted"):
                 raise HTTPException(409, "该版本已经生成移动端产物")
             if any(job["metadata"].get("upload_id") == upload_id and job["action"] == "mobile" and

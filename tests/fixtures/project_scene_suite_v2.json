@@ -1,0 +1,108 @@
+{
+  "contract": "project-scene-suite-v2",
+  "suite": {
+    "suiteContractVersion": 2,
+    "projectId": "project-a",
+    "sceneId": "site-safety",
+    "name": "工地穿戴安全",
+    "revision": 4,
+    "inputTypes": ["image", "video"],
+    "enabled": true,
+    "approved": true,
+    "available": true,
+    "executionSupported": false,
+    "models": [
+      {"memberId": "member-helmet-image", "modelId": "helmet", "version": "1.0.0", "target": "mobile", "position": 0, "inputTypes": ["image"], "execution": "single", "available": true, "targetReadiness": {"mobile": true}},
+      {"memberId": "member-ppe-image", "modelId": "ppe", "version": "2.0.0", "target": "mobile", "position": 1, "inputTypes": ["image"], "execution": "single", "available": true, "targetReadiness": {"mobile": true}},
+      {"memberId": "member-ppe-video", "modelId": "ppe", "version": "2.0.0", "target": "mobile", "position": 2, "inputTypes": ["video"], "execution": "single", "available": true, "targetReadiness": {"mobile": true}}
+    ],
+    "plans": [
+      {"planId": "image-safety", "name": "静态安全检查", "inputTypes": ["image"], "memberIds": ["member-helmet-image"], "execution": "single", "enabled": true, "executionSupported": true},
+      {"planId": "video-ppe", "name": "视频流穿戴检查", "inputTypes": ["video"], "memberIds": ["member-ppe-video"], "execution": "single", "enabled": true, "executionSupported": true},
+      {"planId": "combined-image", "name": "静态联合检查", "inputTypes": ["image"], "memberIds": ["member-helmet-image", "member-ppe-image"], "execution": "sync", "enabled": true, "executionSupported": false}
+    ],
+    "installation": {
+      "status": "partial",
+      "requiredMemberIds": ["member-helmet-image", "member-ppe-image", "member-ppe-video"],
+      "readyMemberIds": ["member-helmet-image"]
+    }
+  },
+  "multiMemberResolveV3": {
+    "request": {
+      "planId": "combined-image",
+      "expectedRevision": 4,
+      "target": "mobile",
+      "inputType": "image",
+      "clientContractVersion": 3,
+      "supportedExecutionModes": ["sync"]
+    },
+    "response": {
+      "projectId": "project-a",
+      "sceneId": "site-safety",
+      "revision": 4,
+      "planId": "combined-image",
+      "execution": "sync",
+      "inputType": "image",
+      "target": "mobile",
+      "resolveContractVersion": 3,
+      "supportedExecutionModes": ["sync"],
+      "members": [
+        {
+          "memberId": "member-helmet-image",
+          "modelId": "helmet",
+          "version": "1.0.0",
+          "target": "mobile",
+          "artifactId": "helmet-mobile-tflite",
+          "artifactSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "parameterPlatform": "android",
+          "parameterRevision": 8,
+          "parameterSnapshot": {
+            "projectId": "project-a",
+            "modelId": "helmet",
+            "modelVersion": "1.0.0",
+            "platform": "android",
+            "revision": 8,
+            "detection": {"confidence": 0.35},
+            "alertRules": []
+          }
+        },
+        {
+          "memberId": "member-ppe-image",
+          "modelId": "ppe",
+          "version": "2.0.0",
+          "target": "mobile",
+          "artifactId": "ppe-mobile-tflite",
+          "artifactSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "parameterPlatform": "android",
+          "parameterRevision": 3,
+          "parameterSnapshot": {
+            "projectId": "project-a",
+            "modelId": "ppe",
+            "modelVersion": "2.0.0",
+            "platform": "android",
+            "revision": 3,
+            "detection": {"confidence": 0.42},
+            "alertRules": []
+          }
+        }
+      ],
+      "resolutionOnly": true,
+      "runtimeAuthorization": false
+    }
+  },
+  "standaloneRetention": {
+    "type": "standalone",
+    "modelId": "helmet",
+    "version": "1.0.0",
+    "target": "mobile",
+    "artifactId": "helmet-mobile-tflite",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "suiteRetention": {
+    "type": "suite",
+    "projectId": "project-a",
+    "sceneId": "site-safety",
+    "revision": 4,
+    "memberId": "member-helmet-image"
+  }
+}

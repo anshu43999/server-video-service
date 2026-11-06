@@ -1,6 +1,8 @@
 # 模型市场目录与下载 API 契约
 
-版本：`v2`（M98-T01，模型版本生命周期扩展）
+类型：当前领域接口说明，对应 App 需求基线 PR-03/04/06/07。M112-T02 增量见末节；不单独定义产品需求。
+
+版本：`v2`（M98-T01，模型版本生命周期扩展；M36 的目标端能力增量见 v3 契约）
 状态：冻结，供 `server-video-service` 与 Android App `M14-T02/M14-T03/M98-T03/M98-T04` 共用。
 
 v2 在保留 v1 顶层目录字段和旧下载路径的同时，将发布对象唯一键提升为
@@ -13,6 +15,10 @@ TFLite；`serverReady`、`androidReady`、`androidContract` 和 `calibrationData
 服务端验证、移动端签名状态和校准集快照。校准集快照记录所选档案的 ID、版本、图片数、大小、
 内容 SHA-256、受控 YAML 相对路径与内置标记，不代表客户端可以直接访问服务器文件路径。详见
 `local-model-conversion.md` 和 `docker-deployment.md` 附录 C。
+
+M36-T01 冻结的模型端能力、PC/移动端分别就绪、项目场景及多模型成员配置语义见
+[`model-capabilities-and-scenes-v1.md`](model-capabilities-and-scenes-v1.md)。该契约是 v2 的增量扩展；
+实际 API/存储行为须由后续 M36 实现任务交付，当前文档不表示同步/异步多模型推理已支持。
 
 ## 1. 范围与边界
 
@@ -34,6 +40,18 @@ Android 动态安装要求客户端校验目录中的 SHA-256，并在 `androidR
 - `modelId` 和 `artifactId` 只允许作为 URL path segment 使用，客户端应进行 percent-encoding。
 - 响应中的路径必须是 API URL 或相对下载地址，不得泄露服务器本机绝对路径。
 
+### 2.1 项目授权投影（M33）
+
+平台目录仍由平台超级管理员全局治理；项目成员访问项目路径时，只能看到该项目按场景批准的
+`modelId + version`。项目负责人通过项目模型分配接口选择已发布版本、参数平台和参数修订，
+服务端保存不可变批准参数快照；项目用户只能读取批准快照和下载启用版本，不能读取负责人尚未
+批准的工作配置，也不能上传、发布、撤回、卸载或迁移全局模型资产。
+
+项目目录、版本详情、产物下载和流绑定均重新检查项目生命周期及分配状态。未分配、已停用、
+项目外或生命周期不可用的对象按项目范围返回 404/403，不得通过平台目录的同族其他版本绕过
+授权。项目流持久化精确模型版本；撤权、撤回或暂停后，运行时在推理前后重新授权，失效结果
+丢弃并回退原图。
+
 ## 3. 目录模型字段
 
 目录列表和详情返回的模型对象使用下列字段。除标注“可选”外均为必填。
@@ -44,7 +62,6 @@ Android 动态安装要求客户端校验目录中的 SHA-256，并在 `androidR
 | `name` | string | 面向用户显示的名称 |
 | `version` | string | 发布版本，不用于替代 `modelId` |
 | `scenario` | string | 场景标识，如 `intrusion`、`smoke` |
-| `purpose` | string | `development`、`business` 或其他服务端定义用途 |
 | `runtime` | string | `server-onnx`、`server-pt`、`android-tflite` 等 |
 | `labels` | string[] | 权重原始类别名，顺序即输出类别顺序 |
 | `compatibleDevices` | string[] | 设备/API/ABI 适配声明，可为空 |
@@ -85,7 +102,6 @@ Android 动态安装要求客户端校验目录中的 SHA-256，并在 `androidR
       "name": "已授权场景检测模型",
       "version": "1.0.0",
       "scenario": "intrusion",
-      "purpose": "business",
       "runtime": "android-tflite",
       "labels": ["bottle", "bag", "box", "tool", "person"],
       "compatibleDevices": ["API 27+", "arm64-v8a", "armeabi-v7a"],
@@ -219,3 +235,30 @@ JSON 错误统一为：
 - 成功响应设置 `Content-Length`、安全的 `Content-Disposition` 文件名和 `X-Model-SHA256`。客户端仍应自行计算下载文件的大小与 SHA-256。
 - 每个服务进程默认最多并发下载 2 个、每个客户端 60 秒最多 10 次。超限返回 `429 rate_limited` 和 `Retry-After`；可通过 `MODEL_DOWNLOAD_MAX_CONCURRENT`、`MODEL_DOWNLOAD_RATE_LIMIT`、`MODEL_DOWNLOAD_RATE_WINDOW_SECONDS`、`MODEL_DOWNLOAD_CHUNK_SIZE` 调整。
 - Session 可从 Cookie、`X-Video-Service-Token`、`X-Admin-Token` 或 Bearer 请求头读取；生产环境只接受动态 Session。下载 URL 与服务日志不包含令牌。多 worker 部署仍应在反向代理层配置全局带宽/并发限额。
+
+## 9. 资源移除增量（M112-T02，2026-10-25）
+
+本节仅交付云端管理操作、领域事实和恢复机制；设备库存、更新通道、App 生命周期展示和用户确认清理分别属于 M111/M112-T03～T06，尚未交付。
+
+| 路径（均带 `/aiyoloapi`） | 语义及权限 |
+|---|---|
+| `GET /projects/{projectId}/scenes/{sceneId}/removal-impact` | 当前项目场景管理权限；返回 `expectedRevision`、影响计数及 `safeToRemove` |
+| `DELETE /projects/{projectId}/scenes/{sceneId}` | 相同权限；软删除，返回操作 ID、终态修订及删除标记，不级联模型或文件 |
+| `GET /models/{modelId}/versions/{version}/removal-impact` | 当前平台模型管理权限；精确版本作用域 |
+| `GET /models/{modelId}/removal-impact` | 同上；家族作用域。多版本家族返回 `409 version_required`，要求明确版本 |
+| `DELETE /models/{modelId}/versions/{version}`、`DELETE /models/{modelId}` | 云端版本退役及有限已知产物回收；家族接口只允许唯一版本，不隐式全族删除 |
+| `POST /models/{modelId}/versions/{version}/deprecate`、`…/revoke` | 原有状态操作增加严格前置、持久幂等意图与审计；已 REVOKED 不得退回 DEPRECATED |
+
+写请求必须包含 `If-Match: "<正整数修订>"` 和 `Idempotency-Key`（1～128 位 ASCII 字母、数字、点、下划线、冒号或连字符）。DELETE 不接收 body 或 cascade；状态 POST 保留原有原因载荷。缺任一前置返回 428，格式或 DELETE body 无效返回 400。修订变化、同键不同载荷、依赖未消除及删除进行中返回 409；当前权限不足 403，不可见对象 404。模型存储/投影故障返回不泄漏路径的 `503 resource_lifecycle_unavailable`，不能当作未执行。
+
+幂等身份包含当前 actor、作用域及动作；同键同载荷返回已存结果，重放仍重验当前平台权限。冲突应重新预览；网络/503 结果不确定时保留原修订和幂等键核验重试，不能直接换新键。预览不是锁、不能作为写时授权或依赖证明。
+
+依赖包括有效项目分配、所有未软删除场景的成员及方案（含停用/未批准场景）、视频流家族引用和活动版本。模型 DELETE 在写入时再次检查；场景/分配/方案/审批/流写入也检查持久删除意图。场景软删除保留成员、方案、安装和审计记录，禁用并撤销运行授权，`sceneId` 永不复用，PATCH 不能复活。新建同名场景必须使用新 ID。旧下载、resolve、runtime 授权路径仍由服务端拒绝失效对象，不依赖新版 UI。
+
+场景删除标记、修订、审计、领域 outbox 和授权撤销在同一 DB 事务中提交。模型使用 `prepared → registry_committed → projected/confirmed` 的持久恢复阶段；注册表墓碑与有限文件清理意图先保存，再删不再共享的已知安全路径。注册表/文件与 PostgreSQL **不是跨存储原子事务**。`uninstalled=true` 表示版本已退役，不等于全部文件已删；检查 `cleanupFailures`、`deletedFiles`、`retainedSharedFiles`、`missingFiles`。失败时保留原意图，重放或服务启动恢复；不扫描未知目录、不另建定时云端 GC、不由 App 回执触发云端删文件。
+
+共享本地锁顺序为 scene → assignment → parameter → catalog（进程锁和 OS 文件锁）→ stream 内存锁 → PostgreSQL default/project 行 → account 行。恢复在 catalog 锁内读取最新阶段，不使用锁外旧 pending 快照；已确认操作仅补注册表确认，不重复审计/事件。生产持久恢复要求 PostgreSQL；内存测试模式不提供同等级 DB 审计和启动恢复保证。领域 outbox 尚未接入设备推送。
+
+上线顺序：维护窗口备份 PostgreSQL、registry 与模型产物 → 使用同一应用配置执行 `alembic upgrade head`（新增 `20261025_22`，父版 `20261022_21`）→ 部署对应代码并启动 → schema 校验和有限意图恢复 → 核对日志及影响预览。存在生命周期事实/场景墓碑时 downgrade 明确拒绝；不要为回退删表或清除历史。多进程必须共享同一注册表、OS 锁文件和数据库；分布式节点须提供兼容锁语义，本次未验证跨主机共享文件系统。
+
+`knownDevices=0` / `unknownDeviceCount=0` 是本阶段未接设备库存时的占位，不表示设备数或离线设备数为零。管理端始终明确“离线设备数量未知”；不可承诺实时通知、远程擦除或所有正在执行的推理即刻终止。运行后续授权/续期失败边界由现有 runtime 门禁负责。

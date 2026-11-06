@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import importlib.metadata
 import json
+import os
 import platform
 import shutil
 from pathlib import Path
@@ -25,6 +26,8 @@ def sha256(path: Path) -> str:
 
 
 def load_ultralytics():
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    os.environ["JAX_PLATFORMS"] = "cpu"
     try:
         import ultralytics
         from ultralytics import YOLO
@@ -65,7 +68,7 @@ def export_model(args: argparse.Namespace) -> list[Path]:
     generated: list[Path] = []
     if args.format in ("server", "all"):
         if args.server_format in ("onnx", "both"):
-            exported = model.export(format="onnx", imgsz=args.imgsz, nms=False, simplify=False, dynamic=False)
+            exported = model.export(format="onnx", imgsz=args.imgsz, nms=False, simplify=False, dynamic=False, device="cpu")
             source = Path(exported)
             destination = output_dir / f"{weights.stem}_{args.imgsz}.onnx"
             shutil.copy2(source, destination)

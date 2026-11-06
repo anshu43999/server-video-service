@@ -71,20 +71,18 @@ class StreamSessionTests(unittest.TestCase):
         self.assertLessEqual(accepted, 33)
         self.assertGreaterEqual(accepted, 25)
 
-    def test_ingest_produces_jpeg(self):
+    def test_ingest_does_not_produce_live_jpeg(self):
         async def scenario():
             session = StreamSession("test")
             await session.ingest_jpeg(make_jpeg())
-            self.assertTrue(session.latest_jpeg)
-            decoded = cv2.imdecode(np.frombuffer(session.latest_jpeg, np.uint8), cv2.IMREAD_COLOR)
-            self.assertIsNotNone(decoded)
+            self.assertIsNone(session.latest_jpeg)
             self.assertEqual(session.frames_received, 1)
         asyncio.run(scenario())
 
     def test_subscriber_limit_counter_is_bounded(self):
         session = StreamSession("test")
-        self.assertTrue(session.try_subscribe())
-        self.assertEqual(session.active_subscribers, 1)
+        self.assertFalse(session.try_subscribe())
+        self.assertEqual(session.active_subscribers, 0)
         session.unsubscribe()
         session.unsubscribe()
         self.assertEqual(session.active_subscribers, 0)
@@ -105,7 +103,7 @@ class StreamSessionTests(unittest.TestCase):
             frame[:, :, 1] = 255
             await session.ingest_frame(frame)
             self.assertEqual(session.frames_received, 1)
-            self.assertTrue(session.latest_jpeg)
+            self.assertIsNone(session.latest_jpeg)
 
         asyncio.run(scenario())
 
@@ -113,7 +111,7 @@ class StreamSessionTests(unittest.TestCase):
         async def scenario():
             session = StreamSession("rtsp-jitter")
             frame = np.zeros((32, 48, 3), dtype=np.uint8)
-            with patch.object(session, "_wait_for_emit_slot", new=AsyncMock()) as pacer:
+            with patch.object(session, "_wait_for_analysis_slot", new=AsyncMock()) as pacer:
                 await session.ingest_frame(
                     frame, enforce_rate_limit=False, pace_output=False
                 )
@@ -125,23 +123,23 @@ class StreamSessionTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
-    def test_max_fps_reconfigures_persistent_publisher(self):
+    def test_max_fps_reconfigures_analysis_without_a_publisher(self):
         async def scenario():
             session = StreamSession("fps")
             await session.set_max_fps(15)
             self.assertEqual(session.max_fps, 15)
-            self.assertEqual(session.publisher.config.fps, 15)
+            self.assertFalse(hasattr(session, "publisher"))
 
         asyncio.run(scenario())
 
-    def test_output_pacer_waits_for_the_next_target_slot(self):
+    def test_analysis_pacer_waits_for_the_next_target_slot(self):
         async def scenario():
             session = StreamSession("pacer")
             session.max_fps = 20
             session._last_emit = 100.0
             with patch("app.stream.time.monotonic", return_value=100.01), \
                  patch("app.stream.asyncio.sleep", new=AsyncMock()) as sleep:
-                await session._wait_for_emit_slot()
+                await session._wait_for_analysis_slot()
             sleep.assert_awaited_once()
             self.assertAlmostEqual(sleep.await_args.args[0], 0.04, places=6)
             self.assertAlmostEqual(session._last_emit, 100.05, places=6)
@@ -161,7 +159,7 @@ class StreamSessionTests(unittest.TestCase):
 
         asyncio.run(scenario())
 
-    def test_missing_model_falls_back_to_raw_output(self):
+    def test_missing_model_does_not_fall_back_to_raw_output(self):
         async def scenario():
             session = StreamSession("fallback")
             session.detector.model_path = "models/definitely-missing-model.pt"
@@ -169,7 +167,7 @@ class StreamSessionTests(unittest.TestCase):
             session._last_input = 0
             await session.ingest_jpeg(make_jpeg())
             await asyncio.sleep(0.05)
-            self.assertTrue(session.latest_jpeg)
+            self.assertIsNone(session.latest_jpeg)
             self.assertEqual(session.frames_processed, 0)
             self.assertEqual(session.frames_fallback, 1)
             self.assertIsNotNone(session.detector.load_error)
@@ -189,7 +187,7 @@ class StreamSessionTests(unittest.TestCase):
             await session.ingest_jpeg(make_jpeg())
             await asyncio.sleep(0.05)
             self.assertGreaterEqual(session.frames_dropped, 0)
-            self.assertTrue(session.latest_jpeg)
+            self.assertIsNone(session.latest_jpeg)
 
         asyncio.run(scenario())
 

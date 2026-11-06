@@ -6,7 +6,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     HOME=/tmp \
     XDG_CONFIG_HOME=/tmp/.config \
     YOLO_CONFIG_DIR=/tmp/Ultralytics \
-    TORCH_HOME=/tmp/torch
+    TORCH_HOME=/tmp/torch \
+    YOLO_DEVICE=cpu \
+    CUDA_VISIBLE_DEVICES="" \
+    JAX_PLATFORMS=cpu \
+    PIP_CONSTRAINT=/app/constraints-cpu.txt \
+    PIP_FIND_LINKS="https://download.pytorch.org/whl/cpu/torch/ https://download.pytorch.org/whl/cpu/torchvision/"
 
 WORKDIR /app
 
@@ -17,7 +22,11 @@ RUN apt-get update \
     && useradd --uid 10002 --gid converter --home-dir /app --no-create-home converter
 
 COPY requirements.txt requirements-yolo.txt requirements-convert.txt requirements-converter-service.txt ./
-RUN pip install --no-cache-dir -r requirements-converter-service.txt
+COPY requirements-cpu.txt constraints-cpu.txt ./
+COPY tools/check_cpu_runtime.py ./tools/check_cpu_runtime.py
+RUN pip install --no-cache-dir -r requirements-converter-service.txt \
+    && pip check \
+    && python tools/check_cpu_runtime.py
 
 COPY --chown=converter:converter converter_service ./converter_service
 COPY --chown=converter:converter tools/conversion_worker.py ./tools/conversion_worker.py

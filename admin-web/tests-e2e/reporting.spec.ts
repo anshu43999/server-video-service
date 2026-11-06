@@ -1,0 +1,52 @@
+import { test, expect, type Download } from '@playwright/test'
+
+test.beforeEach(({},info)=>test.skip(info.project.name!=='production-chromium','Isolated real service required'))
+async function jsonDownload(download:Download){
+  const stream=await download.createReadStream();const chunks:Buffer[]=[]
+  for await(const chunk of stream!)chunks.push(Buffer.from(chunk))
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+}
+for(const width of [1440,390])test(`real scoped reports and audit filters at ${width}px`,async({page,context})=>{
+  test.setTimeout(60_000)
+  await page.setViewportSize({width,height:960})
+  const login=await context.request.post('/aiyoloapi/auth/login',{data:{username:`business-owner-reporting${width}`,password:'business-test-password'}})
+  expect(login.ok()).toBe(true)
+  const me=await(await context.request.get('/aiyoloapi/auth/me')).json()
+  const id=(await(await context.request.get('/aiyoloapi/auth/projects')).json()).projects[0].projectId
+  const base=`/aiyoloapi/projects/${id}`
+  await page.goto(`/admin/alerts?project=${id}`)
+  await expect(page.locator('.alert-event-row')).toHaveCount(1)
+  const auditResponse=page.waitForResponse(r=>r.url().includes('/alerts/export')&&r.status()===200)
+  const alertFile=page.waitForEvent('download');await page.getByRole('button',{name:'导出告警',exact:true}).click()
+  const report=await jsonDownload(await alertFile),response=await auditResponse
+  expect(report).toMatchObject({projectId:id,count:1,scope:'entire-project',evidenceIncluded:false})
+  expect(report.events[0]).toMatchObject({eventId:'business-alert',projectId:id})
+  expect(report.events[0].evidence).toBeUndefined()
+  await page.locator('.alert-event-row').click();await page.getByRole('button',{name:'标记误报',exact:true}).click()
+  await page.getByRole('alertdialog').getByRole('button',{name:'确认标记',exact:true}).click()
+  await expect(page.getByRole('dialog')).toContainText('已标记为误报')
+  await page.getByRole('button',{name:'关闭告警详情'}).click()
+  const feedbackFile=page.waitForEvent('download');await page.getByRole('button',{name:'导出误报',exact:true}).click()
+  const feedback=await jsonDownload(await feedbackFile)
+  expect(feedback).toMatchObject({projectId:id,count:1})
+  expect(feedback.entries).toEqual(feedback.trainingEntries)
+  await page.goto(`/admin/project-audit?project=${id}`)
+  await page.getByLabel('操作动作',{exact:true}).fill('export.alerts')
+  await page.getByLabel('操作者账号 ID').fill(me.accountId)
+  await page.getByLabel('请求 ID',{exact:true}).fill(response.headers()['x-request-id']!)
+  await page.getByRole('button',{name:'查询审计',exact:true}).click()
+  await expect(page.locator('.audit-entry')).toHaveCount(1)
+  await expect(page.locator('.audit-entry')).toContainText('export.alerts')
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
+  await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}))
+  await page.screenshot({path:`../evidence/M33/M33-T13-audit-${width}.png`,fullPage:true,animations:'disabled'})
+  await page.getByLabel('操作动作',{exact:true}).fill('no.match')
+  await page.getByRole('button',{name:'查询审计',exact:true}).click()
+  await expect(page.getByText('当前页暂无审计记录。')).toBeVisible()
+  await page.getByRole('button',{name:'清除筛选'}).click();await expect(page.locator('.audit-entry').first()).toBeVisible()
+  await context.request.post('/aiyoloapi/auth/login',{data:{username:`business-user-reporting${width}`,password:'business-test-password'}})
+  await page.goto(`/admin/alerts?project=${id}`);await expect(page.locator('.alert-event-row')).toHaveCount(1)
+  await expect(page.getByRole('button',{name:'导出告警',exact:true})).toHaveCount(0)
+  expect((await context.request.get(base+'/alerts/export')).status()).toBe(403)
+  expect((await context.request.get(base+'/audit')).status()).toBe(403)
+})

@@ -1,5 +1,7 @@
 # H.264 编码实现决策（M08-T02）
 
+> 2026-10-15 / M34-T04：本文直播输出、发布编码器、播放分发或移动远程视频的方案/操作/验收仅作历史，不再生效，不得据此启动旧服务或放行端口。现行范围以 [ADR-003](adr-003-analysis-alerts-only.md) 和 [退役升级手册](media-retirement-upgrade.md) 为准；输入解码、PC专用预览、YOLO、正式告警与证据仍保留。历史未测项不能标为当前通过。
+
 ## 实现
 
 `app.publisher.MediaMTXPublisher` 为每路流维护一个长驻 FFmpeg 进程，

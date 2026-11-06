@@ -1,32 +1,15 @@
-# M04-T03 多流并发与容量压测
+# 当前分析、PC预览与告警容量验证
 
-## 测量边界
+2026-10-15 / M34-T04：旧 H.264/MediaMTX 容量路径退役。`tools/capacity_benchmark.py` 对包括 `--publish`、`--dry-run` 的旧命令返回 `live_video_retired` 和非零退出码，不编码、不联网、不生成新容量数据。历史 M02/M04/M08 数字只作为历史，不能换个名称复用为当前容量。
 
-生产容量必须包含完整的“帧 → H.264 → RTSP/MediaMTX”路径。`tools/capacity_benchmark.py` 每路并发任务调用 `MediaMTXPublisher.publish()`；该方法先执行 `H264Encoder.encode()`，再向 MediaMTX 的固定 RTSP path 写入 Annex-B H.264。编码耗时通过 P50/P95 单独报告，不能引用 M02-T03 的 JPEG/无编码数字。
+## 当前测量边界（M34-T06）
 
-在没有运行 MediaMTX 的开发机上，可使用 `--dry-run`（默认）运行 H.264 编码加确定性内存 sink。该模式只用于校准编码开销，不作为生产并发结论；生产结论必须附带 `--publish` 的真实 MediaMTX 结果。
+先本地、后部署。使用真实源、明确的模型/参数/推理设备和独立测试 PostgreSQL/MinIO；记录输入分辨率/FPS、解码方式、硬件、系统、运行时、模型哈希及规则版本。
 
-## 可重复命令
+分开测量：输入解码、YOLO推理、规则/正式告警持久化与证据、PC按需JPEG预览。至少比较无人观看、单个PC预览、多个PC视频墙；报告输入/处理FPS、latest-only丢帧、推理P50/P95、告警生成/到达、CPU/RAM/GPU、连接与线程随时间变化。预览最高5fps/宽1280并不代表分析FPS，也不承诺25/30fps全帧率。
 
-```powershell
-cd E:\aiyolo\server-video-service
-.venv\Scripts\python.exe tools\capacity_benchmark.py --streams 1 --duration 20 --fps 10 --dry-run --output artifacts\capacity-1.json
-.venv\Scripts\python.exe tools\capacity_benchmark.py --streams 4 --duration 60 --fps 10 --publish --rtsp-base rtsp://127.0.0.1:8554 --output artifacts\capacity-4.json
-```
+## 通过条件与资源限制
 
-逐步增加 `--streams`（1、2、4、8……），在每次运行中保持分辨率、FPS、码率和 GOP 不变。JSON 结果包含请求/成功帧数、有效总 FPS、编码 P50/P95、每路发布状态、编码后字节数和进程 CPU/内存采样。`--publish` 失败或成功帧数不足时，结果不得标记为通过。
+无预览请求时仍分析并按规则生成正式告警，不运行后台发布编码器。关闭YOLO仍可看PC原画面；禁用/切模型/撤权后不得交付过期标注或跨项目内容。故障恢复见 [故障手册](fault-recovery.md)。
 
-## 容量判定与降级
-
-单机并发上限定义为：连续 60 秒运行时，每路成功帧率不低于目标 FPS 的 90%，编码 P95 不超过单帧预算（`1000 / FPS` ms），且无 `publish_state=failed`、BrokenPipe 重连耗尽或进程内存持续增长。记录达到上限的最后一个流数 `N`，扩容指标为 `N+1` 流或任一资源门槛先触发者。
-
-建议初始资源门槛：CPU 持续 80%、进程 RSS 1 GiB、GPU 显存 80%。超出门槛时按以下顺序降级：
-
-1. 降低每路目标 FPS（保持关键帧 GOP 1–2 秒）；
-2. 关闭叠加或 YOLO 推理，保留原始 H.264 视频和检测心跳；
-3. 拒绝新流并返回容量不足状态，避免影响已建立流；
-4. 扩容到另一服务实例/MediaMTX 节点，并按固定 path 分片。
-
-## 结果记录要求
-
-现场结果应保存 JSON 和运行环境（CPU、内存、GPU、FFmpeg、MediaMTX 版本）。未安装 FFmpeg、MediaMTX 不可达或缺少 `psutil` 时，工具仍输出结果但必须把资源字段记为 `null`，并在验收记录中列为环境限制。
+逐级增加流数，记录可接受负载与首次退化点；负载超过上限优先限制输入/分析FPS和流数，不以恢复移动分发或跳过告警持久化换取指标。真实数值必须来自原始日志，缺硬件/模型/源或长稳时长不足明确列未测；不得把单元测试桩、JPEG编解码测试或历史发布压测当作产能结论。

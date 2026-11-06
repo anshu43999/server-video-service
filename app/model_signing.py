@@ -17,6 +17,14 @@ def _number(value: Any) -> str:
     return str(float(value))
 
 
+def _key_ids(value: str | None) -> frozenset[str]:
+    return frozenset(
+        item.strip()
+        for item in (value or "").split(",")
+        if item.strip()
+    )
+
+
 def canonical_manifest_payload(manifest: dict[str, Any]) -> bytes:
     """Mirror Android ModelPackageManifest.canonicalPayload() byte-for-byte."""
     model_file = manifest["modelFile"]
@@ -32,7 +40,6 @@ def canonical_manifest_payload(manifest: dict[str, Any]) -> bytes:
         f'schemaVersion={manifest["schemaVersion"]}',
         f'modelId={manifest["modelId"]}',
         f'version={manifest["version"]}',
-        f'purpose={manifest["purpose"]}',
         f'runtime.name={runtime["name"]}',
         f'runtime.version={runtime["version"]}',
         f'modelFile.repositoryPath={model_file["repositoryPath"]}',
@@ -61,6 +68,10 @@ def canonical_manifest_payload(manifest: dict[str, Any]) -> bytes:
         f'output.tensor.dataType={output_tensor["dataType"].upper()}',
         f'output.tensor.quantization={_number(output_tensor["quantization"][0])},{output_tensor["quantization"][1]}',
     ]
+    # Legacy signed manifests included purpose in the v1 canonical payload.
+    # New manifests omit it; keep verification byte-compatible when present.
+    if "purpose" in manifest:
+        lines.insert(3, f'purpose={manifest["purpose"]}')
     lines.extend(f"labels[{index}]={label}" for index, label in enumerate(manifest["labels"]))
     lines.extend([
         f'labelSha256={manifest["labelSha256"].lower()}',
@@ -80,17 +91,65 @@ def canonical_manifest_payload(manifest: dict[str, Any]) -> bytes:
 
 
 class ModelManifestSigner:
-    def __init__(self, key_id: str | None, private_key_path: str | Path | None):
+    def __init__(
+        self,
+        key_id: str | None,
+        private_key_path: str | Path | None,
+        trusted_key_ids: str | None = None,
+        revoked_key_ids: str | None = None,
+    ):
         self.key_id = key_id.strip() if key_id else None
         self.private_key_path = Path(private_key_path).expanduser() if private_key_path else None
+        self.trusted_key_ids = _key_ids(trusted_key_ids) | ({self.key_id} if self.key_id else set())
+        self.revoked_key_ids = _key_ids(revoked_key_ids)
+
+    @property
+    def key_id_trusted(self) -> bool:
+        return bool(self.key_id and self.key_id in self.trusted_key_ids and self.key_id not in self.revoked_key_ids)
 
     @property
     def configured(self) -> bool:
-        return bool(self.key_id and self.private_key_path)
+        return bool(self.key_id and self.private_key_path and self.key_id_trusted)
+
+    @property
+    def private_key_readable(self) -> bool:
+        return bool(self.private_key_path and self.private_key_path.is_file())
+
+    @property
+    def public_key_fingerprint(self) -> str | None:
+        if not self.private_key_path:
+            return None
+        try:
+            key = serialization.load_pem_private_key(
+                self.private_key_path.read_bytes(), password=None
+            )
+        except (OSError, ValueError, TypeError):
+            return None
+        if not isinstance(key, Ed25519PrivateKey):
+            return None
+        public_bytes = key.public_key().public_bytes(
+            serialization.Encoding.Raw,
+            serialization.PublicFormat.Raw,
+        )
+        return "sha256:" + hashlib.sha256(public_bytes).hexdigest()
+
+    def diagnostics(self) -> dict[str, Any]:
+        """Return safe operational state; never expose the private key path or bytes."""
+        trusted_key_ids = self.trusted_key_ids - self.revoked_key_ids
+        return {
+            "configured": self.configured,
+            "keyId": self.key_id,
+            "keyIdTrusted": self.key_id_trusted,
+            "privateKeyReadable": self.private_key_readable,
+            "publicKeyFingerprint": self.public_key_fingerprint,
+            "rotationWindowActive": len(trusted_key_ids) > 1,
+            "trustedKeyIds": sorted(self.trusted_key_ids),
+            "revokedKeyIds": sorted(self.revoked_key_ids),
+        }
 
     def sign(self, manifest: dict[str, Any]) -> dict[str, Any]:
         if not self.configured:
-            raise ValueError("模型签名私钥尚未配置")
+            raise ValueError("模型签名私钥未配置或 keyId 已被撤销")
         if any(character.isspace() or not character.isprintable() for character in self.key_id or ""):
             raise ValueError("模型签名 keyId 格式无效")
         try:
@@ -123,7 +182,6 @@ def build_android_manifest(model_id: str, metadata: dict[str, Any], result: dict
         "schemaVersion": 1,
         "modelId": model_id,
         "version": metadata["version"],
-        "purpose": metadata["purpose"],
         "runtime": {"name": "LiteRT", "version": "2.1.6"},
         "modelFile": {
             "repositoryPath": f"models/{model_id}/{metadata['version']}/android.tflite",
@@ -163,7 +221,7 @@ def build_android_manifest(model_id: str, metadata: dict[str, Any], result: dict
         "license": {
             "model": "administrator-supplied-review-required",
             "data": "administrator-supplied-review-required",
-            "distribution": "internal-functional-testing-only" if metadata["purpose"] == "development" else "requires-review",
+            "distribution": "requires-review",
         },
         "source": {"repository": "administrator-upload", "revision": metadata["source_sha256"]},
         "minAppVersion": "0.1.0",

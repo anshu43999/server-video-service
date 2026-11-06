@@ -1,73 +1,25 @@
-# M04-T04 弱网、重启与故障恢复验证
+# 输入、PC预览、YOLO与告警故障恢复
 
-本任务冻结故障注入步骤和可观察的通过条件。仓库中的自动化测试只注入发布器管道故障；它们验证状态机和资源释放，不替代真实 Docker/网络实测。没有运行真实环境时，报告必须明确写“未实测”，不得伪造延迟、恢复时间或并发数据。
+2026-10-15 / M34-T04。当前契约为 ADR-003；先本地验证，不以启动容器作为测试前提。以下真实故障/长稳验收由 M34-T06 承接，自动化桩测试仅验证状态与资源不变量，不得伪造实测恢复时间、容量或成功证据。
 
-## 通过条件
+| 场景 | 本地安全注入方式 | 通过条件 |
+|---|---|---|
+| 输入断流 | 停止专用测试源，不能关闭共享摄像机 | 接收帧停止，PC预览源超过3秒无更新后204清屏，保留配置并自动重试，恢复后显示新帧 |
+| 丢包/延迟 | 使用隔离测试网关或测试源模拟，需网络操作授权 | 不堆积旧帧、不失控增长；记录丢帧与输入错误，恢复后继续分析 |
+| PC预览断开 | 关闭页面、切项目或中断单个浏览器网络 | 无人观看仍推理并生成符合规则的正式告警；前端取消请求/释放图片，不遗留旧画面 |
+| 模型不可用/撤权 | 测试项目中禁用模型或模拟推理失败 | 标注失效，PC原画面可用，模型错误可见，不生成无效或迟到告警 |
+| 存储/投递失败 | 隔离数据库/MinIO/通知适配器注入失败 | 错误可见；不把失败事件伪装为正式持久化告警，不阻塞输入重试；独立验证恢复和去重 |
+| 服务重启 | 只重启本轮拥有的隔离本地服务 | 恢复启用流，保留停用流、模型版本/参数/修订号及历史告警证据，不恢复媒体分发 |
+| 权限变更 | 撤销测试会话/成员，停用测试项目 | 预览编码后再次验权，不能返回跨项目或撤权后的帧，通知/证据遵守项目权限 |
+| 资源泄漏 | 多次创建/删除测试流与开关页面 | 记录进程/线程/连接/内存，任务释放、旧输入停止；无发布器子进程 |
 
-| 场景 | 注入方式 | 通过条件 |
-| --- | --- | --- |
-| 输入断流 | 停止 `tools/push_video.py` 或关闭 ingest WebSocket | `frames_received` 停止增长；服务保持可用，重新推帧后恢复 `outputting` |
-| 弱网/丢包 | Linux 使用 `tc netem loss 10% delay 100ms`；Windows 在测试网关或交换机注入 | 播放器显示离线并重连；发布器依次进入 `reconnecting`，成功后回到 `connected`，不产生重复会话 |
-| 播放器断开 | 关闭 WHEP/LL-HLS 客户端或 MJPEG/WS 连接 | `active_subscribers` 回到断开前水平（通常为 0），发布器和拉流任务仍存活 |
-| WHEP 不可用 | 阻断 8889 或返回非 2xx | 客户端按协议顺序回退 LL-HLS（8888），并在 UI 显示“回退”状态 |
-| 服务重启 | `docker compose restart video-service` | 健康检查恢复；旧会话被关闭；重新创建/推流后无残留进程 |
-| MediaMTX 重启 | `docker compose restart mediamtx` | 首帧触发发布器重连；状态从 `reconnecting` 回到 `connected`；路径列表无重复发布者 |
-| 资源泄漏 | 重复执行启动→播放→断开→删除（至少 20 次） | `GET /aiyoloapi/metrics` 中会话数、订阅数和发布进程数回到基线；无持续增长 |
+## 本地自动化
 
-## 可重复执行
-
-先准备本地配置并启动：
-
-```powershell
-Copy-Item deploy/mediamtx/mediamtx.yml.example deploy/mediamtx/mediamtx.yml
-docker compose up --build -d
-docker compose ps
-```
-
-在另一个终端创建流并持续推帧，然后记录基线：
+在工程根目录运行（Windows虚拟环境）：
 
 ```powershell
-python tools/push_video.py --help
-Invoke-RestMethod http://127.0.0.1:8080/healthz
-Invoke-RestMethod http://127.0.0.1:8080/aiyoloapi/metrics | ConvertTo-Json -Depth 8
+$env:PYTHONPATH='tests'
+./.venv/Scripts/python.exe -m unittest test_fault_recovery test_admin_preview test_analysis_only test_stream_restart_recovery -v
 ```
 
-按上表逐项注入故障。MediaMTX 重启使用：
-
-```powershell
-docker compose restart mediamtx
-docker compose logs --tail=100 mediamtx
-```
-
-模拟媒体服务硬断流（用于断流/故障恢复场景）：
-
-```powershell
-docker compose stop mediamtx
-# 观察 video-service 的 publish_state/reconnect 日志后再启动
-docker compose start mediamtx
-```
-
-服务重启使用：
-
-```powershell
-docker compose restart video-service
-docker compose ps
-```
-
-Linux 弱网示例（仅针对测试接口/容器网卡，测试完成后删除规则）：
-
-```bash
-sudo tc qdisc add dev eth0 root netem loss 10% delay 100ms 20ms
-# ...执行 WHEP/LL-HLS 播放与重连观察...
-sudo tc qdisc del dev eth0 root
-```
-
-## 自动化证据
-
-`tests/test_fault_recovery.py` 使用受控 BrokenPipe 注入模拟媒体进程断开、重试耗尽、播放器订阅释放和会话关闭，确保不会留下 publisher 进程或订阅计数。运行：
-
-```powershell
-.venv\Scripts\python.exe -m unittest discover -s tests -p 'test_fault_recovery.py' -v
-```
-
-该测试通过仅表示本地状态机检查通过；真实 Docker、网络丢包、WHEP/LL-HLS 回退和 20 次泄漏循环仍需在具备 MediaMTX、浏览器/播放器及网络控制权限的环境执行并附原始日志。
+这些测试使用隔离数据库和模拟推理，不是摄像机、真实YOLO或API27实测。记录硬件、源/模型/规则、开始结束时间、原始日志和未测项；保留旧历史报告，不重新标为本次通过。需要维护旧部署时使用 [退役升级手册](media-retirement-upgrade.md)，不再进行媒体服务器重启/播放器回退演练。

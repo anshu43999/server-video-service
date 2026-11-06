@@ -21,7 +21,8 @@ class ModelMarketplaceContractTests(unittest.TestCase):
     def test_contract_freezes_required_metadata_and_mvp_boundary(self):
         for field in ("modelId", "version", "scenario", "runtime", "labels", "sizeBytes", "sha256", "compatibleDevices"):
             self.assertIn(f"`{field}`", self.text)
-        self.assertIn("MVP 不含数字签名", self.text)
+        self.assertIn("MVP 只负责目录元数据和模型产物下载", self.text)
+        self.assertIn("signatureStatus=signed", self.text)
         self.assertIn("X-Video-Service-Token", self.text)
         self.assertIn("不得放入 query、path、下载 URL 或日志", self.text)
 

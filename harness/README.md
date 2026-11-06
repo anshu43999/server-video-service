@@ -2,6 +2,10 @@
 
 这套 Harness 专门管理 `server-video-service` 的开发任务和验收记录，不依赖也不修改 `mobile-app/harness`。
 
+工作区级测试账号统一记录在 [E:\aiyolo\harness\TEST_ACCOUNTS.md](../../harness/TEST_ACCOUNTS.md)，服务端、管理后台和移动端验收使用同一份账号角色口径。
+
+PostgreSQL 集成测试必须使用隔离临时实例并显式覆盖 `DATABASE_URL`；不得默认将应用 `.env` 的连接串用于测试。详见 [POSTGRES_TESTING.md](POSTGRES_TESTING.md)。
+
 ## 工作流
 
 ```text
@@ -82,6 +86,10 @@ python harness/harness.py validate
 python harness/harness.py render
 ```
 
+## 部署最后执行
+
+`task-state.json`中的`executionPolicy`维护部署任务清单和顺序。被标记为部署任务的小任务只能在服务端和`mobile-app`任务状态中的全部测试子任务进入`completed`或`superseded`后启动；部署任务之间还必须遵守`deploymentTaskOrder`。`next`会隐藏未满足门禁的部署任务，`start`会拒绝提前启动并列出阻塞任务。历史已完成的部署任务保留原记录，不因新增门禁回写历史状态。
+
 ## 当前执行顺序
 
-当前主线是 `M07 生产传输协议重构与架构重定位`：先完成 `M07-T01` 的治理工具升级，再冻结 ADR-002 输出协议决策，然后更新产品需求与接口契约，最后重构任务板并终止 `M04` 中因协议变更而作废的任务。`M00`–`M03`、`M06` 是已完成基线，不能替代真实服务器部署和目标模型压测。
+当前视频范围由 `M34` 跟踪：保留输入、PC同源实时预览与YOLO/正式告警，退役PC推流和移动直播分发；Android由独立 `M101` 承接。执行 `next/show` 按实际依赖选择一个任务，先完成本地真实验收，再获准部署容器。ADR-003取代旧分发决策；历史完成记录保留，不替代当前模型/源/存储/设备及长稳验收，也不豁免其他未完成项目任务。

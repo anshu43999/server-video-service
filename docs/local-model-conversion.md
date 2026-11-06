@@ -4,6 +4,8 @@
 
 COCO 仅用作用户功能测试模型，不代表业务精度。训练好的 `.pt` 在服务端虚拟环境中完成 CPU 试推理后直接登记；移动端使用单独导出的 `.tflite`。移动端转换失败不会撤回已经验证通过的 PT，也不会改变已有视频流绑定。
 
+服务端全流程固定 CPU，包含视频推理、PT 试运行、ONNX/LiteRT 导出与 TFLite 复验。安装 `requirements-yolo.txt` 或 `requirements-convert.txt` 会引入 CPU 版 PyTorch/TorchVision 及统一版本约束；Linux 无需显卡驱动。Docker 两个镜像同时构建并执行 CPU 运行库审计，详见 [CPU 运行说明](docker-deployment.md#cpu-only)。
+
 ## 使用步骤
 
 1. 启动服务并登录管理后台，进入“模型资产 → 上传与模型处理”。生产环境使用登录后签发的动态 Session；仅在 `DEPLOYMENT_ENV=development` 的本机调试中可配置 `ADMIN_TOKEN` 使用静态便捷鉴权。
@@ -38,7 +40,7 @@ COCO 仅用作用户功能测试模型，不代表业务精度。训练好的 `.
 | GET/POST /aiyoloapi/conversion/calibration-datasets | 列出校准集或上传图片 ZIP |
 | GET/DELETE /aiyoloapi/conversion/calibration-datasets/{id} | 查看或安全删除未被引用的校准集版本 |
 | POST /aiyoloapi/conversion/check | 返回 202 与环境检测任务 |
-| POST /aiyoloapi/conversion/uploads?filename=best.pt&name=模型&version=1.0.0&scenario=场景&purpose=development | 二进制 PT 上传，返回 202 与 PT 验证任务 |
+| POST /aiyoloapi/conversion/uploads?filename=best.pt&name=模型&version=1.0.0&scenario=场景 | 二进制 PT 上传，返回 202 与 PT 验证任务 |
 | POST /aiyoloapi/conversion/uploads/{upload_id}/mobile?calibrationDatasetId={id} | 使用指定校准集创建移动端转换任务 |
 | GET /aiyoloapi/conversion/jobs | 最近 100 个任务 |
 | GET /aiyoloapi/conversion/jobs/{id} | 任务状态、结果与错误 |

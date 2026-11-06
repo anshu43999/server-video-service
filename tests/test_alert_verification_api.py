@@ -6,54 +6,76 @@ from app.alerts.disposition import alert_disposition_store
 from app.alerts.verification import alert_verification_store
 from app.config import settings
 from app.main import app
+from project_api_support import ProjectApiSupport
 
 
-class AlertVerificationApiTests(unittest.TestCase):
+class AlertVerificationApiTests(ProjectApiSupport, unittest.TestCase):
     def setUp(self):
         self.old_database = alert_disposition_store.database_manager
         alert_disposition_store.configure_database(None)
-        self.old_admin, self.old_mobile = settings.admin_token, settings.mobile_token
-        settings.admin_token, settings.mobile_token = "admin-secret", "mobile-secret"
         alert_disposition_store.reset()
+        self.old_verification_database = alert_verification_store.database_manager
+        alert_verification_store.configure_database(None)
         alert_verification_store.reset()
-        alert_verification_store.enabled = True
-        alert_verification_store.image_egress_authorized = True
-        alert_verification_store.daily_limit = 3
+        self.start_project_api("verification-project")
+        alert_verification_store.configure(
+            enabled=True,
+            image_egress_authorized=True,
+            daily_limit=3,
+            model_id="",
+            provider_configured=False,
+            project_id=self.project_id,
+        )
         alert_disposition_store.register({
             "eventId": "evt-review", "ruleId": "helmet", "sourceId": "cam",
             "subjectKey": "track:1", "evidence": {"snapshotUri": "/srv/evidence/frame.jpg"},
             "disposition": {"status": "OPEN"},
-        })
-        self.client = TestClient(app)
+        }, project_id=self.project_id)
 
     def tearDown(self):
-        settings.admin_token, settings.mobile_token = self.old_admin, self.old_mobile
         alert_disposition_store.reset()
         alert_disposition_store.configure_database(self.old_database)
         alert_verification_store.reset()
+        alert_verification_store.configure_database(self.old_verification_database)
+        self.stop_project_api()
 
-    def test_manual_request_is_deduplicated_and_keeps_disposition(self):
-        headers = {"X-Admin-Token": "admin-secret", "X-Operator-Id": "reviewer"}
-        first = self.client.post("/aiyoloapi/alerts/evt-review/verification", headers=headers, json={})
-        self.assertEqual(first.status_code, 202)
-        self.assertEqual(first.json()["status"], "FAILED")
-        self.assertEqual(first.json()["failureKind"], "NOT_CONFIGURED")
-        second = self.client.post("/aiyoloapi/alerts/evt-review/verification", headers=headers, json={})
-        self.assertEqual(second.status_code, 202)
-        self.assertEqual(second.json()["requestedAtUs"], first.json()["requestedAtUs"])
-        event = self.client.get("/aiyoloapi/alerts/evt-review", headers={"X-Admin-Token": "admin-secret"}).json()
+    def test_manual_request_is_retired_and_does_not_annotate_the_alert(self):
+        first = self.client.post(
+            f"{self.project_path}/alerts/evt-review/verification",
+            headers={**self.headers, "X-Actor": "forged-reviewer"},
+        )
+        self.assertEqual(first.status_code, 410)
+        self.assertEqual(first.json()["detail"]["code"], "verification_retired")
+        event = self.client.get(
+            f"{self.project_path}/alerts/evt-review", headers=self.headers
+        ).json()
         self.assertEqual(event["disposition"]["status"], "OPEN")
-        self.assertEqual(event["verification"]["failureKind"], "NOT_CONFIGURED")
+        self.assertNotIn("verification", event)
 
-    def test_privacy_gate_is_fail_closed(self):
-        alert_verification_store.image_egress_authorized = False
+    def test_review_configuration_is_retired_without_deleting_existing_data(self):
+        response = self.client.get(f"{self.project_path}/verification/config", headers=self.headers)
+        self.assertEqual(response.status_code, 410)
         response = self.client.post(
-            "/aiyoloapi/alerts/evt-review/verification",
-            headers={"X-Admin-Token": "admin-secret", "X-Operator-Id": "reviewer"},
+            f"{self.project_path}/verification/config", headers=self.headers,
+        )
+        self.assertEqual(response.status_code, 410)
+
+    def test_retired_request_does_not_depend_on_or_read_evidence(self):
+        alert_verification_store.configure(
+            enabled=True,
+            image_egress_authorized=False,
+            daily_limit=3,
+            model_id="",
+            provider_configured=False,
+            project_id=self.project_id,
+        )
+        response = self.client.post(
+            f"{self.project_path}/alerts/evt-review/verification",
+            headers=self.headers,
             json={},
         )
-        self.assertEqual(response.status_code, 202)
-        self.assertEqual(response.json()["failureKind"], "NOT_AUTHORIZED")
+        self.assertEqual(response.status_code, 410)
+        self.assertEqual(response.json()["detail"]["code"], "verification_retired")
 
 
 if __name__ == "__main__":

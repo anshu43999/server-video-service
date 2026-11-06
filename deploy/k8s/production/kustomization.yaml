@@ -4,7 +4,6 @@ namespace: saas-prod
 
 resources:
   - storage.yaml
-  - mediamtx.yaml
   - video-service.yaml
   - model-converter.yaml
   - services.yaml

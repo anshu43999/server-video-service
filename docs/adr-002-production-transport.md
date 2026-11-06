@@ -1,6 +1,8 @@
 # ADR-002：生产输出传输协议重构
 
-状态：accepted（取代 ADR-001）
+状态：superseded（2026-10-15由ADR-003取代；仅作历史记录）
+
+> 本文不得作为现行实现、部署或回退依据。当前保留PC同源预览/YOLO/告警，退役移动直播分发，见 [ADR-003](adr-003-analysis-alerts-only.md) 和 [升级手册](media-retirement-upgrade.md)。下文均为2026-09-03历史决策，原任务证据保留。
 日期：2026-09-03
 适用任务：`M07-T02`
 取代：`docs/adr-001-output-protocol.md`

@@ -3,7 +3,8 @@ import uuid
 from pathlib import Path
 
 from app.alerts.disposition import AlertDispositionStore
-from app.database import Base, DatabaseManager
+from app.database import Base, DatabaseManager, FalsePositiveFeedbackRecord
+from sqlalchemy import select
 
 
 class AlertPersistenceTests(unittest.TestCase):
@@ -69,6 +70,42 @@ class AlertPersistenceTests(unittest.TestCase):
     def test_reset_cannot_clear_persistent_database(self):
         with self.assertRaisesRegex(RuntimeError, "disabled"):
             self.store.reset()
+
+    def test_source_name_snapshot_survives_reopen_and_feedback(self):
+        provenance = {"kind": "SCENE", "scene": {"sceneId": "scene-02", "name": "场景02", "revision": 3},
+                      "plan": {"planId": "plan-1", "name": "联合相机方案"}, "memberId": "helmet-member",
+                      "model": {"modelId": "uploaded-06abc", "name": "安全帽", "version": "2.0.0"}}
+        event = {**self.event(), "provenance": provenance, "model": provenance["model"]}
+        self.store.register(event)
+        self.store.dispose(event["eventId"], "FALSE_POSITIVE", "operator", acted_at_us=3000)
+        reopened_db = DatabaseManager(self.url)
+        try:
+            reopened = AlertDispositionStore(reopened_db)
+            self.assertEqual(provenance, reopened.get(event["eventId"])["provenance"])
+            self.assertEqual(provenance, reopened.feedback()[0]["provenance"])
+        finally:
+            reopened_db.close()
+
+    def test_late_evidence_repairs_persisted_feedback_without_image_bytes(self):
+        event = self.event()
+        event['evidence'] = {}
+        event_id = event['eventId']
+        self.store.register(event)
+        self.store.dispose(event_id, 'FALSE_POSITIVE', 'operator', acted_at_us=4000)
+        project_id = self.store.get(event_id)['projectId']
+        self.assertEqual(self.store.feedback()[0]['evidenceUnavailableReason'], 'evidence_not_uploaded')
+        reference = {'sha256': 'a' * 64, 'objectStorage': {'provider': 'minio', 'objectKey': 'test/image.jpg'}}
+        self.store.register_evidence(event_id, project_id, 'original', 2, reference)
+        with self.database.session() as session:
+            stored = session.scalar(select(FalsePositiveFeedbackRecord)).payload
+            self.assertTrue(stored['image'].endswith('/evidence/original/2'))
+            self.assertIsNone(stored['evidenceUnavailableReason'])
+        reopened_database = DatabaseManager(self.url)
+        try:
+            entry = AlertDispositionStore(reopened_database).feedback()[0]
+            self.assertEqual(entry['image'], stored['image'])
+        finally:
+            reopened_database.close()
 
 
 if __name__ == "__main__":

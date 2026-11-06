@@ -1,0 +1,11 @@
+{
+  "eventId": "evt-server-1234567890abcdef12345678",
+  "cases": [
+    {"reference": "evidence/evidence/frame.jpg", "expected": "evidence/frame.jpg"},
+    {"reference": "C:\\archive\\evidence\\frame.jpg", "expected": "evidence/frame.jpg"},
+    {"reference": "file:///srv/evidence/frame.jpg", "expected": "evidence/frame.jpg"},
+    {"reference": "/aiyoloapi/alerts/evt-server-1234567890abcdef12345678/evidence", "canonical": true},
+    {"reference": "https://legacy.invalid/aiyoloapi/alerts/evt-server-1234567890abcdef12345678/evidence?token=DO_NOT_EXPORT#private", "canonical": true},
+    {"reference": "data:image/png;base64,c2VjcmV0LWltYWdlLWJ5dGVz", "canonical": true}
+  ]
+}

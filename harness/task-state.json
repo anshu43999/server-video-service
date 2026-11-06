@@ -1,7 +1,39 @@
 {
   "schemaVersion": 1,
   "project": "server-video-service",
-  "updatedAt": "2026-09-28T10:46:47+08:00",
+  "updatedAt": "2026-11-06T13:17:51+08:00",
+  "executionPolicy": {
+    "deploymentTaskIds": [
+      "M00-T06",
+      "M00-T07",
+      "M00-T09",
+      "M00-T12",
+      "M05-T01",
+      "M05-T04",
+      "M08-T06",
+      "M28-T11",
+      "M28-T12",
+      "M33-T17"
+    ],
+    "deploymentTaskOrder": [
+      "M00-T06",
+      "M00-T07",
+      "M00-T09",
+      "M00-T12",
+      "M05-T01",
+      "M08-T06",
+      "M28-T11",
+      "M28-T12",
+      "M05-T04",
+      "M33-T17"
+    ],
+    "externalTaskStates": [
+      {
+        "project": "mobile-app",
+        "path": "mobile-app/harness/task-state.json"
+      }
+    ]
+  },
   "majorTasks": [
     {
       "id": "M00",
@@ -535,13 +567,17 @@
         {
           "id": "M05-T07",
           "title": "完成 Android WHEP/LL-HLS 与真实网络兼容性验证",
-          "status": "pending",
+          "status": "superseded",
           "dependsOn": [
             "M31-T01",
             "M04-T04"
           ],
           "acceptance": "在目标 Android 设备和实际网络拓扑中验证 WHEP 主链路、LL-HLS 回退、首帧、P50/P95 延迟、断网重连和播放器资源释放；记录设备型号、Android API、播放器库版本、ABI、原始日志和失败原因；该验证属于发布兼容性门禁，不阻塞 MVP 服务端功能开发",
-          "record": "harness/records/M05/M05-T07.md"
+          "record": "harness/records/M05/M05-T07.md",
+          "owner": "codex",
+          "supersededReason": "用户于2026-10-15取消移动端远程视频及后端直播分发；纯播放兼容性验收不再适用，改验收分析告警与无直播请求，历史证据保留。",
+          "supersededAt": "2026-10-15T15:52:01+08:00",
+          "supersededBy": "M34-T06"
         }
       ],
       "startedAt": "2026-09-28T10:27:25+08:00"
@@ -1016,12 +1052,28 @@
         {
           "id": "M10-T03",
           "title": "实现签名密钥轮换与发布门禁",
-          "status": "pending",
+          "status": "completed",
           "dependsOn": [
             "M10-T02"
           ],
           "acceptance": "签名配置支持稳定 keyId 与新旧公钥并存窗口；撤销密钥和未签名模型不能发布为 releaseEligible；后台诊断不泄露私钥，发布、下线与失败恢复测试通过",
-          "record": "harness/records/M10/M10-T03.md"
+          "record": "harness/records/M10/M10-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-10-17T15:13:00+08:00",
+          "completedAt": "2026-10-17T15:17:55+08:00"
+        },
+        {
+          "id": "M10-T04",
+          "title": "实现灰度分组与受控强制回退",
+          "status": "completed",
+          "dependsOn": [
+            "M10-T03"
+          ],
+          "acceptance": "以现有项目模型分配作为隔离的灰度分组，提供分组版本选择和显式 Android 强制回退 API；强制回退只能选择仍有效、已签名且已发布的历史版本，通过项目模型分配 CAS 修订与审计生效，并返回前后版本，不静默修改 App 本地槽位；撤销、失效版本和并发冲突返回明确错误，服务端与接口测试覆盖成功、拒绝、失败恢复和审计记录",
+          "record": "harness/records/M10/M10-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-10-17T15:18:04+08:00",
+          "completedAt": "2026-10-17T15:40:54+08:00"
         }
       ],
       "startedAt": "2026-09-08T17:44:44+08:00"
@@ -1810,6 +1862,19 @@
           "owner": "codex",
           "startedAt": "2026-09-05T16:43:28+08:00",
           "completedAt": "2026-09-05T16:52:46+08:00"
+        },
+        {
+          "id": "M25-T09",
+          "title": "退役管理后台智能复核功能",
+          "status": "completed",
+          "dependsOn": [
+            "M25-T08"
+          ],
+          "acceptance": "移除PC管理后台智能复核导航/配置页、告警列表与详情的复核触发及状态展示，并停止服务端复核API、后台任务与供应商出站调用；不删除历史复核数据、告警、配置审计或证据对象，历史API/字段按兼容策略只读保留或以明确迁移保留；AI处置建议M41的资料管理、生成API、历史快照、权限审计和前端入口必须继续正常，告警确认/误报/关闭、来源/两级证据、移动端处置回写和媒体留存补传不回归。补充API/数据库迁移、后端/后台前端回归和不发生供应商请求的测试，执行服务端测试、前端类型检查/单测/构建及Harness门禁，提供可定位证据；不操作生产环境或删除业务数据。",
+          "record": "harness/records/M25/M25-T09.md",
+          "owner": "codex",
+          "startedAt": "2026-10-28T13:46:06+08:00",
+          "completedAt": "2026-10-28T14:03:26+08:00"
         }
       ],
       "startedAt": "2026-09-05T14:44:12+08:00"
@@ -1937,7 +2002,7 @@
     {
       "id": "M28",
       "title": "管理后台模型资产去 Mock 化",
-      "status": "in_progress",
+      "status": "completed",
       "dependsOn": [
         "M27"
       ],
@@ -2101,9 +2166,23 @@
           "owner": "codex",
           "startedAt": "2026-09-21T18:21:16+08:00",
           "completedAt": "2026-09-21T18:42:08+08:00"
+        },
+        {
+          "id": "M28-T13",
+          "title": "统一模型资产可用性与安全绑定门禁",
+          "status": "completed",
+          "dependsOn": [
+            "M28-T12"
+          ],
+          "acceptance": "服务端拒绝弃用、撤回和卸载模型的新绑定；公开目录依据当前产物完整性计算就绪并提供可绑定投影；管理页按后端可绑定投影去重筛选、明确不可用原因和新流默认含义；覆盖生命周期、文件损坏、双端隔离及前端行为回归；不改变视频流版本持久化契约。",
+          "record": "harness/records/M28/M28-T13.md",
+          "owner": "codex",
+          "startedAt": "2026-10-02T12:00:58+08:00",
+          "completedAt": "2026-10-02T12:08:06+08:00"
         }
       ],
-      "startedAt": "2026-09-12T15:33:28+08:00"
+      "startedAt": "2026-09-12T15:33:28+08:00",
+      "completedAt": "2026-10-19T16:04:40+08:00"
     },
     {
       "id": "M29",
@@ -2305,6 +2384,89 @@
           "owner": "codex",
           "startedAt": "2026-09-21T10:16:58+08:00",
           "completedAt": "2026-09-21T10:19:46+08:00"
+        },
+        {
+          "id": "M29-T16",
+          "title": "重构告警中心为工业事件工作台",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T12"
+          ],
+          "acceptance": "重构管理后台告警中心的信息架构与视觉样式，采用克制、紧凑的工业运维工作台布局，优化标题、统计筛选、事件表格、严重度、状态与复核操作的层级；桌面与窄屏均可读；不改变真实事件 API、筛选、详情、证据、处置和复核行为；前端语法、管理后台回归、浏览器验收及 Harness 门禁通过",
+          "record": "harness/records/M29/M29-T16.md",
+          "owner": "codex",
+          "startedAt": "2026-09-30T14:44:43+08:00",
+          "completedAt": "2026-09-30T14:56:11+08:00"
+        },
+        {
+          "id": "M29-T17",
+          "title": "告警中心来源标识与分类筛选",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "管理后台告警中心列表为每条告警清晰显示来源文字标签：SERVER_STREAM 显示视频流告警、MOBILE_CAMERA 显示移动端相机、MOBILE_IMAGE 显示移动端图片，未知/缺失来源显示来源未标记；提供全部来源、视频流告警、移动端本地告警筛选并可与既有关键词/状态筛选组合；详情来源映射使用正确中文且继续展示来源标识；复用现有 origin 字段、不修改数据库或告警 API；补充来源映射和列表筛选测试，前端测试、类型检查/构建及 Harness 门禁通过。",
+          "record": "harness/records/M29/M29-T17.md",
+          "owner": "codex",
+          "startedAt": "2026-10-28T11:42:13+08:00",
+          "completedAt": "2026-10-28T11:47:30+08:00"
+        },
+        {
+          "id": "M29-T18",
+          "title": "精简告警列表来源列信息",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "告警中心来源列只显示来源类型文字标签（视频流告警、移动端相机、移动端图片、来源未标记），不再显示 sourceId 或 alertSubject；列标题调整为告警来源；告警详情仍保留来源标识和主体信息；来源筛选及其他列表行为不变；前端单测、类型检查/生产构建与 Harness 门禁通过。",
+          "record": "harness/records/M29/M29-T18.md",
+          "owner": "codex",
+          "startedAt": "2026-10-28T13:25:58+08:00",
+          "completedAt": "2026-10-28T13:27:37+08:00"
+        },
+        {
+          "id": "M29-T19",
+          "title": "贯通移动告警场景及触发模型来源快照与后台展示",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "接收有界结构化来源快照（场景ID名称修订、方案ID名称、成员及模型ID名称版本），保留鉴权项目隔离和来源摘要；新事件保存发生时快照且重放不得篡改；旧信封兼容并明确未记录，独立模型不伪造场景；后台列表详情通知展示并可搜索场景和模型，服务端持久化与前端回归测试通过，人工待复测，不部署不提交Git。",
+          "record": "harness/records/M29/M29-T19.md",
+          "owner": "codex",
+          "startedAt": "2026-11-05T11:22:56+08:00",
+          "completedAt": "2026-11-05T11:33:06+08:00"
+        },
+        {
+          "id": "M29-T20",
+          "title": "保持告警详情在后台轮询和实时更新期间稳定",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "修复告警详情与证据视图把同一项目事件的新快照误作导航的问题；保留详情滚动、处置备注、AI建议及已查看证据，不停止正常实时同步。切事件/项目/关闭重开仍重置并拒绝过期响应；同身份首次缺失事件后加载及证据更新保持可用。执行组件回归、桌面及窄屏生产浏览器连续刷新测试、类型检查构建与Harness门禁；记录待人工复测，不操作真实项目数据，不提交或推送Git。",
+          "record": "harness/records/M29/M29-T20.md",
+          "owner": "codex",
+          "startedAt": "2026-11-05T15:51:49+08:00",
+          "completedAt": "2026-11-05T15:59:56+08:00"
+        },
+        {
+          "id": "M29-T21",
+          "title": "告警详情自动读取已保存建议并保留显式生成和历史",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T20"
+          ],
+          "acceptance": "进入详情GET最近建议，无记录或读取失败不生成；读取重试仅GET，显式生成/重新生成保留不可变历史；项目/告警切换拒绝迟到响应，同身份刷新不重复读取；组件、生产构建、浏览器和Harness门禁通过，待人工复测。",
+          "record": "harness/records/M29/M29-T21.md",
+          "owner": "codex",
+          "startedAt": "2026-11-05T16:09:13+08:00",
+          "completedAt": "2026-11-05T16:17:48+08:00"
+        },
+        {
+          "id": "M29-T22",
+          "title": "统一类别识别与告警开关并隔离场景运行参数",
+          "status": "completed",
+          "dependsOn": [
+            "M29-T21"
+          ],
+          "acceptance": "一个类别开关同时控制识别输出和告警；推理后处理在限额前过滤且空集合不回退全类别；同权重不同项目与场景参数隔离；场景修改撤销审批和旧授权；管理端文案及真实测试留证，待人工复测",
+          "record": "harness/records/M29/M29-T22.md",
+          "owner": "codex",
+          "startedAt": "2026-11-05T16:52:04+08:00",
+          "completedAt": "2026-11-05T17:05:54+08:00"
         }
       ]
     },
@@ -2482,6 +2644,2030 @@
         }
       ],
       "startedAt": "2026-09-18T09:19:12+08:00"
+    },
+    {
+      "id": "M32",
+      "title": "管理后台前端工程化与渐进迁移",
+      "status": "in_progress",
+      "dependsOn": [],
+      "acceptanceDocument": "harness/acceptance/M32-admin-frontend-engineering.md",
+      "acceptanceCriteria": [
+        "管理后台建立独立的 Vue 3、TypeScript、Vite 工程，并由 FastAPI 在现有 /admin 路径托管生产构建产物",
+        "现有菜单、真实业务数据、鉴权、API、WebSocket、媒体预览和文件操作在迁移后保持功能对等",
+        "路由、状态、API Client、页面与通用组件形成清晰模块边界，并具备类型检查、单元测试和端到端回归门禁",
+        "迁移期间旧前端可回退，只有全部页面通过验收后才切换默认入口并清理遗留静态实现",
+        "桌面与窄屏关键工作流可用，加载、空数据、错误、无权限和断线恢复状态均有明确反馈"
+      ],
+      "subtasks": [
+        {
+          "id": "M32-T01",
+          "title": "冻结前端迁移架构、API 契约和功能对等清单",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "形成前端迁移 ADR 和可追踪的功能对等清单，覆盖现有全部菜单、弹窗、筛选、表单、实时状态、文件上传下载、媒体预览及角色权限；逐项映射 API、WebSocket、鉴权和错误语义；冻结 admin-web 源码位置、/admin URL、构建托管、开发代理、灰度切换与回退方案；明确不得借迁移改变后端业务契约。",
+          "record": "harness/records/M32/M32-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-10-08T17:33:16+08:00",
+          "completedAt": "2026-10-08T17:48:56+08:00"
+        },
+        {
+          "id": "M32-T02",
+          "title": "建立 Vue 3 + TypeScript + Vite 工程与 FastAPI 构建托管",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T01"
+          ],
+          "acceptance": "在 admin-web 建立 Vue 3、TypeScript、Vite、Vue Router 和 Pinia 工程，提供可复现的依赖锁定、开发、类型检查、测试和生产构建命令；FastAPI 可在现有 /admin 路径提供构建产物与 SPA 路由回退，开发代理正确转发 API 和 WebSocket；遗留静态前端在迁移期间仍可独立回退；Docker 与本地启动流程均有验证和文档。",
+          "record": "harness/records/M32/M32-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-10-08T17:48:56+08:00",
+          "completedAt": "2026-10-08T18:06:48+08:00"
+        },
+        {
+          "id": "M32-T03",
+          "title": "实现统一鉴权、类型化 API Client、错误处理和 WebSocket 基础层",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T02",
+            "M29-T14"
+          ],
+          "acceptance": "实现集中式会话恢复、登录、退出、角色门禁和未授权跳转；建立类型化 API Client，统一处理查询参数、JSON、Multipart、Blob 下载、超时、取消、错误映射与敏感信息保护；建立可复用 WebSocket 连接、退避重连、订阅释放和在线状态机制；覆盖会话过期、403、服务异常、断线重连与组件卸载回归测试。",
+          "record": "harness/records/M32/M32-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-10-08T18:06:49+08:00",
+          "completedAt": "2026-10-08T18:23:04+08:00"
+        },
+        {
+          "id": "M32-T04",
+          "title": "实现路由、应用外壳、通用状态组件和设计令牌",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T03"
+          ],
+          "acceptance": "实现与现有菜单一致的路由和应用外壳，统一导航、页头、面包屑、权限可见性和窄屏行为；沉淀颜色、排版、间距和状态设计令牌，以及加载、空数据、错误、确认对话框、通知、表格、筛选和表单等通用组件；路由直达与刷新不丢失页面，键盘操作、焦点管理和基础可访问性检查通过。",
+          "record": "harness/records/M32/M32-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-10-09T09:06:04+08:00",
+          "completedAt": "2026-10-09T09:23:57+08:00"
+        },
+        {
+          "id": "M32-T05",
+          "title": "迁移告警中心与智能复核事件操作",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T04",
+            "M29-T12"
+          ],
+          "acceptance": "使用 Vue 页面完整迁移告警列表、统计筛选、分页或刷新、详情证据、确认告警、标记误报及智能复核事件操作；所有操作绑定真实 eventId 和现有权限，保持严重度、状态、来源与时间语义；覆盖空库、证据缺失、并发更新、API 失败和窄屏工作流，并通过现有告警 API 与前端行为回归。",
+          "record": "harness/records/M32/M32-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-10-09T09:26:29+08:00",
+          "completedAt": "2026-10-09T09:54:21+08:00"
+        },
+        {
+          "id": "M32-T06",
+          "title": "迁移视频流管理、诊断预览和实时检测",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T04",
+            "M30-T10"
+          ],
+          "acceptance": "使用 Vue 页面完整迁移视频流创建、编辑、启停、删除、模型绑定、YOLO 参数、运行状态、诊断信息、MJPEG 预览和实时检测展示；保留画面等比例、重新启用后建立新预览请求及敏感 source_url 保护；组件卸载、切换流和断线时释放订阅与媒体资源；真实 RTSP、连续启停和错误恢复验收通过。",
+          "record": "harness/records/M32/M32-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-10-09T09:55:39+08:00",
+          "completedAt": "2026-10-09T11:02:21+08:00"
+        },
+        {
+          "id": "M32-T07",
+          "title": "迁移模型资产、参数、转换任务和校准集",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T04",
+            "M28-T13"
+          ],
+          "acceptance": "使用 Vue 页面完整迁移模型目录、版本状态、激活与卸载、模型参数档案、训练模型上传、本地或远程转换任务、实时进度及校准集管理；只允许绑定后端声明可用的模型，上传进度、失败重试、任务轮询和危险操作确认保持真实语义；覆盖大文件、任务中断、无效产物、被引用资产和权限回归。",
+          "record": "harness/records/M32/M32-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-10-09T11:02:38+08:00",
+          "completedAt": "2026-10-09T11:28:07+08:00"
+        },
+        {
+          "id": "M32-T08",
+          "title": "迁移规则配置、报警推送、智能复核配置和系统诊断",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T04"
+          ],
+          "acceptance": "使用 Vue 页面完整迁移规则列表与编辑、规则绑定和审计、报警推送渠道与投递历史、智能复核配置与额度、系统健康及诊断信息；保持现有校验、密钥不回显、角色权限、并发修订和审计语义；规则配置明确表达单模型触发、多模型结果组合及复核链路的实际能力，不以纯前端选项承诺后端未实现的协同推理。",
+          "record": "harness/records/M32/M32-T08.md",
+          "owner": "codex",
+          "startedAt": "2026-10-09T11:28:35+08:00",
+          "completedAt": "2026-10-09T11:44:31+08:00"
+        },
+        {
+          "id": "M32-T09",
+          "title": "迁移总览与数据看板",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T04",
+            "M29-T11"
+          ],
+          "acceptance": "使用 Vue 页面迁移总览、统计周期、业务指标、服务器资源、告警趋势、类别分布、现场流状态、视频墙和大屏模式；仅展示真实 API 与实时状态，空库显示零值或暂无数据，接口失败显示不可用而不回退 Mock；桌面、大屏和窄屏布局无重叠，定时刷新、页面切换和资源释放行为通过回归。",
+          "record": "harness/records/M32/M32-T09.md",
+          "owner": "codex",
+          "startedAt": "2026-10-09T11:49:43+08:00",
+          "completedAt": "2026-10-09T12:07:24+08:00"
+        },
+        {
+          "id": "M32-T10",
+          "title": "完成新旧前端切换、遗留清理和端到端验收",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T05",
+            "M32-T06",
+            "M32-T07",
+            "M32-T08",
+            "M32-T09"
+          ],
+          "acceptance": "依据功能对等清单逐项完成管理员与操作员端到端验收，将 /admin 默认入口切换到 Vue 构建产物；在保留可验证回退版本后删除不再引用的遗留 HTML、CSS、JS 和兼容代码；更新 Docker、部署、缓存策略与运维文档；类型检查、单元测试、API 契约测试、关键浏览器流程、安全检查及桌面和窄屏视觉验收全部通过，且无未说明的功能降级。",
+          "record": "harness/records/M32/M32-T10.md",
+          "owner": "codex",
+          "startedAt": "2026-10-09T13:15:22+08:00",
+          "completedAt": "2026-10-09T13:43:28+08:00"
+        },
+        {
+          "id": "M32-T11",
+          "title": "本地归档并退役旧版管理前端",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T10"
+          ],
+          "acceptance": "归档当前旧前端、资源、托管配置及专属测试，提供文件清单、SHA256、历史查询和带备份的恢复工具；验证归档可完整恢复后删除产品旧静态目录与legacy托管分支、退役专属测试，更新运维文档；Vue构建、API托管、浏览器工作流与Harness门禁通过。",
+          "record": "harness/records/M32/M32-T11.md",
+          "owner": "codex",
+          "startedAt": "2026-10-09T14:18:28+08:00",
+          "completedAt": "2026-10-09T14:31:44+08:00"
+        },
+        {
+          "id": "M32-T12",
+          "title": "统一管理后台 Element Plus 控件与主题适配层",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T11"
+          ],
+          "acceptance": "引入锁定版本的Element Plus，通过components/ui统一按钮、表单输入、选择、开关、数字、表格、弹窗、标签和反馈控件；九菜单及登录页迁移，保留绿色设计主题、Lucide、API上传与媒体业务；类型检查、单元测试、正式/preview构建及桌面/窄屏浏览器工作流通过，记录组件规范与迁移边界。",
+          "record": "harness/records/M32/M32-T12.md",
+          "owner": "codex",
+          "startedAt": "2026-10-09T14:47:55+08:00",
+          "completedAt": "2026-10-09T16:00:47+08:00"
+        },
+        {
+          "id": "M32-T13",
+          "title": "彻底切换管理后台为Element Plus原生控件",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T12"
+          ],
+          "acceptance": "components/ui内部下拉、选项、开关、文件选择和进度全部由Element Plus组件实现，业务源码不再保留原生select/option/input/progress兼容实现；所有页面、单元测试与Playwright选择器同步迁移；类型检查、单元测试、正式与preview构建、43项正式浏览器回归及桌面/390px视觉验收通过，并更新组件规范与迁移证据。",
+          "record": "harness/records/M32/M32-T13.md",
+          "owner": "codex",
+          "startedAt": "2026-10-09T16:17:01+08:00",
+          "completedAt": "2026-10-09T17:49:50+08:00"
+        },
+        {
+          "id": "M32-T14",
+          "title": "修复告警中心列表 Element Plus 布局错乱",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T13"
+          ],
+          "acceptance": "告警中心桌面与390px窄屏列表在Element Plus控件迁移后保持列对齐、行高、状态标签和分页布局正常；不改变告警筛选、分页、详情、证据、处置与复核行为；类型检查、单元测试和告警列表浏览器视觉回归通过。",
+          "record": "harness/records/M32/M32-T14.md",
+          "owner": "codex",
+          "startedAt": "2026-10-09T18:01:15+08:00",
+          "completedAt": "2026-10-09T18:35:22+08:00"
+        },
+        {
+          "id": "M32-T15",
+          "title": "修复告警详情证据图片回退读取",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T14"
+          ],
+          "acceptance": "告警详情证据接口能够正确返回本地开发模式保存的 data:image 证据、服务端文件和 MinIO 证据；鉴权、无证据 404 与错误语义保持不变；后端接口测试、前端告警 E2E、类型检查和构建通过。",
+          "record": "harness/records/M32/M32-T15.md",
+          "owner": "codex",
+          "startedAt": "2026-10-10T09:20:23+08:00",
+          "completedAt": "2026-10-10T09:27:28+08:00"
+        },
+        {
+          "id": "M32-T16",
+          "title": "告警列表显示证据缩略图",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T15"
+          ],
+          "acceptance": "告警中心列表对有证据事件显示真实鉴权缩略图，无证据、加载中和加载失败状态有明确占位；不影响行点击、分页、移动端布局和详情证据加载；类型检查、单元测试、构建与告警 E2E 通过。",
+          "record": "harness/records/M32/M32-T16.md",
+          "owner": "codex",
+          "startedAt": "2026-10-10T09:34:22+08:00",
+          "completedAt": "2026-10-10T09:44:21+08:00"
+        },
+        {
+          "id": "M32-T17",
+          "title": "告警中心状态列明确为处置状态",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "PC项目告警中心列表状态表头改为处置状态，筛选全部选项及空态使用一致术语，保留事件状态和复核状态各自含义；前端告警回归、类型构建与Harness通过。",
+          "record": "harness/records/M32/M32-T17.md",
+          "owner": "codex",
+          "startedAt": "2026-10-23T16:12:16+08:00",
+          "completedAt": "2026-10-23T16:26:27+08:00"
+        }
+      ],
+      "startedAt": "2026-10-08T17:33:16+08:00"
+    },
+    {
+      "id": "M33",
+      "title": "多项目空间、角色权限与全链路数据隔离",
+      "status": "in_progress",
+      "dependsOn": [
+        "M29-T16",
+        "M30-T10",
+        "M32-T16"
+      ],
+      "acceptanceDocument": "harness/acceptance/M33-project-rbac-isolation.md",
+      "acceptanceCriteria": [
+        "平台管理员、项目负责人和项目用户的身份、成员关系、能力矩阵与管理渠道形成版本化契约，支持同一账号加入多个项目并在不同项目具有不同角色",
+        "视频流、告警、证据、规则、模型分配、参数、复核配置、实时订阅、统计、导出和审计均具有不可绕过的项目归属，REST、WebSocket、媒体与文件接口不存在跨项目越权",
+        "全局模型资产由平台管理员治理，项目负责人只能为本项目选择已发布模型、版本、参数和场景绑定，项目用户只能下载和使用项目获准资源",
+        "现有账号与业务数据可经可审计、幂等、可回滚的默认项目迁移进入新模型，灰度期兼容路径不会产生无项目数据或隐式跨项目回退",
+        "管理后台覆盖项目、账号、成员、项目上下文、项目业务数据和权限反馈的完整工作流，并通过平台管理员、项目负责人、项目用户和无成员账号的端到端测试",
+        "数据库迁移、备份恢复、权限变更即时生效、审计留存、部署升级、回滚和跨端联调均有真实测试与可定位证据"
+      ],
+      "subtasks": [
+        {
+          "id": "M33-T01",
+          "title": "冻结多项目领域模型、权限矩阵与跨端契约",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "形成版本化契约文档，冻结 Account、Project、ProjectMembership、平台角色、项目角色、能力集合、项目生命周期、项目数据归属、全局模型与项目模型分配边界、项目用户告警处置权、Web 管理与移动端使用边界；定义显式项目上下文、401/403/404、REST/WebSocket/证据/媒体鉴权、离线语义、审计要求、旧接口迁移策略和跨端验收矩阵，不保留未说明的默认全局访问。",
+          "record": "harness/records/M33/M33-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-10-10T10:18:14+08:00",
+          "completedAt": "2026-10-10T10:20:49+08:00"
+        },
+        {
+          "id": "M33-T02",
+          "title": "建立项目、成员、审计与项目模型分配数据库基线",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T01"
+          ],
+          "acceptance": "通过 Alembic 增加不可变 account_id、platform_role、projects、project_memberships、project_model_assignments 与项目审计表；为现有项目级业务表设计 project_id、外键、复合唯一约束和索引；迁移采用新增可空列、默认项目回填、完整性校验、收紧非空约束的安全顺序，SQLite/PostgreSQL 升降级、重复执行保护和数据量级评估通过。",
+          "record": "harness/records/M33/M33-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-10-10T10:32:29+08:00",
+          "completedAt": "2026-10-10T11:15:19+08:00"
+        },
+        {
+          "id": "M33-T03",
+          "title": "实现统一身份主体、项目上下文与能力授权内核",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T02"
+          ],
+          "acceptance": "认证层返回不可变账号身份并在每次请求实时解析 platform_role、有效成员关系和项目能力；建立统一 ProjectContext/Capability 授权依赖，显式区分未登录、无能力与不可见资源，权限或成员状态变更无需等待旧会话过期即可生效；生产环境不接受静态遗留 Token，内存测试后端与数据库后端语义一致。",
+          "record": "harness/records/M33/M33-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-10-10T11:21:50+08:00",
+          "completedAt": "2026-10-10T11:35:15+08:00"
+        },
+        {
+          "id": "M33-T04",
+          "title": "实现项目、账号与成员全生命周期 API",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T03"
+          ],
+          "acceptance": "提供项目创建、查询、修改、停用、归档、恢复，以及账号创建、启停、项目成员增删、角色变更、负责人移交和可访问项目列表 API；禁止最后一个负责人被移除、项目角色越权提升和禁用账号继续访问；所有写操作记录操作者、项目、前后值、请求关联标识和时间，重复请求与并发修订有确定语义。",
+          "record": "harness/records/M33/M33-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-10-10T12:01:09+08:00",
+          "completedAt": "2026-10-10T12:20:09+08:00"
+        },
+        {
+          "id": "M33-T05",
+          "title": "完成视频流、媒体播放与实时检测的项目隔离",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T03",
+            "M33-T04"
+          ],
+          "acceptance": "流配置、运行时 StreamSession、MediaMTX 发布路径、模型绑定、播放地址、MJPEG、WHEP、LL-HLS、检测 WebSocket、推流入口和能力来源全部绑定显式项目；运行时键支持不同项目重复 streamId 且不串流；项目负责人可维护本项目流，项目用户仅查看和播放获准流，跨项目枚举、订阅、播放和删除均被拒绝且不泄露资源存在性。",
+          "record": "harness/records/M33/M33-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-10-10T12:21:06+08:00",
+          "completedAt": "2026-10-10T12:51:16+08:00"
+        },
+        {
+          "id": "M33-T06",
+          "title": "完成告警、证据、处置、复核与投递的项目隔离",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T03",
+            "M33-T04"
+          ],
+          "acceptance": "告警事件、处置动作、误报反馈、证据对象、复核记录、复核配置、额度、通知投递和导出全部写入并查询项目归属；项目用户可按契约确认与标记误报，actor 从会话身份派生而非信任客户端头；证据路径、对象存储签名、列表、详情、WebSocket 和导出均通过跨项目越权与路径攻击测试。",
+          "record": "harness/records/M33/M33-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-10-10T12:52:03+08:00",
+          "completedAt": "2026-10-10T13:54:16+08:00"
+        },
+        {
+          "id": "M33-T07",
+          "title": "完成规则、参数、统计和系统配置的项目分层",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T03",
+            "M33-T04",
+            "M33-T05",
+            "M33-T06"
+          ],
+          "acceptance": "告警规则、来源绑定、项目模型参数覆盖、复核策略、告警投递策略、业务统计与看板查询按项目存储和聚合；平台级运行配置与项目级业务配置边界明确；审计、并发 revision、默认值继承和项目归档后的只读或停用行为有测试，指标标签避免无界 projectId 高基数。",
+          "record": "harness/records/M33/M33-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-10-10T13:54:19+08:00",
+          "completedAt": "2026-10-12T09:28:31+08:00"
+        },
+        {
+          "id": "M33-T08",
+          "title": "实现全局模型治理与项目模型授权部署",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T03",
+            "M33-T04",
+            "M33-T05",
+            "M33-T07"
+          ],
+          "acceptance": "模型族、版本、签名产物、转换和校准继续由平台管理员全局治理；新增项目按场景选择已发布模型版本、参数修订和启用状态的分配流程，项目负责人不能上传、发布、撤回或破坏其他项目使用的资产；目录、下载、升级、撤回、流绑定和 active 保护按项目授权返回，项目用户只能读取并下载获准模型。",
+          "record": "harness/records/M33/M33-T08.md",
+          "owner": "codex",
+          "startedAt": "2026-10-12T09:28:51+08:00",
+          "completedAt": "2026-10-12T14:11:37+08:00"
+        },
+        {
+          "id": "M33-T09",
+          "title": "建立项目绑定的设备与服务凭据体系",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T03",
+            "M33-T04"
+          ],
+          "acceptance": "将人类账号会话与设备/服务凭据分离，提供项目绑定、最小能力、过期、轮换、撤销、最后使用时间和审计；移动告警上报、设备推流或自动化客户端不能借普通项目用户令牌写入其他项目，服务端从凭据上下文确定项目而不信任请求体 projectId；泄露、撤销、重放和跨项目使用测试通过。",
+          "record": "harness/records/M33/M33-T09.md",
+          "owner": "codex",
+          "startedAt": "2026-10-12T14:31:54+08:00",
+          "completedAt": "2026-10-12T15:16:03+08:00"
+        },
+        {
+          "id": "M33-T10",
+          "title": "实现管理后台项目上下文与安全切换外壳",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T04"
+          ],
+          "acceptance": "管理后台登录后加载可访问项目，单项目自动进入、多项目显式选择，并在固定位置持续显示当前项目和项目角色；切换项目时取消旧请求、WebSocket、媒体预览、轮询和缓存，清空旧数据后再加载新项目；无项目、成员被移除、项目停用、刷新、深链和多标签页状态均有明确且不泄露数据的行为。",
+          "record": "harness/records/M33/M33-T10.md",
+          "owner": "codex",
+          "startedAt": "2026-10-12T15:19:38+08:00",
+          "completedAt": "2026-10-12T15:57:16+08:00"
+        },
+        {
+          "id": "M33-T11",
+          "title": "实现平台项目、账号与成员管理后台",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T10"
+          ],
+          "acceptance": "平台管理区提供项目创建编辑、停用归档恢复、账号创建启停、成员分配、项目角色变更、负责人移交和审计查看；项目负责人只能在当前项目维护普通项目用户，不能创建平台管理员或操作其他项目；危险操作有影响说明、确认、并发冲突和失败恢复，桌面与窄屏及键盘可访问性通过。",
+          "record": "harness/records/M33/M33-T11.md",
+          "owner": "codex",
+          "startedAt": "2026-10-12T15:58:57+08:00",
+          "completedAt": "2026-10-12T16:27:13+08:00"
+        },
+        {
+          "id": "M33-T12",
+          "title": "改造项目业务后台并落实角色能力矩阵",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T05",
+            "M33-T06",
+            "M33-T07",
+            "M33-T08",
+            "M33-T10",
+            "M33-T11"
+          ],
+          "acceptance": "视频流、告警、规则、模型、参数、复核、推送、看板和诊断页面全部读取当前项目且按服务端 capability 控制导航、按钮和只读状态；平台管理员需显式进入项目并产生审计，项目负责人可维护项目数据，项目用户只使用与处置获准功能；直接 URL、旧页面缓存和隐藏按钮均不能绕过后端授权。",
+          "record": "harness/records/M33/M33-T12.md",
+          "owner": "codex",
+          "startedAt": "2026-10-12T16:36:23+08:00",
+          "completedAt": "2026-10-12T17:36:53+08:00"
+        },
+        {
+          "id": "M33-T13",
+          "title": "完成项目级看板、导出、审计与运维可观测性",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T05",
+            "M33-T06",
+            "M33-T07",
+            "M33-T08",
+            "M33-T12"
+          ],
+          "acceptance": "看板统计、趋势、视频墙、告警导出、误报导出、审计查询和运维诊断均明确项目口径；平台汇总与项目视图使用不同能力且不得混合返回明细；日志包含安全的 project/account/request 关联信息但不泄露 Token、密码、RTSP 凭据或证据内容，审计留存、分页和大数据量性能测试通过。",
+          "record": "harness/records/M33/M33-T13.md",
+          "owner": "codex",
+          "startedAt": "2026-10-12T17:42:07+08:00",
+          "completedAt": "2026-10-12T18:18:43+08:00"
+        },
+        {
+          "id": "M33-T14",
+          "title": "实现默认项目回填、灰度兼容与可回滚迁移工具",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T02",
+            "M33-T04",
+            "M33-T05",
+            "M33-T06",
+            "M33-T07",
+            "M33-T08",
+            "M33-T09"
+          ],
+          "acceptance": "提供预检查、备份、默认项目创建、账号映射、业务行回填、文件与对象证据归属校验、迁移执行、结果对账和回滚工具；旧接口在限定灰度期只允许明确映射到默认项目且记录告警，不得在多项目启用后静默选择首个项目；空库、现有生产快照、失败中断、重复执行和回滚演练通过。",
+          "record": "harness/records/M33/M33-T14.md",
+          "owner": "codex",
+          "startedAt": "2026-10-13T10:32:14+08:00",
+          "completedAt": "2026-10-13T10:55:41+08:00"
+        },
+        {
+          "id": "M33-T15",
+          "title": "建立跨项目授权与数据隔离自动化测试矩阵",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T05",
+            "M33-T06",
+            "M33-T07",
+            "M33-T08",
+            "M33-T09",
+            "M33-T14"
+          ],
+          "acceptance": "以平台管理员、两个项目负责人、两个项目用户、无成员账号、禁用账号、项目设备凭据构建双项目金样；逐项覆盖 REST 列表与单项、写操作、WebSocket、WHEP/LL-HLS/MJPEG、模型下载、证据、导出、对象存储、ID 猜测、角色变更、项目切换和并发请求，证明任何项目 A 凭据均不能读写或推断项目 B 数据。",
+          "record": "harness/records/M33/M33-T15.md",
+          "owner": "codex",
+          "startedAt": "2026-10-13T10:58:49+08:00",
+          "completedAt": "2026-10-13T12:36:37+08:00"
+        },
+        {
+          "id": "M33-T16",
+          "title": "完成管理后台多角色端到端与视觉验收",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T11",
+            "M33-T12",
+            "M33-T13",
+            "M33-T15"
+          ],
+          "acceptance": "Playwright 覆盖项目创建、账号创建、成员分配、负责人移交、项目切换、流和规则维护、模型分配、项目用户只读与告警处置、成员移除、项目停用及重新登录；刷新、深链、双标签、窄屏、加载失败、会话过期和权限变更不显示旧项目数据，类型检查、单元测试、构建和浏览器截图均通过。",
+          "record": "harness/records/M33/M33-T16.md",
+          "owner": "codex",
+          "startedAt": "2026-10-13T12:48:09+08:00",
+          "completedAt": "2026-10-13T13:10:58+08:00"
+        },
+        {
+          "id": "M33-T17",
+          "title": "完成部署升级、备份恢复、安全审计与回滚演练",
+          "status": "blocked",
+          "dependsOn": [
+            "M33-T14",
+            "M33-T15",
+            "M33-T18"
+          ],
+          "acceptance": "更新 Docker/Kubernetes、数据库迁移、备份恢复、密钥与设备凭据轮换、审计留存、告警和故障排查文档；在接近生产的数据快照上执行升级、回填、重启恢复、权限撤销、项目归档和回滚演练，验证旧版本回退条件、数据不可逆边界、停机窗口和监控告警，所有命令与证据可复现。",
+          "record": "harness/records/M33/M33-T17.md",
+          "owner": "codex",
+          "startedAt": "2026-10-13T13:15:13+08:00",
+          "blocker": "隔离PostgreSQL快照升级、重启、撤权、归档、回滚及19项专项已通过；完整部署恢复仍缺隔离Docker/Kubernetes环境、旧新镜像和文件卷/对象/PITR恢复及TLS告警切流验证；在线167条孤立回执处置须用户确认。MinIO不再有独立的后置核验规则；对象/PITR恢复仍按原部署验收标准执行。详见evidence/M33/M33-T17-validation.md，不将离线通过当作上线或缩减验收。",
+          "blockedAt": "2026-10-13T14:54:33+08:00"
+        },
+        {
+          "id": "M33-T18",
+          "title": "完成服务端、管理后台与 Android 多项目联合验收",
+          "status": "blocked",
+          "dependsOn": [
+            "M33-T14",
+            "M33-T15",
+            "M33-T16",
+            "M33-T22"
+          ],
+          "acceptance": "使用真实服务端、PostgreSQL、管理后台和 Android 验收版本完成双项目全流程：平台建项目与账号、负责人维护成员/流/规则/模型、用户登录选项目并执行图片/相机巡检及服务端告警消费、告警上传处置与证据查看、模型撤回与成员移除即时生效；联合核对 Android M100/M101及服务端M34验收证据、无跨项目泄漏、无未迁移全局数据、无未说明兼容入口后生成通过报告。",
+          "record": "harness/records/M33/M33-T18.md",
+          "owner": "codex",
+          "startedAt": "2026-10-13T15:15:21+08:00",
+          "blocker": "本地真实PostgreSQL、完整后端HTTP及浏览器基础验证已通过，详见evidence/M33/M33-T18-validation.md；联合验收仍缺Android M100-T02至T14实现及API27证据，并需补齐模型/媒体/告警/对象链路。转入M100-T02补齐前置；不以Docker缺失作为本地测试阻塞。",
+          "blockedAt": "2026-10-13T15:28:54+08:00"
+        },
+        {
+          "id": "M33-T19",
+          "title": "冻结移动旧数据归属审批契约与可执行测试金样",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T01",
+            "M33-T03",
+            "M33-T04",
+            "M33-T14"
+          ],
+          "acceptance": "冻结平台管理员显式审批手机旧数据归属的版本化契约，区分清单一致性与所有权依据；绑定原服务、服务实例、目标accountId、安装身份、inventoryDigest和固定默认项目，未知或混用归属继续隔离；定义在线申请/审核/拒绝/批准/领取/结果确认/撤销、TTL、修订与幂等、并发/重放/改投防护、迁移中断和撤销竞态语义；提供请求响应/权限/错误码/审计/隐私约束、可执行状态机金样及全流程追踪矩阵，明确服务端、PC、Android的任务承接与本地验收先于部署；测试与Harness门禁通过。",
+          "record": "harness/records/M33/M33-T19.md",
+          "owner": "codex",
+          "startedAt": "2026-10-14T11:04:38+08:00",
+          "completedAt": "2026-10-14T11:22:31+08:00"
+        },
+        {
+          "id": "M33-T20",
+          "title": "实现移动旧数据归属审批存储与在线授权接口",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T19"
+          ],
+          "acceptance": "依据T19实现持久化安装登记、清单申请、管理员审核批准/拒绝/撤销、目标账号领取与在线重验证、幂等结果收据和审计；仅平台管理员可批准且不能以成员资格自动认领，原服务/实例/账号/安装/清单/默认项目不可改投，未知归属拒绝；SQLite/PostgreSQL迁移、事务审计、实时身份与成员/项目校验、密钥安全、TTL/重放/并发、进程重启/断网重试、错误信息和枚举防护全通过；未接通前对旧客户端明确不可用，不削弱现有业务鉴权或执行真实用户数据迁移。",
+          "record": "harness/records/M33/M33-T20.md",
+          "owner": "codex",
+          "startedAt": "2026-10-14T11:25:00+08:00",
+          "completedAt": "2026-10-14T13:01:07+08:00"
+        },
+        {
+          "id": "M33-T21",
+          "title": "实现平台旧移动数据归属审核管理与异常处理体验",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T20",
+            "M33-T11",
+            "M33-T16"
+          ],
+          "acceptance": "PC平台管理区提供申请列表/详情、原服务与账号映射依据、清单计数及摘要核对、明确批准/拒绝/撤销和执行收据查看；不可编辑已绑定目标，不把确认按钮当归属证明，混用/未知保持隔离；非管理员导航/深链/API均拒绝，展示审核风险、过期/撤销/执行中竞态/结果待确认、修订冲突和网络失败恢复；沿用Element Plus和现有权限体系，类型检查/单测/构建/桌面窄屏键盘及Playwright真实服务流程通过。",
+          "record": "harness/records/M33/M33-T21.md",
+          "owner": "codex",
+          "startedAt": "2026-10-14T13:03:36+08:00",
+          "completedAt": "2026-10-14T15:12:21+08:00"
+        },
+        {
+          "id": "M33-T22",
+          "title": "完成旧移动数据归属审批与Android迁移本地闭环验收",
+          "status": "superseded",
+          "dependsOn": [
+            "M33-T20",
+            "M33-T21"
+          ],
+          "acceptance": "与Android M100-T05协同但不形成跨仓库完成状态循环：真实本地服务/PostgreSQL/PC/API27完成申请、管理员依据审核、批准、固定账号安装领取、清单复验、Room/媒体一次性回填和收据核对；覆盖拒绝、未知归属、成员撤销、项目停用、审批撤销/过期/并发、断网和提交前后强杀、同ID/跨账号/跨服务/安装改投及旧APK升级回退恢复，证据证明无未经批准展示或上传、原件保留和无重复导入；保留T05原验收边界，不以内部模拟代替真实闭环，也不依赖T17容器部署；通过后作为T18新增前置。",
+          "record": "harness/records/M33/M33-T22.md",
+          "owner": "codex",
+          "startedAt": "2026-10-16T20:21:38+08:00",
+          "supersededReason": "产品范围变更：移动端旧数据全部不使用，旧数据审批与Android迁移闭环不再提供；服务端旧审批接口已退役并统一返回410，数据库仅保留兼容schema。",
+          "supersededAt": "2026-10-17T22:34:39+08:00"
+        },
+        {
+          "id": "M33-T23",
+          "title": "区分平台管理与项目工作台导航",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "管理后台侧栏将平台级菜单与当前项目菜单分成名称明确、视觉分隔的独立分组；平台管理员进入项目后可清楚识别并切换两类入口，项目负责人/用户仅看到 capability 授权的项目菜单且不出现平台菜单；路由权限、项目上下文与服务端授权语义不变；导航单测、类型检查、构建通过。",
+          "record": "harness/records/M33/M33-T23.md",
+          "owner": "codex",
+          "startedAt": "2026-10-19T11:11:20+08:00",
+          "completedAt": "2026-10-19T11:14:26+08:00"
+        },
+        {
+          "id": "M33-T24",
+          "title": "移除旧数据审批与管理端兼容流程",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "管理后台不再注册、显示或调用旧数据审批功能；删除相关管理端页面、API客户端、协议校验、业务样式及专用前端审批测试和运行脚本；旧审批深链不可达，管理台任何角色均无旧数据入口；服务端现有410退役响应保持，当前项目业务不变；完整前端测试、类型检查、生产构建、Harness单测和校验通过。",
+          "record": "harness/records/M33/M33-T24.md",
+          "owner": "codex",
+          "startedAt": "2026-10-19T11:23:34+08:00",
+          "completedAt": "2026-10-19T11:25:43+08:00"
+        },
+        {
+          "id": "M33-T25",
+          "title": "彻底移除旧数据审批服务端实现与兼容",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T24"
+          ],
+          "acceptance": "服务端不再注册旧移动数据审批/平台审批路由，不再提供410退役兼容响应，也不再特殊兼容legacyApproval告警字段；删除旧审批业务模块、配置、ORM模型、仅服务旧审批的运行脚本/测试/协议样例和非历史说明；新增前向Alembic迁移删除legacy_*审批表，不读取或迁移表内旧数据，保留既有迁移文件以维持Alembic升级链；清理数据库初始化、审计保留策略和README中的旧审批产品行为；当前项目登录、告警、项目权限与审计行为回归通过，服务端及Harness测试通过。",
+          "record": "harness/records/M33/M33-T25.md",
+          "owner": "codex",
+          "startedAt": "2026-10-19T11:27:01+08:00",
+          "completedAt": "2026-10-19T11:45:36+08:00"
+        },
+        {
+          "id": "M33-T26",
+          "title": "修复服务端全量回归测试残留失败",
+          "status": "pending",
+          "dependsOn": [
+            "M33-T25"
+          ],
+          "acceptance": "复核并修复或明确隔离全量 unittest 中的 7 项残留失败：告警验证与验证 provider fixture 的3个PostgreSQL外键错误、视频端到端帧状态错误、test_api流状态断言及两个项目业务配置接口404；保持当前项目登录、告警、项目权限、告警验证与数据库迁移行为正确；服务端全量 unittest 和Harness校验通过，失败原因与证据可定位。",
+          "record": "harness/records/M33/M33-T26.md"
+        },
+        {
+          "id": "M33-T27",
+          "title": "允许开发用途模型在开发环境按项目授权",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T08"
+          ],
+          "acceptance": "在明确的非生产部署环境中，已验证且产物就绪的 development 模型可按项目/场景授权和用于项目流及识别场景测试，不被商业发布状态误拦；production 环境仍拒绝 development 模型且不降低 business 正式发布的许可证、签名、目标端就绪和审计门禁；平台目录、项目可用目录、分配/场景保存、下载与运行时授权一致执行隔离策略；管理后台明确标示开发测试授权与正式发布的区别；覆盖正反向权限、跨项目隔离和生产拒绝测试，相关前后端测试、构建、Harness 校验通过。",
+          "record": "harness/records/M33/M33-T27.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T09:49:58+08:00",
+          "completedAt": "2026-10-20T10:01:22+08:00"
+        },
+        {
+          "id": "M33-T28",
+          "title": "从模型资产进入开发模型项目测试授权",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T27"
+          ],
+          "acceptance": "admin-next 模型资产中对 READY 的 development 模型提供明确的项目测试授权入口（不称正式发布）；入口要求管理员先选择/验证项目，再导航到项目模型工作台并预选精确模型版本；只通过现有项目授权流程保存，不绕过场景、参数、项目权限、审计或生产拒绝门禁；前后端相关测试、预览构建与 Harness 校验通过。",
+          "record": "harness/records/M33/M33-T28.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T10:08:10+08:00",
+          "completedAt": "2026-10-20T10:11:07+08:00"
+        },
+        {
+          "id": "M33-T29",
+          "title": "移除模型用途字段及用途分支控制",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T27"
+          ],
+          "acceptance": "从服务端模型资产元数据与 API、模型上传/转换表单、签名清单、模型发布门禁、项目分配/场景授权策略、流绑定投影和管理后台中移除 purpose 字段及其用途差异控制；所有满足现有通用许可证、产物完整性、目标端就绪、签名和项目权限门禁的模型均按统一规则参与发布及项目授权；兼容已登记模型和旧 manifest，忽略历史 purpose 而不丢失其他元数据；同步清理契约文档及测试，服务端与后台回归、构建和 Harness 校验通过。",
+          "record": "harness/records/M33/M33-T29.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T10:15:03+08:00",
+          "completedAt": "2026-10-20T10:37:12+08:00"
+        },
+        {
+          "id": "M33-T30",
+          "title": "移除项目数据看板现场视频墙",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "项目空间的数据看板不再渲染现场视频墙、诊断预览画面或相关文案；仍保留项目级现场流状态统计和管理视频流入口，数据看板不再发起逐路预览请求；更新前端自动化覆盖移除视频墙且看板其他指标/现场流状态正常，管理后台构建与相关浏览器回归通过。",
+          "record": "harness/records/M33/M33-T30.md",
+          "owner": "codex",
+          "startedAt": "2026-10-21T17:18:32+08:00",
+          "completedAt": "2026-10-21T17:22:35+08:00"
+        },
+        {
+          "id": "M33-T32",
+          "title": "将新增视频流表单改为弹窗",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "视频流工作台点击新增视频流后以居中弹窗显示表单，遮罩和弹窗宽度适配窄屏；支持关闭按钮、Esc、点击遮罩关闭，忙碌提交期间不允许误关；创建成功关闭弹窗并更新已选流，失败保留表单与错误提示；URL create=1 仍自动打开弹窗。更新浏览器回归覆盖这些交互，管理后台单测与构建通过。",
+          "record": "harness/records/M33/M33-T32.md",
+          "owner": "codex",
+          "startedAt": "2026-10-21T17:54:10+08:00",
+          "completedAt": "2026-10-21T18:00:41+08:00"
+        },
+        {
+          "id": "M33-T33",
+          "title": "修复项目模型分配后列表未更新",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T12"
+          ],
+          "acceptance": "项目负责人在项目模型页批准一个与现有模型不同的已发布模型后，列表在服务端确认及刷新后立即出现新分配；页面卡片与模型/版本/目标端对应，项目用户刷新后只见获准启用模型。失败或刷新失败清楚提示且可恢复，不把保存成功伪装成展示成功。补充前端状态/组件回归和项目模型接口测试，相关Vitest、类型检查与Harness校验通过；不得改动角色、项目隔离、CAS或发布门禁。",
+          "record": "harness/records/M33/M33-T33.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T10:21:29+08:00",
+          "completedAt": "2026-11-02T10:33:26+08:00"
+        },
+        {
+          "id": "M33-T34",
+          "title": "项目模型卡片发布状态中文化",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T33"
+          ],
+          "acceptance": "项目模型分配卡片不直接展示英文模型状态码；为已知模型状态提供准确中文文案（至少 PUBLISHED 显示为‘已发布’），未知状态安全回退为可读文案；补充前端单测覆盖状态映射，项目模型页其他模型名称、分配启停状态和模型资产页状态语义不变；相关 Vitest、类型检查、生产构建及 Harness 校验通过。",
+          "record": "harness/records/M33/M33-T34.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T10:44:35+08:00",
+          "completedAt": "2026-11-02T10:46:49+08:00"
+        },
+        {
+          "id": "M33-T35",
+          "title": "按场景归组并清晰展示项目模型目标端",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T34"
+          ],
+          "acceptance": "项目模型列表按业务场景分组，明确解释同一场景下PC端和移动端是独立部署目标，而不是两种场景或两张无关模型卡；每个目标端清晰展示实际模型名称、版本、启用状态和操作。场景标识提供易懂中文名称并保留原始ID；已停用分配仍可辨认。桌面和窄屏可扫描，已有分配/停用/参数/下载行为与权限不变；组件回归、相关浏览器测试、Vitest、类型检查、生产构建和Harness校验通过。",
+          "record": "harness/records/M33/M33-T35.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T11:03:37+08:00",
+          "completedAt": "2026-11-02T11:09:04+08:00"
+        },
+        {
+          "id": "M33-T36",
+          "title": "冻结项目模型、项目场景与运行入口边界",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T35"
+          ],
+          "acceptance": "更新项目模型授权、项目场景/套件与运行入口的权威契约：项目模型是项目级精确modelId/version/target可用清单，同一目标端允许多个模型且不按业务场景分组；场景/方案只能引用项目已分配模型，同一项目模型可被多个场景复用；流或巡检运行必须显式选择sceneId与planId，分配模型不自动加入场景或启动运行。明确目标端能力、参数快照/修订、审批/运行授权、撤权、错误码与审计语义；测试阶段不迁移旧项目分配数据、不保留旧scenario assignment及legacy场景投影兼容。仅修改契约文档，不操作运行数据库、Default Project或部署实例。",
+          "record": "harness/records/M33/M33-T36.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T11:28:08+08:00",
+          "completedAt": "2026-11-02T11:33:28+08:00"
+        },
+        {
+          "id": "M33-T37",
+          "title": "重构项目模型多模型授权存储与服务端接口",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T36"
+          ],
+          "acceptance": "按冻结契约将项目模型授权改为项目级精确模型版本与目标端清单，唯一身份不含scenario且允许PC/移动端各自多个模型；实现列表、分配、停用/移除、参数快照与修订校验，服务端继续校验项目角色、模型发布状态、目标端就绪、审计与并发。旧scenario单模型接口及数据投影不提供兼容；SQLite/PostgreSQL使用隔离测试库验证新建/重启/冲突/撤权，不迁移旧分配数据、不操作Default Project或运行数据库。",
+          "record": "harness/records/M33/M33-T37.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T11:33:47+08:00",
+          "completedAt": "2026-11-02T12:00:06+08:00"
+        },
+        {
+          "id": "M33-T38",
+          "title": "重做项目模型多模型清单管理界面",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T37"
+          ],
+          "acceptance": "项目模型页按PC端和移动端展示各自可用的多个精确模型版本，不显示或使用业务场景分组；支持按端分配、停用/移除及查看目标端就绪和发布状态，分配确认并刷新后列表准确更新。模型不可用、冲突、无权限、加载和刷新失败均有可恢复状态；页面不暗示分配会创建场景或启动运行。前端单测、类型检查、生产构建与相关浏览器流程通过。",
+          "record": "harness/records/M33/M33-T38.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T12:00:07+08:00",
+          "completedAt": "2026-11-02T12:12:07+08:00"
+        },
+        {
+          "id": "M33-T39",
+          "title": "将项目场景成员约束到项目模型清单",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T37"
+          ],
+          "acceptance": "场景及方案成员以当前项目已分配的精确模型版本/目标端为来源；拒绝未分配、已停用、目标端不匹配或跨项目的成员，允许同一已分配模型被多个场景复用。场景成员、方案参数快照、revision、审批与撤权校验保持事务一致；模型分配本身不创建/修改场景。移除依赖全局模型目录直接加入场景的旧授权路径及legacyAssignment只读投影，不迁移旧数据；隔离SQLite/PostgreSQL覆盖授权、复用、并发和撤权。",
+          "record": "harness/records/M33/M33-T39.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T12:12:36+08:00",
+          "completedAt": "2026-11-02T12:47:07+08:00"
+        },
+        {
+          "id": "M33-T40",
+          "title": "调整项目场景界面从已分配模型选择成员",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T38",
+            "M33-T39"
+          ],
+          "acceptance": "项目场景编辑器从当前项目模型清单选择成员，明确展示模型版本、目标端、场景成员及运行方案；同一模型可在多个场景中复用，未分配或停用模型不能加入；编辑/审批只影响场景和方案，不隐式分配模型、改变其他场景或启动运行。加载、空态、冲突、撤权和失败状态可恢复；前端单测、类型检查、生产构建和项目负责人/用户权限浏览器回归通过。",
+          "record": "harness/records/M33/M33-T40.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T12:47:25+08:00",
+          "completedAt": "2026-11-02T13:21:48+08:00"
+        },
+        {
+          "id": "M33-T41",
+          "title": "让视频流与巡检运行显式选择场景及方案",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T40"
+          ],
+          "acceptance": "运行任务或视频流配置必须显式提交并保存当前项目sceneId与planId，启动前复核场景/方案批准状态、目标端、revision、项目成员授权及所需模型授权；拒绝缺失/停用/跨项目/旧revision选择。移除按旧scenario直接取单模型或仅凭项目模型分配启动的运行路径；模型分配与场景配置均不自动开始运行。通过API、运行时、参数快照、撤权竞争和前端选择流程测试，不实现未纳入冻结契约的推理调度。",
+          "record": "harness/records/M33/M33-T41.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T13:22:19+08:00",
+          "completedAt": "2026-11-02T13:47:28+08:00"
+        },
+        {
+          "id": "M33-T42",
+          "title": "清理旧场景投影并完成项目模型场景跨层回归",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T41"
+          ],
+          "acceptance": "删除旧scenario项目模型单条分配语义、legacyAssignment场景投影及其专用兼容分支/文档/测试；按新契约更新迁移与测试夹具，不迁移旧分配数据或操作运行数据库。使用隔离项目验证PC/移动端多模型授权、场景成员复用/审批、显式sceneId+planId运行选择、撤权及跨项目拒绝；后端与管理端专项/全量相关回归、Harness单测、validate和render通过，Default Project配置保持未变。",
+          "record": "harness/records/M33/M33-T42.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T13:48:02+08:00",
+          "completedAt": "2026-11-02T14:28:08+08:00"
+        },
+        {
+          "id": "M33-T43",
+          "title": "优化项目模型清单端侧切换与信息密度",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "项目模型页面可在PC端与移动端清单间直接切换，两端模型不再纵向堆叠；每端使用紧凑、可扫描的行式条目，首屏可显示更多模型并保留名称、精确版本、发布/目标端状态、启用状态和关键操作；两端均支持多个模型，空态、窄屏和无障碍切换可用。保留现有参数查看/调整、产物下载、重新批准/启用、停用及移除行为和权限约束。管理端相关组件测试、类型检查和生产构建通过，Harness单测、validate和render通过。",
+          "record": "harness/records/M33/M33-T43.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T14:47:51+08:00",
+          "completedAt": "2026-11-02T14:56:34+08:00"
+        },
+        {
+          "id": "M33-T44",
+          "title": "修复项目模型分配弹窗状态重置与共用弹窗留白",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "项目模型分配弹窗每次以新建方式打开时清空上次版本、确认态和错误草稿，并采用明确的默认目标端；从PC/移动端添加时保留对应端预选，编辑现有条目时准确回填版本与目标端。关闭后重开不会带入上次临时选择。共用UiDialog正文拥有统一桌面/窄屏内边距，既有自带内边距的内容根节点不发生双重留白。补充组件测试覆盖关闭重开、新建默认、指定端及编辑预填，并验证共用弹窗padding样式。抽查主要UiDialog表单入口的begin初始化；相关管理端单测、类型检查、生产构建及Harness门禁通过。",
+          "record": "harness/records/M33/M33-T44.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T15:03:28+08:00",
+          "completedAt": "2026-11-02T15:07:57+08:00"
+        },
+        {
+          "id": "M33-T45",
+          "title": "合并项目模型的重复分配入口",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "项目模型页只保留一个新增模型入口，位置及按钮文本随当前PC/移动端页签切换；移除顶部入口与端池内重复添加按钮，不出现多个等价入口。点击唯一入口打开原分配弹窗并按当前端预选；深链接预选和编辑已有条目保持原行为，权限和禁用条件不变。更新组件测试、隔离浏览器回归及相关调用页面的断言，管理端单测、类型检查、生产构建和Harness门禁通过。",
+          "record": "harness/records/M33/M33-T45.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T15:15:46+08:00",
+          "completedAt": "2026-11-02T15:18:01+08:00"
+        },
+        {
+          "id": "M33-T46",
+          "title": "统一后台页面标题与描述并移除内容区重复标题",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "所有已登录管理后台路由在shell顶栏展示当前功能标题与简短描述；为缺少描述的路由补齐准确描述。内容区移除与功能标题重复的页面级标题、eyebrow和重复简介，保留页面操作按钮、项目上下文条、内容分区标题及告警/流状态等业务状态标题；自定义hero不得保留第二份页面标题。覆盖总览、平台页、项目页、模型、场景、知识、App版本、审计及状态/错误页，不影响登录/受限页。调整窄屏布局，补充路由元数据及布局回归；管理端全量测试、类型检查、构建及Harness门禁通过。",
+          "record": "harness/records/M33/M33-T46.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T15:24:45+08:00",
+          "completedAt": "2026-11-02T15:37:07+08:00"
+        },
+        {
+          "id": "M33-T47",
+          "title": "修复新建场景的成员输入超出场景声明",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T40"
+          ],
+          "acceptance": "依据FR-13修复场景/成员/方案输入能力不一致导致新建失败；新增成员取场景与模型能力交集，场景输入修改后约束成员和方案并提供中文可恢复提示；保留服务端拒绝越界及CAS/撤权保护。覆盖先选输入再添加成员和添加后修改输入、图片/视频单输入及无交集、方案能力、编辑和成员管理；前端回归、类型检查、生产构建、真实路由隔离浏览器回归、相关后端测试和Harness通过并留证，人工状态为待人工复测，不操作Default Project或提交推送Git。",
+          "record": "harness/records/M33/M33-T47.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T17:26:30+08:00",
+          "completedAt": "2026-11-02T17:43:32+08:00"
+        },
+        {
+          "id": "M33-T48",
+          "title": "修复项目模型到场景批准参数快照的跨端契约丢失",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T40"
+          ],
+          "acceptance": "落实FR-13及现有移动端场景契约，项目模型保存的参数快照必须保留schemaVersion、source、继承修订与更新时间等移动端必需元数据，并在场景批准、目录投影、解析和安装准备中保持同一冻结值；内存和数据库路径一致，不混入审计列表，不以读取当前参数或猜测来源替代批准快照，不增加旧数据兼容或自动改Default Project。补充真实分配到批准目录的继承/自定义及冻结/重启/隔离回归，执行相关API、数据库、跨端解析与Harness测试并留证；人工状态待人工复测，禁止提交推送Git。",
+          "record": "harness/records/M33/M33-T48.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T18:04:47+08:00",
+          "completedAt": "2026-11-02T18:12:39+08:00"
+        },
+        {
+          "id": "M33-T49",
+          "title": "按用户授权重新保存Default Project模型与场景批准快照",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T48"
+          ],
+          "acceptance": "落实FR-13及2026-11-02用户明确授权，只通过运行中服务的正常鉴权/CAS API重新保存test01引用的helmet 2.0.0移动端与ppe 1.0.0 PC端两条模型分配，并重新批准test01；写前后确认参数值、成员、输入与方案不变，快照必需字段完整，其他分配不变；移动端实际刷新显示场景，保留脱敏HTTP及设备证据，人工状态待人工复测，不安装模型或启动运行，不提交推送Git。",
+          "record": "harness/records/M33/M33-T49.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T19:59:15+08:00",
+          "completedAt": "2026-11-02T20:02:10+08:00"
+        },
+        {
+          "id": "M33-T50",
+          "title": "拒绝不完整项目模型参数快照通过场景审批",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T48"
+          ],
+          "acceptance": "落实FR-13及当前移动端参数契约，在场景批准时严格校验项目模型冻结参数快照的schemaVersion/source/updatedAt字段及精确身份和修订关系，缺失或非法时返回可定位到成员和项目模型的中文可恢复错误并保持场景修订/审批/快照不变；读取不猜来源、不自动补写历史数据，不将最新参数冒充批准快照。覆盖旧分配新建场景、混合成员全有或全无、重新保存后审批恢复、内存/数据库和有效默认/继承/自定义路径，相关回归与Harness通过留证，人工待复测；本任务不擅自重审cj02、不重启共享服务、不提交推送Git。",
+          "record": "harness/records/M33/M33-T50.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T21:30:24+08:00",
+          "completedAt": "2026-11-02T22:33:20+08:00"
+        },
+        {
+          "id": "M33-T51",
+          "title": "按用户授权恢复场景02参数快照并加载审批修复",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T50"
+          ],
+          "acceptance": "落实FR-13及用户2026-11-02的bug修复授权，仅对本机Default Project中cj02引用的ppe 1.0.0移动端分配通过正常鉴权/CAS API按参数值不变重存并显式重新批准cj02；写前核对精确成员、分配/场景修订及参数值，失败停止不自动重试，其他分配/场景/方案不变。核对8080开发服务精确进程、空闲和数据库schema后，按原0.0.0.0绑定重启加载M33-T50，不迁移/清库/发布容器。留存脱敏API、前后快照、实际移动端刷新结果和测试证据；不安装模型或启动识别，API30观察不冒充API27验收；人工待人工复测，不提交推送Git。",
+          "record": "harness/records/M33/M33-T51.md",
+          "owner": "codex",
+          "startedAt": "2026-11-02T22:38:05+08:00",
+          "completedAt": "2026-11-02T22:42:49+08:00"
+        },
+        {
+          "id": "M33-T52",
+          "title": "统一模型显示名称契约与管理后台呈现",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T51"
+          ],
+          "acceptance": "落实FR-13及用户2026-11-03名称统一要求：以精确modelId/version对应模型资产上传name为展示来源，为获权场景成员和项目分配提供只读modelName；后台场景成员/方案选择/审批、项目模型及相关模型提示统一名称优先，ID仅作明确技术信息，版本目标端仍区分。名称不可用于授权、签名、参数摘要、去重或运行身份；缺名明确显示未命名模型，跨项目不可泄漏。不修改业务数据或批准修订，不提交推送；补充API与前端实际渲染回归，构建和Harness通过，人工待复测。",
+          "record": "harness/records/M33/M33-T52.md",
+          "owner": "codex",
+          "startedAt": "2026-11-03T09:44:22+08:00",
+          "completedAt": "2026-11-03T09:51:48+08:00"
+        },
+        {
+          "id": "M33-T53",
+          "title": "识别场景列表紧凑化与按需详情",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T52"
+          ],
+          "acceptance": "在现有FR-13范围将识别场景大卡片改为紧凑表格摘要，完整成员、方案和参数按需查看；保留权限、审批、CAS、删除确认与全部原有操作。验证桌面信息密度、长名称、窄屏和键盘、加载空错及只读权限；生产构建与相关真实隔离测试、Harness检查通过；记录待人工复测，不改业务数据，不提交推送Git。",
+          "record": "harness/records/M33/M33-T53.md",
+          "owner": "codex",
+          "startedAt": "2026-11-03T10:54:17+08:00",
+          "completedAt": "2026-11-03T11:04:31+08:00"
+        },
+        {
+          "id": "M33-T54",
+          "title": "识别场景列表行内高频操作",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T53"
+          ],
+          "acceptance": "在紧凑场景表格行内直接提供编辑、启停、批准/撤销批准等有权限的高频操作，成员与方案仍按需查看详情，危险删除仍保留影响预览与显式确认；保留权限、revision CAS、刷新和错误反馈语义。验证窄屏、键盘、只读权限及隔离浏览器常规场景流程；生产构建、前端与Harness检查通过；记录待人工复测，不改业务数据、不部署、不提交推送Git。",
+          "record": "harness/records/M33/M33-T54.md",
+          "owner": "codex",
+          "startedAt": "2026-11-03T11:08:09+08:00",
+          "completedAt": "2026-11-03T11:21:55+08:00"
+        },
+        {
+          "id": "M33-T55",
+          "title": "识别场景操作列按钮居中对齐",
+          "status": "completed",
+          "dependsOn": [
+            "M33-T54"
+          ],
+          "acceptance": "场景列表操作列中可见操作按钮组在表头与单元格内水平居中；不改变权限/操作/列宽或交互。验证1366px与390px布局截图、前端测试/production构建和Harness检查；状态待人工复测，不改业务数据、不部署、不提交推送。",
+          "record": "harness/records/M33/M33-T55.md",
+          "owner": "codex",
+          "startedAt": "2026-11-03T11:23:13+08:00",
+          "completedAt": "2026-11-03T11:25:13+08:00"
+        }
+      ]
+    },
+    {
+      "id": "M34",
+      "title": "保留PC实时预览与服务端分析告警，退役移动直播分发",
+      "status": "in_progress",
+      "dependsOn": [],
+      "acceptanceDocument": "harness/acceptance/M34-analysis-only.md",
+      "acceptanceCriteria": [
+        "服务端接入配置的视频源并执行YOLO与告警规则；保留受项目权限保护的PC实时预览，不恢复MediaMTX发布、移动直播播放地址或逐帧检测旁路",
+        "PC保留视频源、模型、分析参数、运行状态、实时预览及视频墙；移除PC推流及WHEP/HLS/RTSP分发控件；正式告警仅经告警功能入库、展示与提示",
+        "Android移除远程视频功能但保留项目化服务端告警、图片/相机巡检及历史证据；权限与项目隔离不降级",
+        "旧配置无法重新启用分发；本地真实服务、PostgreSQL、PC与API27验证通过后才允许容器部署，不用模拟测试冒充真实联合验收"
+      ],
+      "subtasks": [
+        {
+          "id": "M34-T01",
+          "title": "冻结分析告警架构与跨端退役任务依赖",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "记录保留与退役清单、旧客户端失败策略、证据媒体边界、正式告警幂等与项目隔离、迁移顺序和回归矩阵；新增两仓任务并按CLI终止纯播放验收，修订未完成的混合任务但不伪造历史完成；仍有效的数据迁移工作保留并明确恢复条件。",
+          "record": "harness/records/M34/M34-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-10-15T15:47:53+08:00",
+          "completedAt": "2026-10-15T15:52:35+08:00"
+        },
+        {
+          "id": "M34-T02",
+          "title": "解除分析告警对推流的依赖并关闭直播出口",
+          "status": "completed",
+          "dependsOn": [
+            "M34-T01"
+          ],
+          "acceptance": "StreamSession不构造或调用发布器、不编码预览、不提供WHEP/HLS/RTSP播放或MJPEG/JPEG/检测订阅出口；旧入口明确退役且不泄露地址或启动资源；保留输入解码、latest-only推理、限速、配置恢复、模型切换与授权、告警入库和证据生成；覆盖YOLO关闭/故障/开关竞态/撤权/关闭及旧配置开启MediaMTX仍不分发的测试。",
+          "record": "harness/records/M34/M34-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-10-15T15:52:36+08:00",
+          "completedAt": "2026-10-15T16:20:33+08:00"
+        },
+        {
+          "id": "M34-T03",
+          "title": "恢复项目隔离的PC实时预览并移除推流分发控件",
+          "status": "completed",
+          "dependsOn": [
+            "M34-T02"
+          ],
+          "acceptance": "按2026-10-15用户澄清修正ADR：恢复受登录会话及项目查看权限保护的后台专用实时预览，YOLO关闭可看原画面、开启可看识别叠加，断流/撤权/切项目/停止后不泄漏旧帧；不恢复旧移动MJPEG/JPEG/WHEP/HLS/RTSP或检测订阅出口，不创建MediaMTX发布器；PC流页面及视频墙使用新预览，移除推流/播放分发诊断与检测WS请求，保留源/模型/参数/状态及告警功能；权限隔离、管线、前端类型/单测/构建、桌面/窄屏浏览器回归通过，真实模型联合验收另由T06完成。",
+          "record": "harness/records/M34/M34-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-10-15T16:31:48+08:00",
+          "completedAt": "2026-10-15T16:49:39+08:00"
+        },
+        {
+          "id": "M34-T04",
+          "title": "清理直播分发配置依赖与运维契约",
+          "status": "completed",
+          "dependsOn": [
+            "M34-T03"
+          ],
+          "acceptance": "清理MediaMTX发布服务、分发端口、旧播放鉴权、发布编码器及相关环境变量/健康检查/监控/脚本；保留RTSP输入解码、PC专用实时预览及证据所需依赖，兼容旧持久流记录且不丢数据；更新API/ADR/本地启动/部署/升级回退文档和配置测试，只做静态配置验证、不提前部署容器。",
+          "record": "harness/records/M34/M34-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-10-15T16:52:07+08:00",
+          "completedAt": "2026-10-15T17:19:28+08:00"
+        },
+        {
+          "id": "M34-T05",
+          "title": "验证无播放客户端时告警持久化与通知闭环",
+          "status": "completed",
+          "dependsOn": [
+            "M34-T02",
+            "M34-T03"
+          ],
+          "acceptance": "没有PC预览消费者时服务端规则仍生成唯一正式告警并持久化证据，PC和移动端通过告警接口刷新/提示；检测帧不是告警，打开或关闭PC预览不影响告警，断线重连不重复入库或提示；覆盖冷却去重、持久化失败恢复、通知失败与项目切换/撤权；保留来源streamId供溯源，移动端不能跳回直播，PC仅按当前项目权限访问预览。",
+          "record": "harness/records/M34/M34-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-10-15T17:25:30+08:00",
+          "completedAt": "2026-10-15T17:49:25+08:00"
+        },
+        {
+          "id": "M34-T06",
+          "title": "完成分析告警架构三端本地联合验收",
+          "status": "pending",
+          "dependsOn": [
+            "M34-T03",
+            "M34-T04",
+            "M34-T05"
+          ],
+          "acceptance": "与Android M101协同，真实本地视频源/YOLO/PostgreSQL/PC/API27完成配置源、PC实时预览与YOLO叠加、无人预览时识别、告警入库/提示/证据/处置以及双项目撤权、重启/断流恢复和持续运行；网络与进程证据证明无移动直播分发/订阅/发布编码器，旧移动入口不可恢复，PC仅使用鉴权隔离的新预览；保留失败日志和未完成项，不依赖容器部署。",
+          "record": "harness/records/M34/M34-T06.md"
+        },
+        {
+          "id": "M34-T07",
+          "title": "服务端推理与模型转换统一CPU运行及Docker依赖瘦身",
+          "status": "completed",
+          "dependsOn": [
+            "M34-T04"
+          ],
+          "acceptance": "两个Linux镜像固定安装兼容CPU版PyTorch/TorchVision并约束后续依赖解析，构建时拒绝CUDA/NVIDIA/Triton GPU包；视频推理、模型切换、PT校验、LiteRT转换和复验统一CPU，兼容旧auto设置；同步Compose/Kubernetes示例与运维文档；完成CPU行为、依赖审计、部署配置及既有相关回归，记录Linux真实验证和不可用环境限制，不改Android不部署不提交。",
+          "record": "harness/records/M34/M34-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-11-05T16:29:45+08:00",
+          "completedAt": "2026-11-05T17:05:33+08:00"
+        }
+      ],
+      "startedAt": "2026-10-15T15:47:53+08:00"
+    },
+    {
+      "id": "M35",
+      "title": "部署最后执行门禁",
+      "status": "completed",
+      "dependsOn": [],
+      "acceptanceDocument": "harness/acceptance/M35-deployment-last.md",
+      "acceptanceCriteria": [
+        "部署任务清单和执行顺序在服务端任务状态源中明确登记",
+        "部署任务启动前必须确认服务端和移动端全部测试子任务处于completed或superseded",
+        "Harness、任务板和自动化测试对提前部署进行阻断并保留可定位提示"
+      ],
+      "subtasks": [
+        {
+          "id": "M35-T01",
+          "title": "建立部署最后执行与跨端测试门禁",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "在服务端 Harness 中增加部署任务清单、顺序和移动端外部任务状态检查；部署任务在所有 AI/混合/人工测试子任务完成或作废前不得启动；任务板明确显示部署最后阶段。",
+          "record": "harness/records/M35/M35-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-10-19T10:12:28+08:00",
+          "completedAt": "2026-10-19T10:12:47+08:00"
+        }
+      ],
+      "completedAt": "2026-10-19T10:13:03+08:00"
+    },
+    {
+      "id": "M36",
+      "title": "模型端能力与项目场景配置第一阶段",
+      "status": "in_progress",
+      "dependsOn": [
+        "M28",
+        "M33-T08",
+        "M33-T12"
+      ],
+      "acceptanceDocument": "harness/acceptance/M36-model-capabilities-scenes.md",
+      "acceptanceCriteria": [
+        "模型发布按PC、移动端或双端能力独立标记；目标端产物分别校验，缺少非目标端产物不阻止发布或使用，Android转换不再是模型发布前置条件",
+        "场景作为项目可管理的业务配置独立于模型分类；有权限的用户可创建和编辑场景及其模型成员关系，服务端强制校验项目和场景能力",
+        "场景可配置一个或多个已发布模型并声明图片/视频输入适用性；本阶段只交付配置、授权、目录展示与兼容消费，不宣称已支持多模型运行编排",
+        "既有modelId/version、产物签名/哈希、参数快照、项目隔离和图片/相机既有运行行为保持兼容；服务端、PC管理后台、Android契约测试及Harness门禁通过"
+      ],
+      "subtasks": [
+        {
+          "id": "M36-T01",
+          "title": "冻结模型目标端能力与场景配置跨端契约",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "形成版本化契约，区分逻辑模型版本、支持端能力（PC/移动端/双端）与按端独立产物；定义目标端就绪、可选转换、旧Manifest/目录兼容、场景身份与权限、场景模型成员及顺序/运行语义占位、图片/视频输入适用性、项目授权、错误码、审计及API示例；明确第一阶段不实现多模型推理编排，同步/异步调度留后续阶段。",
+          "record": "harness/records/M36/M36-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-10-19T16:04:40+08:00",
+          "completedAt": "2026-10-19T16:06:44+08:00"
+        },
+        {
+          "id": "M36-T02",
+          "title": "实现按目标端独立校验的模型就绪与发布规则",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T01"
+          ],
+          "acceptance": "模型目录、发布门禁、项目分配及下载授权依据目标端能力和对应签名产物分别校验；纯PC模型无需TFLite即可发布/分配到PC，纯移动模型不允许绑定PC推理，双端模型允许任一端产物独立先就绪；取消Android转换作为通用发布前置，保留按需转换任务、哈希/签名/许可证检查和历史Manifest兼容；覆盖旧数据迁移、权限、错误与回归测试。",
+          "record": "harness/records/M36/M36-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-10-19T16:06:56+08:00",
+          "completedAt": "2026-10-19T17:01:28+08:00"
+        },
+        {
+          "id": "M36-T03",
+          "title": "建立项目场景及多模型成员关系 API 与存储",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T01",
+            "M36-T02"
+          ],
+          "acceptance": "新增项目隔离的场景创建、读取、更新、停用和修订控制，以及场景模型成员的增删/排序与图片、视频适用性配置；同场景可关联一个或多个已发布模型版本；所有操作服务端校验 capability、目标端产物就绪、版本、并发修订及审计；迁移保留现有 scenario 字段与单模型分配语义并提供兼容映射，不改变推理运行行为。",
+          "record": "harness/records/M36/M36-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-10-19T17:01:29+08:00",
+          "completedAt": "2026-10-19T17:11:57+08:00"
+        },
+        {
+          "id": "M36-T04",
+          "title": "实现项目场景授权和目标端可用目录",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T03"
+          ],
+          "acceptance": "项目负责人及获授权角色可按capability启停/批准当前项目可用场景；场景目录按项目、成员权限、输入适用性和目标端过滤并携带场景revision、模型版本及各端产物就绪状态；项目用户只能读取获准场景，直接API调用越权拒绝；旧项目单模型场景读取保持兼容，跨项目同ID隔离、撤权和审计测试通过。",
+          "record": "harness/records/M36/M36-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-10-19T17:11:58+08:00",
+          "completedAt": "2026-10-19T17:20:52+08:00"
+        },
+        {
+          "id": "M36-T05",
+          "title": "建设PC模型资产与项目场景管理界面",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T02",
+            "M36-T03",
+            "M36-T04"
+          ],
+          "acceptance": "模型资产页清楚区分PC/移动端/双端支持能力与各端产物就绪状态，移动端转换可选触发且不阻断PC模型发布；新增按权限显示的场景列表、创建编辑及多模型版本成员管理，支持声明图片/视频输入适用性；加载、空、校验、冲突、无权限和失败状态可恢复；PC项目/平台权限边界、键盘可达性、前端单元测试、类型检查、构建与浏览器流程通过。",
+          "record": "harness/records/M36/M36-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-10-19T17:21:11+08:00",
+          "completedAt": "2026-10-19T17:47:37+08:00"
+        },
+        {
+          "id": "M36-T06",
+          "title": "完成模型能力与场景配置跨项目自动化验收",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T02",
+            "M36-T03",
+            "M36-T04",
+            "M36-T05"
+          ],
+          "acceptance": "覆盖PC-only、mobile-only、双端及单端转换失败/缺失/哈希错误、旧Manifest兼容；覆盖单/多模型场景创建修改、图片/视频适用性、角色能力、项目隔离、撤权、并发revision、审计和旧单模型分配读取；服务端/数据库迁移、前端测试、API契约金样、Harness单测与校验通过；真实多模型同步/异步推理性能与调度不纳入本阶段验收。",
+          "record": "harness/records/M36/M36-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-10-19T17:48:03+08:00",
+          "completedAt": "2026-10-19T17:55:30+08:00"
+        },
+        {
+          "id": "M36-T07",
+          "title": "为已登记 PC 模型补充运行验证与发布入口",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T02"
+          ],
+          "acceptance": "平台管理员可对已登记的 PC 模型版本主动执行实际服务端 runtime load/warmup 验证，结果以验证状态和必要摘要持久化到模型版本；模型资产页可显示验证状态并触发验证，失败可查看安全的错误原因并重试；PC 发布仅在该模型版本与当前产物哈希相同的 runtime 验证通过时可提交，mobile-only 发布路径不受影响；覆盖 API 鉴权、模型不存在/非 PC/缺失/哈希变化/加载失败/成功验证/重试、版本隔离和并发发布门禁，服务端与管理端测试及构建通过。",
+          "record": "harness/records/M36/M36-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T10:55:46+08:00",
+          "completedAt": "2026-10-20T11:03:17+08:00"
+        },
+        {
+          "id": "M36-T08",
+          "title": "支持项目模型双端独立分配与按端场景执行判定",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T07"
+          ],
+          "acceptance": "项目负责人选择一次精确模型版本并勾选PC/mobile，按端独立保存批准参数快照与CAS修订且批量写入原子；旧单端记录与接口安全兼容、不隐式授权另一端，提供前向迁移和有数据降级保护；场景同一版本双端配置不按成员总数误判多模型，按请求端解析且多模型sync/async继续拒绝；前后端回归、迁移、类型检查、构建与Harness校验通过，保留现存数据和未提交改动，不操作生产迁移或自动审批真实场景。",
+          "record": "harness/records/M36/M36-T08.md",
+          "owner": "codex-dual-target",
+          "startedAt": "2026-10-20T11:22:17+08:00",
+          "completedAt": "2026-10-20T12:20:03+08:00"
+        },
+        {
+          "id": "M36-T09",
+          "title": "更新本机8080开发服务并验证双端分配接口",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T08"
+          ],
+          "acceptance": "仅按用户授权更新127.0.0.1:8080本机开发实例，不执行容器部署或生产切换；确认开发数据库与原启动配置，停写后备份并验证备份可读及隔离恢复，迁移至20261020_16并重启配套代码及前端；核对原项目、模型授权、场景和账号保持完整，验证健康、登录、目录及双端接口路由，保留日志与恢复路径，不自动批准场景或修改模型授权。",
+          "record": "harness/records/M36/M36-T09.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T12:32:34+08:00",
+          "completedAt": "2026-10-20T12:49:25+08:00"
+        },
+        {
+          "id": "M36-T10",
+          "title": "补齐项目场景审批参数快照与修订绑定执行契约",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T09"
+          ],
+          "acceptance": "审批在参数写入及项目锁保护下冻结精确项目/模型版本/平台参数；新增可空快照迁移且旧批准场景不自动获得执行资格；提供按场景及revision绑定的发布模型投影、参数和下载授权，编辑/撤销/成员撤权/模型撤回与目标端限制保持一致，多模型sync/async继续只读拒执行；通过API、并发、SQLite/PostgreSQL持久化与迁移测试及Harness门禁，不修改Default Project或运行实例。",
+          "record": "harness/records/M36/M36-T10.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T14:30:06+08:00",
+          "completedAt": "2026-10-20T14:39:09+08:00"
+        },
+        {
+          "id": "M36-T11",
+          "title": "更新本地场景服务并发布获授权的双测试版本",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T10"
+          ],
+          "acceptance": "根据20261020用户授权备份并更新127.0.0.1:8080本地实例及快照迁移；遵守签名、哈希、许可证和按端发布门禁发布现有uploaded-06b4dd2f10544673ab723226f91c34a7的2.0.0/3.0.0，不伪造验证结果；复用M104隔离项目审批场景并留存真实接口证据，核对Default Project配置未变，不执行生产或容器部署。",
+          "record": "harness/records/M36/M36-T11.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T14:39:10+08:00",
+          "completedAt": "2026-10-20T14:45:14+08:00"
+        },
+        {
+          "id": "M36-T12",
+          "title": "冻结场景套件成员与运行方案v2跨端契约",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T11"
+          ],
+          "acceptance": "与Android M107-T01共同冻结套件/稳定memberId/运行方案及revision、精确modelId/version/target、成员inputTypes和方案选择关系；同一产物可用于不同输入方案但参数/授权隔离，套件输入按方案汇总。定义审批快照、角色capability、安装与运行授权分离、目录可见/可安装/可运行状态、兼容协商、错误码和API金样；旧v1同端多成员/sync/async拒绝门禁保留，不把多成员套件自动迁移为可执行联合方案。仅图片/本机相机移动消费，不恢复远程视频；不交付调度或伪造客户端能力。",
+          "record": "harness/records/M36/M36-T12.md",
+          "owner": "codex",
+          "startedAt": "2026-10-21T09:22:27+08:00",
+          "completedAt": "2026-10-21T09:26:55+08:00"
+        },
+        {
+          "id": "M36-T13",
+          "title": "实现套件混合输入成员及运行方案持久化迁移",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T12"
+          ],
+          "acceptance": "以项目隔离存储套件、稳定成员及显式运行方案，允许图片专用/连续帧专用成员共存，方案选择不得超出成员及模型输入能力；目标端、精确发布版本和参数来源可追溯。CRUD使用CAS和事务、capability及审计；保留既有sceneId/revision和legacy只读投影，单成员提供兼容默认方案但不隐式扩权；多成员旧配置不自动获得运行资格。同一模型不同方案可复用，稳定成员身份不依赖position，缺失/重复/跨项目引用拒绝，SQLite/PostgreSQL迁移、幂等/重启/回退限制及自动化测试通过，不操作运行数据库。",
+          "record": "harness/records/M36/M36-T13.md",
+          "owner": "codex",
+          "startedAt": "2026-10-21T09:34:19+08:00",
+          "completedAt": "2026-10-21T09:47:16+08:00"
+        },
+        {
+          "id": "M36-T14",
+          "title": "提供套件安装授权与单成员方案修订绑定运行接口",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T13"
+          ],
+          "acceptance": "审批冻结方案成员精确参数快照；按账号/项目/目标端/套件修订提供整套或能力成员目录与受限下载，安装准备不启动推理也不颁发持久运行权限。单成员方案resolve绑定planId/memberId、输入、精确版本/产物哈希/参数revision，直接下载与参数请求复核当前权限/批准/发布及修订；同一产物复用不共用参数或权限。撤权、停用、撤回、签名损坏、CAS冲突及跨项目拒绝；未实现多成员方案运行维持409。API金样和真实PostgreSQL并发测试通过，不修改Default Project或启动实例。",
+          "record": "harness/records/M36/M36-T14.md",
+          "owner": "codex",
+          "startedAt": "2026-10-21T09:51:50+08:00",
+          "completedAt": "2026-10-21T10:13:51+08:00"
+        },
+        {
+          "id": "M36-T15",
+          "title": "扩展管理后台套件成员输入与方案编辑审批",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T13",
+            "M36-T14"
+          ],
+          "acceptance": "项目场景页升级为套件编辑，按capability添加/移除/排序精确模型版本并配置成员输入、目标端及单成员运行方案，展示套件能力汇总而非要求所有模型支持所有输入。模型复用不复制资产，审批快照及编辑失效/CAS冲突可理解；多模型方案当前仅配置不可运行状态明确。保留双端独立分配及旧只读投影，加载/空/错误/无权限恢复可用；前端类型检查、单测、构建、键盘与三角色真实浏览器流程通过，不提交生产配置或自动审批真实业务套件。",
+          "record": "harness/records/M36/M36-T15.md",
+          "owner": "codex",
+          "startedAt": "2026-10-21T10:17:07+08:00",
+          "completedAt": "2026-10-21T11:00:59+08:00"
+        },
+        {
+          "id": "M36-T16",
+          "title": "完成套件混合输入与单成员方案真实服务联合验收",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T14",
+            "M36-T15"
+          ],
+          "acceptance": "在隔离项目与真实服务/PostgreSQL验证混合业务套件、纯图片套件和纯本机相机套件；至少两项目和admin/gly/ptcy角色验证创建/编辑/批准/读取/下载/单方案resolve、撤权、并发修订、重复成员/同模型跨方案、旧客户端门禁及迁移。自主查找项目内模型/样本并核验许可，记录真实覆盖与缺样本阻塞，不以mock替代环境；产出Android M107-T02/T09可核验的契约版本、HTTP/DB/审计证据。服务端/前端/迁移/Harness测试通过；不改Default Project、不操作正式App、不更新本机运行实例或生产容器。",
+          "record": "harness/records/M36/M36-T16.md",
+          "owner": "codex",
+          "startedAt": "2026-10-21T11:01:26+08:00",
+          "completedAt": "2026-10-21T11:27:34+08:00"
+        },
+        {
+          "id": "M36-T17",
+          "title": "支持多模型方案冻结参数与客户端能力协商授权",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T16"
+          ],
+          "acceptance": "与Android M108-T01/T02共同冻结同步批次与异步增量、结果身份/时效、错误/超时/部分结果/取消和告警归属契约；多成员方案审批固定每项版本/目标端/输入/产物哈希及参数快照。提供显式版本化多成员resolve配置，按客户端已交付模式协商、逐项检查权限与修订，能力声明本身不提升账号权限；未知/旧协议继续409，不把新配置用于启动服务端调度或暗中放行旧客户端。契约金样、持久化、并发撤权和参数写入审批竞态测试通过；完成记录供Android核验，不与Android实现互相循环依赖。",
+          "record": "harness/records/M36/M36-T17.md",
+          "owner": "codex",
+          "startedAt": "2026-10-21T11:28:01+08:00",
+          "completedAt": "2026-10-21T12:04:31+08:00"
+        },
+        {
+          "id": "M36-T18",
+          "title": "补齐联合识别方案后台配置与真实授权回归",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T17"
+          ],
+          "acceptance": "后台支持按审批策略配置联合方案的参与成员、同步/异步模式及获准参数，清晰区分已配置、客户端未支持与可使用，不宣称服务端已推理或强制并行。真实服务/PostgreSQL两项目三角色验证多成员resolve完整快照、修改重新审批、撤权/撤回/旧revision拒绝、旧客户端继续阻断、混合输入只选适用成员、下载仍按精确身份鉴权；产出Android M108-T08可核验契约/HTTP/DB/审计记录。前后端与Harness门禁通过，不用Android端到端通过作为本任务前置以免循环依赖，不执行容器/生产部署或额外模型发布。",
+          "record": "harness/records/M36/M36-T18.md",
+          "owner": "codex",
+          "startedAt": "2026-10-21T12:30:26+08:00",
+          "completedAt": "2026-10-21T13:51:28+08:00"
+        },
+        {
+          "id": "M36-T19",
+          "title": "颁发可续期且可撤权的单成员套件运行授权",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T14",
+            "M36-T18"
+          ],
+          "acceptance": "定义并实现项目套件单成员方案的短期运行授权与续期/撤权：授权绑定账号、项目、sceneId及revision、planId、memberId、输入、目标端、精确模型版本、产物哈希和参数revision；仅在当前项目成员权限、场景批准、发布状态、目标端产物完整性及客户端能力均复核通过后颁发，在线resolve预检、安装准备和能力声明不得等价为运行授权。授权有明确短期过期时间，续期必须重新核验全部当前条件；项目撤权、场景/方案修订、成员/模型撤回、审批失效、账号禁用或产物完整性变化后，旧授权不得启动或续期。定义运行开始/心跳/停止或等价验证端点，做到重放/跨项目/跨账号/过期/旧revision拒绝、审计最小化且不泄露凭据；多成员运行继续明确拒绝，不将本任务扩成服务端推理调度。补协议文档、契约金样、单元/API/隔离PostgreSQL并发与撤权测试，Harness测试/validate/render通过；验收使用隔离项目和本地测试账号，不修改Default Project、正式App或生产环境。",
+          "record": "harness/records/M36/M36-T19.md",
+          "owner": "codex",
+          "startedAt": "2026-10-21T20:07:34+08:00",
+          "completedAt": "2026-10-21T20:36:13+08:00"
+        },
+        {
+          "id": "M36-T27",
+          "title": "新增移动相机方案抽帧与有界运行策略配置",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "场景方案新增cameraPolicy并完成严格校验、数据库迁移、审批修订、目录及resolve透传；管理端支持识别抽帧间隔与执行/结果时效设置；修改清除审批，权限/快照/持久化和前端回归通过。不修改Default Project或运行实例，不执行生产迁移，人工待复测，与Android M153-T02对齐。",
+          "record": "harness/records/M36/M36-T27.md",
+          "owner": "codex",
+          "startedAt": "2026-11-04T17:40:05+08:00",
+          "completedAt": "2026-11-04T17:49:04+08:00"
+        },
+        {
+          "id": "M36-T28",
+          "title": "执行用户授权的开发库相机策略迁移",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T27"
+          ],
+          "acceptance": "仅对已核验127.0.0.1:5432/aiyolo_dev执行20261102_32至20261104_33迁移；先备份并验证归档可读取，迁移后验证JSON可空列、版本和既有场景方案数据不变；不修改业务配置或批准、不重启服务、不提交推送，保存脱敏证据并标待人工复测。",
+          "record": "harness/records/M36/M36-T28.md",
+          "owner": "codex",
+          "startedAt": "2026-11-04T18:39:22+08:00",
+          "completedAt": "2026-11-04T18:40:45+08:00"
+        }
+      ],
+      "startedAt": "2026-10-19T16:04:40+08:00"
+    },
+    {
+      "id": "M37",
+      "title": "移动端告警分级上传接收与证据治理",
+      "status": "in_progress",
+      "dependsOn": [],
+      "acceptanceDocument": "harness/acceptance/M37-tiered-alert-ingest.md",
+      "acceptanceCriteria": [
+        "与Android M105-T01共同冻结并引用同一版本API契约与金样，事实、处置、缩略图、原图分别具备明确路由、项目授权、幂等身份、乱序处理、错误分类和兼容策略；两端完成记录互相引用契约版本/哈希及评审证据",
+        "无处置事实以OPEN保存并纳入统计，来源分组及各自分母可验证；处置增量和事实重放不丢字段、不重置既有处置",
+        "证据独立受鉴权上传和读取，缩略图/原图可同时存在；对象身份至少区分项目、事件、证据类型及内容版本/摘要，重复与并发上传安全，不产生覆盖、孤儿对象或base64持久化",
+        "证据留存策略覆盖对象和数据库引用，明确待同步保护上限、误报/样本保留期限及可配置例外；干跑、审计、失败重试和引用/并发保护可验证",
+        "修复路径证据引用规范化和base64进入反馈/训练导出的问题，保留受鉴权引用、缺失原因与审计语义",
+        "服务端测试、数据库迁移、前端类型检查/构建及与Android M105-T08共用金样的跨端联调通过；真实PostgreSQL、MinIO等本轮所需环境证据如实记录，不以模拟结果替代",
+        "按2026-10-20用户确认，仅调整本轮联合验收范围：智能复核、真实供应商联调、复核重试及复核触发原图上传不纳入本轮专项验收，供应商endpoint/key不是关闭M37/M105的门禁；现有功能代码、数据、历史完成记录与既有自动化测试保持不变。范围变更记录：../harness/decisions/20261020-m37-m105-acceptance-scope.md"
+      ],
+      "subtasks": [
+        {
+          "id": "M37-T01",
+          "title": "冻结分级上传服务端接收契约",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "与Android M105-T01共同评审冻结同一版本化契约（服务端仓库docs/mobile-alert-tiered-upload-v1.md及稳定版本/哈希），列明事实、处置、缩略图、原图的路由/字段/MIME与可配置体积上限、项目capability、各自幂等键、乱序/重复/并发语义、错误码及可重试分类；明确OPEN事实、处置先于事实时的客户端重试行为、缩略图与原图并存及替换规则、接口版本兼容/迁移；附Android可直接使用的请求/响应/错误API金样和共同评审证据。未取得Android侧评审不得标记完成。",
+          "record": "harness/records/M37/M37-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-10-19T17:59:49+08:00",
+          "completedAt": "2026-10-19T18:09:30+08:00"
+        },
+        {
+          "id": "M37-T02",
+          "title": "支持无处置事件入库并按来源分组统计",
+          "status": "completed",
+          "dependsOn": [
+            "M37-T01"
+          ],
+          "acceptance": "按M37-T01金样，mobile-ingest在disposition为null时幂等创建OPEN事实；后续处置增量可重放且事实重放不会覆盖处置，处置先到的响应/重试符合契约；service principal能力、事件身份、项目隔离与审计不降级。dashboard按origin至少分开移动端与SERVER_STREAM来源，分别输出总数、OPEN/已处置数和处置率，各分母仅含本来源且OPEN纳入总数；覆盖memory/SQLite与数据库路径、重复/乱序/并发和统计分组测试。",
+          "record": "harness/records/M37/M37-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-10-19T18:09:54+08:00",
+          "completedAt": "2026-10-19T18:54:38+08:00"
+        },
+        {
+          "id": "M37-T03",
+          "title": "新增受鉴权的证据图片独立上传接口",
+          "status": "completed",
+          "dependsOn": [
+            "M37-T01"
+          ],
+          "acceptance": "按M37-T01实现项目和事件级授权的multipart/流式证据上传及受鉴权读取，校验MIME白名单、真实文件签名、流式字节上限、事件归属与证据类型；允许事实已入库后补传，并按契约处理证据先到/事件缺失；对象键区分project/event/evidenceType/contentDigest或等价不可覆盖身份，缩略图和原图可并存，重放同内容幂等、并发不同内容不互相覆盖且失败无孤儿对象；对旧base64写接口执行兼容期/拒绝策略；覆盖越权、撤权、超限、伪造MIME、缺失事件、重复及并发测试。",
+          "record": "harness/records/M37/M37-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T10:19:23+08:00",
+          "completedAt": "2026-10-20T10:36:24+08:00"
+        },
+        {
+          "id": "M37-T04",
+          "title": "建立证据对象留存与清理策略",
+          "status": "completed",
+          "dependsOn": [
+            "M37-T03"
+          ],
+          "acceptance": "按M37-T01冻结的留存策略建立可配置、可重入清理任务，同时治理MinIO对象与数据库引用；实现先标记待删/宽限再删除或等价可恢复流程，清理前再次确认对象无有效事件/证据类型引用、未处于上传或读取竞态；待同步保护具有明确最长保护期，FALSE_POSITIVE/样本保留使用有期限且可审计的保留标记，不作无限期隐式豁免；提供干跑、分批限额、结果指标、失败重试/续跑和审计；覆盖到期、未到期、待同步超期、保留标记、共享引用、对象删除失败及并发上传/清理测试。",
+          "record": "harness/records/M37/M37-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T10:47:46+08:00",
+          "completedAt": "2026-10-20T11:11:49+08:00"
+        },
+        {
+          "id": "M37-T05",
+          "title": "修复证据引用转义与base64图像入库",
+          "status": "completed",
+          "dependsOn": [
+            "M37-T01"
+          ],
+          "acceptance": "修复路径型及URL型快照引用规范化产生evidence/evidence的问题，服务端来源事件误报反馈保留可解析且受项目鉴权的证据引用；对历史data URL和新证据上传响应均确保反馈持久化、审计、API响应与训练导出不含base64/原始图像字节，只保留脱敏后的证据引用及缺失原因；保持导出字段契约与审计语义，提供旧数据fixture和新旧路径回归测试。",
+          "record": "harness/records/M37/M37-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T11:12:06+08:00",
+          "completedAt": "2026-10-20T11:50:54+08:00"
+        },
+        {
+          "id": "M37-T06",
+          "title": "复核失败结果可重试",
+          "status": "completed",
+          "dependsOn": [
+            "M37-T01"
+          ],
+          "acceptance": "按M37-T01允许的显式重试语义处理供应商超时/临时错误；确定性拒绝（禁用、未授权、缺图、额度耗尽、未配置）不重试。每次实际供应商调用具有唯一attemptId并持久记录状态/次数/错误类型；配额先原子预留，调用结果明确后按契约结算，超时等未知结果不自动盲目重放，须以可观测状态和安全恢复策略处理；相同HTTP请求/并发请求不重复启动供应商调用，供应商计费不可保证时如实区分内部额度与外部账单；覆盖临时失败后成功、确定性拒绝、超时未知、并发、进程重启及额度边界。",
+          "record": "harness/records/M37/M37-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T11:50:55+08:00",
+          "completedAt": "2026-10-20T12:11:47+08:00"
+        },
+        {
+          "id": "M37-T07",
+          "title": "完成分级上传接收与证据治理回归验收",
+          "status": "completed",
+          "dependsOn": [
+            "M37-T02",
+            "M37-T03",
+            "M37-T04",
+            "M37-T05"
+          ],
+          "acceptance": "使用与Android M105-T08相同的冻结契约版本及哈希、API金样、事件序列和成本基准，端到端覆盖OPEN事实、处置增量、处置/事实乱序、缩略图与原图独立补传、上传失败重试、撤权、清理与保留策略及引用修复/base64拒绝；原图采用误报、获授权样本回流或看板请求触发，不依赖智能复核。验证HTTP轨迹、DB状态/分母、MinIO对象键/摘要/引用和重放结果一致。成本报告明列事件数、班次时长、原图/缩略图尺寸、触发比例、留存期、上传重试率等相同假设，对比流量/对象存储/接口时延；服务端单测集成、迁移、前端类型检查/构建、Harness单测校验通过；真实PostgreSQL/MinIO等所需环境不可用时记录阻塞，不得用mock宣称环境验收通过。按2026-10-20用户确认，智能复核、真实供应商联调、复核重试与复核触发原图上传不纳入本轮专项验收，供应商配置缺失不构成本轮阻塞；不修改功能代码、历史记录或数据，不删除既有自动化测试。范围变更记录：../harness/decisions/20261020-m37-m105-acceptance-scope.md。",
+          "record": "harness/records/M37/M37-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T14:03:27+08:00",
+          "completedAt": "2026-10-20T14:21:23+08:00"
+        },
+        {
+          "id": "M37-T08",
+          "title": "统一服务端视频流告警两级证据",
+          "status": "completed",
+          "dependsOn": [
+            "M37-T04",
+            "M40-T01"
+          ],
+          "acceptance": "将新生成的 SERVER_STREAM 正式告警统一为 thumbnail/original 两级证据：告警确认时从同一证据帧生成并持久化原图与缩略图，二者使用独立不可覆盖的版本化 MinIO 对象和数据库引用，缩略图满足既有 128 KiB 上限、原图满足既有 5 MiB 上限；默认单图证据接口返回主缩略图，版本化接口分别读取 thumbnail/original，PC 与移动端列表优先缩略图、详情可按权限查看原图，均复用同帧 displayOverlay 且不重复绘制 bakedIn 框。存储失败不得登记缺证据的正式成功告警；重放、重启、并发、撤权、跨项目同 eventId、对象缺失及留存清理安全，历史单级 SERVER_STREAM 告警保持只读兼容且不伪造原图。补充契约文档、单元/API/持久化/前端回归及真实 PostgreSQL/MinIO 验收证据，不修改 Android 本地采集上传策略、不恢复远程视频播放。",
+          "record": "harness/records/M37/M37-T08.md",
+          "owner": "codex",
+          "startedAt": "2026-10-28T10:11:05+08:00",
+          "completedAt": "2026-10-28T10:16:49+08:00"
+        }
+      ],
+      "startedAt": "2026-10-19T17:59:49+08:00"
+    },
+    {
+      "id": "M38",
+      "title": "后台处置回写与移动原图补传闭环",
+      "status": "completed",
+      "dependsOn": [
+        "M37"
+      ],
+      "acceptanceDocument": "harness/acceptance/M38-mobile-evidence-requests.md",
+      "acceptanceCriteria": [
+        "后台可先处置未确认移动告警；服务端修订控制与幂等防止旧移动处置覆盖新结果",
+        "持久化原图请求由原采集账号及安装领取，后台误报自动请求、确认不强制原图；显式索图及结果可见",
+        "Android自动回写处置与领取补图，无图报告、离线恢复、撤权及清理保护闭环，智能复核不作前置",
+        "真实PostgreSQL/MinIO/API27及后台回归留证；不操作生产部署或业务数据"
+      ],
+      "subtasks": [
+        {
+          "id": "M38-T01",
+          "title": "冻结后台处置回写与原图请求跨端契约",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "定义服务端处置revision/CAS/幂等、原账号安装归属、请求创建领取回执和无图枚举、误报自动索图与确认不强制索图、后台展示、撤权/重启/清理保护及共同金样；保留M37/M105冻结原件和历史记录。",
+          "record": "harness/records/M38/M38-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T15:02:06+08:00",
+          "completedAt": "2026-10-20T15:05:16+08:00"
+        },
+        {
+          "id": "M38-T02",
+          "title": "实现持久化处置修订和后台原图请求接口及交互",
+          "status": "completed",
+          "dependsOn": [
+            "M38-T01"
+          ],
+          "acceptance": "后台处置与索图同事务持久化，原采集账号安装隔离、同ID幂等、CAS冲突、分页及重复领取回执安全；补传用既有鉴权证据接口并核验引用，缺图有明确结果；前后端测试、数据库重启/并发及构建通过，不依赖智能复核。",
+          "record": "harness/records/M38/M38-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T15:05:16+08:00",
+          "completedAt": "2026-10-20T15:38:53+08:00"
+        },
+        {
+          "id": "M38-T03",
+          "title": "完成后台先处置与手机自动补图真实联合验收",
+          "status": "completed",
+          "dependsOn": [
+            "M38-T02"
+          ],
+          "acceptance": "与Android M106-T02使用真实服务/PostgreSQL/远程MinIO/API27验证OPEN告警后台先确认/误报、自动领取补图、无图、离线重启、撤权恢复、同ID跨项目和并发冲突；对账原图/处置/回执及清理保护，不以mock替代真实环境。",
+          "record": "harness/records/M38/M38-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-10-20T16:57:48+08:00",
+          "completedAt": "2026-10-20T17:20:55+08:00"
+        }
+      ],
+      "startedAt": "2026-10-20T15:02:06+08:00",
+      "completedAt": "2026-10-20T17:21:47+08:00"
+    },
+    {
+      "id": "M39",
+      "title": "场景套件多成员运行授权",
+      "status": "completed",
+      "dependsOn": [
+        "M36"
+      ],
+      "acceptanceDocument": "harness/acceptance/M39-multi-member-runtime-authorization.md",
+      "acceptanceCriteria": [
+        "服务端对移动端场景方案完整成员集合提供在线短期运行授权，不将安装授权、配置快照、resolve或能力声明当作运行许可",
+        "授权精确绑定账号、项目、场景/方案修订、输入、目标端及每个成员的模型版本、产物摘要和批准参数摘要；方案内容变化或任一成员不匹配均拒绝",
+        "多成员准入具有全有或全无语义；续期/心跳重新校验现行权限，撤权、修订、成员/模型撤回、账号禁用或产物变化使旧授权失效",
+        "服务端仅负责授权与生命周期，不执行模型推理；单成员兼容路径不回归，不修改 Default Project 或生产环境",
+        "单元/API/隔离 PostgreSQL 并发、重放、跨项目、部分成员拒绝、撤权与修订竞态测试通过，契约供 Android M108-T04/T05 核验"
+      ],
+      "subtasks": [
+        {
+          "id": "M39-T01",
+          "title": "实现并验收场景套件多成员运行授权",
+          "status": "completed",
+          "dependsOn": [
+            "M36-T19"
+          ],
+          "acceptance": "定义并实现多成员场景方案的在线短期运行授权与生命周期，授权完整绑定账号、项目、场景/方案修订、输入、移动端目标，以及完整成员集合中每个 memberId、精确 model version、artifact SHA-256 和批准参数摘要；签发及续期逐项校验项目权限、场景审批、当前修订、模型发布/撤回状态和客户端执行能力。采用复合 grant 或具备同等保证的逐成员 grant，但联合方案必须全有或全无；部分成员未授权、成员集合顺序/内容变化、旧revision、重放、跨项目/账号/方案/输入均拒绝。撤权、任一成员/模型/参数/审批变化、账号禁用或产物摘要变化后，运行中的授权失效且不能续期；开始/心跳/停止接口保持幂等并提供最小审计。单成员 M36-T19 契约兼容；只提供授权，不实现服务端推理调度，不改 Default Project 或生产。更新版本化API契约、金样与迁移（如需要），通过单元/API/隔离PostgreSQL并发、部分拒绝、重放及撤权/修订竞态回归，Harness校验通过；完成记录提供 Android M108-T04/T05 接入证据。",
+          "record": "harness/records/M39/M39-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-10-22T13:50:32+08:00",
+          "completedAt": "2026-10-22T14:39:36+08:00"
+        }
+      ],
+      "startedAt": "2026-10-22T13:50:32+08:00",
+      "completedAt": "2026-10-22T14:40:01+08:00"
+    },
+    {
+      "id": "M40",
+      "title": "告警证据显示叠加与移动端配套",
+      "status": "completed",
+      "dependsOn": [
+        "M38"
+      ],
+      "acceptanceDocument": "harness/acceptance/M40-evidence-display-overlay.md",
+      "acceptanceCriteria": [
+        "新告警PC列表及详情使用同帧展示元数据叠加框、类别和置信度，服务端已烘焙证据不重复绘制",
+        "不改变媒体字节、压缩、上传接口、补传或清理；不回填历史数据",
+        "相关服务端/前端回归、构建和Harness通过，与Android M109共同留证"
+      ],
+      "subtasks": [
+        {
+          "id": "M40-T01",
+          "title": "实现PC证据展示叠加与服务端烘焙状态元数据",
+          "status": "completed",
+          "dependsOn": [
+            "M38-T03"
+          ],
+          "acceptance": "PC列表与详情使用同帧displayOverlay快照绘制，非法或缺失字段不伪造框，图片缩放/项目切换安全；服务端视频记录实际烘焙状态与当帧检测快照，不修改媒体/上传机制；前端组件/类型/构建、服务端相关回归与Harness通过，配套Android M109-T01。",
+          "record": "harness/records/M40/M40-T01.md",
+          "owner": "codex-evidence-display",
+          "startedAt": "2026-10-23T14:25:29+08:00",
+          "completedAt": "2026-10-23T14:43:26+08:00"
+        }
+      ],
+      "startedAt": "2026-10-23T14:25:29+08:00",
+      "completedAt": "2026-10-23T14:43:48+08:00"
+    },
+    {
+      "id": "M41",
+      "title": "管理后台 AI 告警处置建议模拟闭环",
+      "status": "completed",
+      "dependsOn": [
+        "M38"
+      ],
+      "acceptanceDocument": "harness/acceptance/M41-ai-alert-advice-simulation.md",
+      "acceptanceCriteria": [
+        "服务端集中管理按告警类型与识别分类精确匹配的模拟知识资料，支持版本、启停、权限和审计，不以模型名称或相似类别兜底",
+        "告警详情由用户主动触发模拟建议，结构化区分处置步骤、可能相关制度原文、匹配说明和模拟来源，覆盖成功、无匹配、部分成功、失败与重试",
+        "生成记录保存知识版本及引用快照；建议不自动认定违规、不改变告警处置、不额外上传媒体、不调用真实外部知识库或大模型",
+        "管理页面、服务接口、项目隔离、角色权限、审计、数据库迁移及自动化浏览器回归通过，并为后续真实检索器和生成器保留可替换边界"
+      ],
+      "subtasks": [
+        {
+          "id": "M41-T01",
+          "title": "冻结 AI 处置建议领域模型与接口契约",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "冻结知识条目、处置步骤、制度引用、匹配键、建议请求/结果、生成状态和错误码；与 Android M114 的规范化 alertTypeId + recognitionCategoryId 语义对齐，明确用户主动触发、模拟来源、可能相关而非已违规、无跨类别兜底、不改变告警处置且不额外发送媒体；定义 Retriever/Generator 可替换接口、API 金样、权限矩阵和后续真实知识库/大模型兼容边界。",
+          "record": "harness/records/M41/M41-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-10-27T17:52:15+08:00",
+          "completedAt": "2026-10-27T17:57:01+08:00"
+        },
+        {
+          "id": "M41-T02",
+          "title": "建立模拟知识资料持久化与版本审计",
+          "status": "completed",
+          "dependsOn": [
+            "M41-T01"
+          ],
+          "acceptance": "在 PostgreSQL/显式测试仓储中持久化项目适用范围、告警类型、识别分类、风险说明、处置步骤、制度名称/编号/版本/章节/条款原文、适用条件、状态和修订；支持 CAS、启停、历史版本及审计，约束同作用域有效匹配唯一性；提供安全帽未佩戴等少量明确标记的模拟种子资料，正常类别不生成违规建议；迁移重跑、回退限制、并发修订和项目隔离测试通过。",
+          "record": "harness/records/M41/M41-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-10-27T17:57:08+08:00",
+          "completedAt": "2026-10-27T18:02:38+08:00"
+        },
+        {
+          "id": "M41-T03",
+          "title": "实现模拟知识资料管理 API",
+          "status": "completed",
+          "dependsOn": [
+            "M41-T02"
+          ],
+          "acceptance": "提供项目授权范围内的知识资料列表、详情、新增、编辑、启停、版本历史和匹配预览 API；区分查看与维护权限，校验制度字段、精确匹配键、修订冲突和跨项目访问，响应不泄露内部路径或敏感配置；所有写操作记录操作者、前后修订和结果，API/仓储/权限测试通过。",
+          "record": "harness/records/M41/M41-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-10-27T18:02:46+08:00",
+          "completedAt": "2026-10-27T18:08:12+08:00"
+        },
+        {
+          "id": "M41-T04",
+          "title": "实现可替换的模拟检索与建议生成服务",
+          "status": "completed",
+          "dependsOn": [
+            "M41-T02"
+          ],
+          "acceptance": "基于已持久化告警事实和规范化匹配键实现 Mock Retriever/Generator，结构化返回处置建议、制度引用、匹配说明、模拟标识和知识修订；支持成功、无匹配、检索失败、生成失败及有制度无建议的部分结果，重试不跨类别兜底。服务不得读取或外发原始媒体、自动改变处置、阻塞告警主链路；接口可由后续真实实现替换，单元和故障注入测试通过。",
+          "record": "harness/records/M41/M41-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-10-27T18:08:18+08:00",
+          "completedAt": "2026-10-27T18:09:37+08:00"
+        },
+        {
+          "id": "M41-T05",
+          "title": "实现告警建议生成 API 与历史结果快照",
+          "status": "completed",
+          "dependsOn": [
+            "M41-T03",
+            "M41-T04"
+          ],
+          "acceptance": "在项目告警详情范围提供主动生成、查询最近结果和查看历史记录 API；请求绑定 eventId、项目、请求人和幂等键，持久化状态、建议正文、制度引用快照、知识版本、生成器类型和时间，不保存媒体字节。并发重复、失败重试、告警不存在/越权、知识修改后历史不变、服务重启恢复和不改变原处置状态测试通过。",
+          "record": "harness/records/M41/M41-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-10-27T18:09:38+08:00",
+          "completedAt": "2026-10-27T18:13:10+08:00"
+        },
+        {
+          "id": "M41-T06",
+          "title": "开发管理后台模拟知识资料管理页面",
+          "status": "completed",
+          "dependsOn": [
+            "M41-T03"
+          ],
+          "acceptance": "管理后台新增 AI 知识资料入口，使用真实管理 API 完成列表筛选、详情、新增、编辑、启停、版本查看和匹配预览；清晰展示模拟资料标识、精确告警类型/识别分类和制度原文，不提供在线大模型或文档上传假入口。覆盖加载、空态、错误、无权限、CAS 冲突、窄屏和键盘操作，前端类型检查、单测与构建通过。",
+          "record": "harness/records/M41/M41-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-10-27T18:13:29+08:00",
+          "completedAt": "2026-10-27T18:20:43+08:00"
+        },
+        {
+          "id": "M41-T07",
+          "title": "在后台告警详情接入 AI 处置建议交互",
+          "status": "completed",
+          "dependsOn": [
+            "M41-T05"
+          ],
+          "acceptance": "告警详情增加用户主动触发的 AI 处置建议区域，打开详情不自动请求；展示加载、成功、无匹配、部分结果、失败、重试和重新生成，视觉区分生成建议与制度原文并标注模拟来源及可能相关。切换告警/项目不残留旧结果，按钮防重复提交；交互不得改变确认/关闭/误报状态，前端组件、状态和回归测试通过。",
+          "record": "harness/records/M41/M41-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-10-27T18:20:43+08:00",
+          "completedAt": "2026-10-27T18:23:51+08:00"
+        },
+        {
+          "id": "M41-T08",
+          "title": "加固项目权限、审计与安全边界",
+          "status": "completed",
+          "dependsOn": [
+            "M41-T05",
+            "M41-T06",
+            "M41-T07"
+          ],
+          "acceptance": "分别验证知识查看、维护、建议生成和历史查看能力，平台/项目角色及显式进入项目边界一致；审计覆盖资料变更和生成尝试但不记录令牌、原图、视频或未来模型密钥/内部提示词。撤权、项目切换、会话失效、跨项目同 eventId、请求重放和异常响应均安全拒绝，既有告警处置、证据和通知权限不回归。",
+          "record": "harness/records/M41/M41-T08.md",
+          "owner": "codex",
+          "startedAt": "2026-10-27T18:23:51+08:00",
+          "completedAt": "2026-10-27T18:29:56+08:00"
+        },
+        {
+          "id": "M41-T09",
+          "title": "完成管理后台模拟闭环浏览器与服务验收",
+          "status": "completed",
+          "dependsOn": [
+            "M41-T08"
+          ],
+          "acceptance": "使用隔离服务和 PostgreSQL，以至少管理员/项目负责人/普通用户及两个项目验证资料维护、启停与版本、告警详情主动生成、成功/无匹配/部分失败/重试、历史快照、撤权和项目切换；保留 HTTP、DB、审计及桌面/窄屏截图证据。后端测试、迁移、前端类型检查/单测/构建、生产资产浏览器测试和 Harness 门禁通过；明确结果为模拟，不宣称真实知识库、大模型或业务准确率。",
+          "record": "harness/records/M41/M41-T09.md",
+          "owner": "codex",
+          "startedAt": "2026-10-27T18:30:04+08:00",
+          "completedAt": "2026-10-27T18:35:35+08:00"
+        },
+        {
+          "id": "M41-T10",
+          "title": "冻结移动端后续服务化接入方案",
+          "status": "completed",
+          "dependsOn": [
+            "M41-T09"
+          ],
+          "acceptance": "基于 M41 已验收 API 与 Android M114 的 Retriever/Generator 边界输出跨端接入说明、字段映射、兼容版本、认证/项目上下文、离线/超时/重试和本地模拟退役策略；只形成可执行后续任务建议及契约金样，不修改 Android、不将手机端接线或 API27 联调计为 M41 已完成，也不引入循环依赖。",
+          "record": "harness/records/M41/M41-T10.md",
+          "owner": "codex",
+          "startedAt": "2026-10-27T18:35:46+08:00",
+          "completedAt": "2026-10-27T18:38:25+08:00"
+        },
+        {
+          "id": "M41-T11",
+          "title": "系统AI资料版本发布与项目继承覆盖",
+          "status": "completed",
+          "dependsOn": [
+            "M41-T10"
+          ],
+          "acceptance": "系统初始V1及不可变发布版本；项目固定继承、主动升级、新增覆盖停用；权限审计、历史建议不变；前后端和持久化测试通过",
+          "record": "harness/records/M41/M41-T11.md",
+          "owner": "codex",
+          "startedAt": "2026-11-05T16:56:37+08:00",
+          "completedAt": "2026-11-05T17:45:13+08:00"
+        }
+      ],
+      "startedAt": "2026-10-27T17:52:15+08:00",
+      "completedAt": "2026-11-05T17:47:11+08:00"
+    },
+    {
+      "id": "M42",
+      "title": "App升级发布服务、双来源托管与快速恢复",
+      "status": "in_progress",
+      "dependsOn": [],
+      "acceptanceDocument": "harness/acceptance/M42-app-update-service.md",
+      "acceptanceCriteria": [
+        "server-video-service与admin-web仅允许平台管理员完成APK登记、统一核验、发布、停止分发、兼容门禁和快速回退",
+        "MinIO自有上传和第三方公开HTTPS直链两种来源均可完整运行并分别通过真实APK验收，外部字节不经业务服务代理",
+        "发布策略、版本码、工件、来源修订、并发、幂等、审计及设备回执可追溯，问题版停止分发不被误报为已装设备恢复",
+        "与Android从稳定版到新版及更高versionCode恢复包的API27和目标真机联合验收通过"
+      ],
+      "subtasks": [
+        {
+          "id": "M42-T01",
+          "title": "冻结App升级服务端契约与数据模型",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "冻结检查、下载地址、安装许可、回执、管理发布和回退API及错误码；PostgreSQL模型覆盖applicationId、渠道、release/artifact/source、versionCode、三类更新级别、兼容条件、策略修订、设备状态和审计。正式身份为com.aiyolo.inspection且首包versionCode=1，后续递增；与Android M118契约金样一致，迁移重跑/回退边界及SQLite/PostgreSQL测试通过。",
+          "record": "harness/records/M42/M42-T01.md",
+          "owner": "codex",
+          "startedAt": "2026-10-29T12:27:15+08:00",
+          "completedAt": "2026-10-29T12:40:45+08:00"
+        },
+        {
+          "id": "M42-T02",
+          "title": "实现APK统一工件核验器",
+          "status": "completed",
+          "dependsOn": [
+            "M42-T01"
+          ],
+          "acceptance": "统一核验器流式读取完整APK，计算实际大小和SHA-256，并用受控Android构建工具解析applicationId、versionCode/versionName、SDK/ABI及签名证书；对照批准的生产签名身份和版本递增规则。截断、HTML、坏ZIP、未签名、未知证书、包名/版本/哈希不符、工具缺失/超时/错误退出均保持待核验或失败且不能发布，原始证据、工具版本和审计可定位。",
+          "record": "harness/records/M42/M42-T02.md",
+          "owner": "codex",
+          "startedAt": "2026-10-29T12:42:00+08:00",
+          "completedAt": "2026-10-29T12:52:27+08:00"
+        },
+        {
+          "id": "M42-T03",
+          "title": "实现MinIO自有APK上传与不可变存储",
+          "status": "completed",
+          "dependsOn": [
+            "M42-T02"
+          ],
+          "acceptance": "仅平台管理员可流式上传APK到受限暂存区，限制大小/超时/并发并调用统一核验器；通过后以不可变对象键转入配置的MinIO bucket，记录对象定位、ETag/摘要和来源修订。重启、重复上传、同名不同字节、MinIO中断/限额/权限错误和清理失败可恢复；凭据只通过服务端秘密引用，App、日志、API和仓库均不出现密钥。",
+          "record": "harness/records/M42/M42-T03.md",
+          "owner": "codex",
+          "startedAt": "2026-10-29T13:04:51+08:00",
+          "completedAt": "2026-10-29T13:33:07+08:00"
+        },
+        {
+          "id": "M42-T04",
+          "title": "实现第三方公开HTTPS直链登记与核验",
+          "status": "completed",
+          "dependsOn": [
+            "M42-T02"
+          ],
+          "acceptance": "平台管理员可登记第三方公开HTTPS APK直链和允许域名；服务端逐跳限制HTTPS、重定向、目标地址和响应大小，异步完整读取到隔离临时区后使用统一核验器，核验后不在业务服务或MinIO保存常驻副本。403/404/429/5xx、HTML页、超时、DNS/重定向变化、文件替换、Range缺失和清理失败状态明确；外部请求不携带业务Cookie/Bearer或管理密钥。",
+          "record": "harness/records/M42/M42-T04.md",
+          "owner": "codex",
+          "startedAt": "2026-10-29T13:34:53+08:00",
+          "completedAt": "2026-10-29T13:46:44+08:00"
+        },
+        {
+          "id": "M42-T05",
+          "title": "实现版本发布策略、检查、地址与回执API",
+          "status": "completed",
+          "dependsOn": [
+            "M42-T01",
+            "M42-T03",
+            "M42-T04"
+          ],
+          "acceptance": "实现平台管理员草稿/发布/停止分发及面向App的check、download-address、install-permission和幂等receipts；选择普通/重要/兼容门禁并按包名、渠道、SDK/ABI、当前versionCode和策略修订返回目标。响应将工件摘要、大小、签名、来源修订和有效期纳入可信发布者签名；公开外链直接返回受控地址而不代理字节，撤回后不签发新许可，未联系/已发现/下载/待安装/启动待健康/成功/失败状态分开。",
+          "record": "harness/records/M42/M42-T05.md",
+          "owner": "codex",
+          "startedAt": "2026-10-29T13:47:43+08:00",
+          "completedAt": "2026-10-29T14:04:40+08:00"
+        },
+        {
+          "id": "M42-T06",
+          "title": "实现平台管理员版本管理后台",
+          "status": "completed",
+          "dependsOn": [
+            "M42-T03",
+            "M42-T04",
+            "M42-T05"
+          ],
+          "acceptance": "admin-web平台管理导航新增App版本管理，复用PLATFORM_ADMIN：版本/工件/来源列表详情、MinIO上传、公开直链登记、核验状态、更新说明、三类更新级别、发布/停止分发、兼容门槛和审计可操作；普通账号和项目角色无菜单且直调API被拒绝。加载、空态、失败、冲突、长说明、上传进度、桌面/窄屏、键盘和前端类型检查/单测/生产构建通过。",
+          "record": "harness/records/M42/M42-T06.md",
+          "owner": "codex",
+          "startedAt": "2026-10-29T14:05:33+08:00",
+          "completedAt": "2026-10-29T14:19:35+08:00"
+        },
+        {
+          "id": "M42-T07",
+          "title": "实现停止分发、兼容门禁与快速回退",
+          "status": "completed",
+          "dependsOn": [
+            "M42-T05",
+            "M42-T06"
+          ],
+          "acceptance": "平台管理员可对问题版本执行只读影响预览，再以原因、幂等键、预期策略修订和预览指纹原子提交：停止问题版、恢复稳定推荐并关联同包名同签名且versionCode更高的恢复包。无恢复包可先止损并显示设备恢复待就绪；签名/摘要/数据库或协议兼容证据不足、并发发布、重复点击和恢复包版本过低均安全拒绝，无半完成策略。结果页分别显示策略与设备恢复阶段。",
+          "record": "harness/records/M42/M42-T07.md",
+          "owner": "codex",
+          "startedAt": "2026-10-29T14:22:02+08:00",
+          "completedAt": "2026-10-29T14:36:50+08:00"
+        },
+        {
+          "id": "M42-T08",
+          "title": "加固并发、审计、凭据与外链网络边界",
+          "status": "completed",
+          "dependsOn": [
+            "M42-T05",
+            "M42-T07"
+          ],
+          "acceptance": "所有管理写接口逐次校验启用PLATFORM_ADMIN，降权/停用/会话失效后立即拒绝；CAS、唯一约束、事务和幂等防止重复发布、工件原地覆盖和丢失新策略。审计记录操作者、原因、前后修订、工件/来源及结果但不记录私钥、MinIO/第三方凭据或完整临时URL；覆盖SSRF、HTTP降级、恶意重定向、DNS变化、日志脱敏、限流和临时文件清理。",
+          "record": "harness/records/M42/M42-T08.md",
+          "owner": "codex",
+          "startedAt": "2026-10-29T14:37:27+08:00",
+          "completedAt": "2026-10-29T14:52:45+08:00"
+        },
+        {
+          "id": "M42-T09",
+          "title": "完成双来源服务端与管理后台真实验收",
+          "status": "completed",
+          "dependsOn": [
+            "M42-T08"
+          ],
+          "acceptance": "使用隔离PostgreSQL、真实MinIO和可控第三方HTTPS源，至少两个平台账号及普通/项目角色，分别完成真实签名APK上传/外链登记、完整核验、发布、停止分发、错文件/替换/外链故障、100稳定→101问题→102恢复、并发/幂等/降权和服务重启；网络证据证明外部APK不经业务服务或MinIO代理。后端测试、迁移、前端类型检查/单测/构建、浏览器及Harness通过。",
+          "record": "harness/records/M42/M42-T09.md",
+          "owner": "codex",
+          "startedAt": "2026-10-29T14:53:55+08:00",
+          "completedAt": "2026-10-29T15:29:11+08:00"
+        },
+        {
+          "id": "M42-T10",
+          "title": "完成Android双来源升级与恢复联合验收",
+          "status": "pending",
+          "dependsOn": [
+            "M42-T09"
+          ],
+          "acceptance": "配合Android M118，在API27固定模拟器和目标真机分别从MinIO及第三方公开HTTPS直链完成稳定版到新版覆盖安装及问题版到更高versionCode恢复包；验证移动网络确认、撤回竞态、错哈希/签名/包名、历史数据保护、回执幂等与恢复统计，保存HTTP、网关、数据库、对象存储、设备和截图证据。正式签名、域名、显示名称、许可证/SBOM或真实设备不齐时保留阻塞，不以Mock/Debug替代。",
+          "record": "harness/records/M42/M42-T10.md"
+        },
+        {
+          "id": "M42-T11",
+          "title": "简化管理员手工托管APK的新版本登记流程",
+          "status": "completed",
+          "dependsOn": [
+            "M42-T06"
+          ],
+          "acceptance": "管理员自行构建并上传APK至外部托管，在新建版本入口填写版本名、递增版本码、公开HTTPS直链、更新说明及提醒级别；后台沿用完整APK核验，手填版本必须与真实包匹配，核验通过后明确确认创建草稿，再沿用现有发布/停止/恢复流程。单一部署自动选择，重定向域名为高级项；主流程不依赖MinIO上传凭据且不自动发布。保留原有来源能力与手机端数据/签名/用户安装确认规则；权限失效、重复提交、核验失败、版本不符与离页安全处理，前端测试/生产构建/浏览器回归通过，联合验收最后执行。",
+          "record": "harness/records/M42/M42-T11.md",
+          "owner": "codex",
+          "startedAt": "2026-10-30T09:24:28+08:00",
+          "completedAt": "2026-10-30T09:36:04+08:00"
+        },
+        {
+          "id": "M42-T12",
+          "title": "接入现有环境App发布签名身份与升级基础配置",
+          "status": "completed",
+          "dependsOn": [
+            "M42-T02",
+            "M42-T11"
+          ],
+          "acceptance": "在现有环境使用已生成独立APK证书及Ed25519元数据密钥，记录FR-12覆盖评审；配置发布scope和本机SDK核验路径，幂等登记唯一App身份且拒绝覆盖冲突身份或版本水位。不得生成新密钥、伪造兼容性证据、修改手机数据或自动发布；保留APK外链由用户填写，未满足域名/兼容性/候选包门禁时不启用分发或重启服务。不接触其他业务记录；真实配置加载、签名校验、工具调用、身份幂等/冲突测试及Harness通过，留存公开证据和未完成项。该任务只完成配置准备，不替代M42-T10或Android M118联合验收。",
+          "record": "harness/records/M42/M42-T12.md",
+          "owner": "codex",
+          "startedAt": "2026-11-06T10:58:13+08:00",
+          "completedAt": "2026-11-06T11:16:20+08:00"
+        },
+        {
+          "id": "M42-T13",
+          "title": "启用当前HTTP环境App升级管理与外链核验",
+          "status": "completed",
+          "dependsOn": [
+            "M42-T12"
+          ],
+          "acceptance": "根据M164真实v1/v2构建及M165安装证据配置保守20到20兼容声明，启用当前环境升级服务与外链核验，不启用无关MinIO上传、不创建发布；受控重启同一8080服务，核对健康、管理员配置/台账/外链鉴权与签名器，保留业务及版本水位，真实回归/Harness及证据齐全。不替代M42-T10或生产发布门禁。",
+          "record": "harness/records/M42/M42-T13.md",
+          "owner": "codex",
+          "startedAt": "2026-11-06T13:00:17+08:00",
+          "completedAt": "2026-11-06T13:17:51+08:00"
+        }
+      ],
+      "createdAt": "2026-10-29T12:25:00+08:00",
+      "requirementIds": [
+        "FR-12"
+      ],
+      "requirementReview": {
+        "decision": "new_requirement",
+        "rationale": "用户要求server-video-service承载App升级服务，支持MinIO和第三方公开HTTPS直链、平台管理员版本管理及快速恢复；现有需求只覆盖模型发布，必须单独登记应用安装包发布生命周期。"
+      },
+      "startedAt": "2026-10-29T12:27:15+08:00"
     }
   ]
 }

@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://example.invalid/server-video-service/video-protocol.schema.json",
   "title": "Server Video Service protocol payloads",
+  "$comment": "ADR-003 (2026-10-15): basic control/input request subset only; use explicit project routes and OpenAPI for full fields. Mobile live distribution and detections subscriptions are retired. PC preview is a same-origin cookie-authorized JPEG response, not a request payload here.",
   "type": "object",
   "oneOf": [
     { "$ref": "#/$defs/createStream" },

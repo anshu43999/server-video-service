@@ -1,76 +1,36 @@
+"""ADR-003: live MJPEG/JPEG output is retired, evidence media is unaffected."""
 import asyncio
 import unittest
-import uuid
-
+from contextlib import nullcontext
+from unittest.mock import patch
 from fastapi.testclient import TestClient
-
-from app.config import settings
-from app.main import app, mjpeg_generator, streams
+from starlette.websockets import WebSocketDisconnect
+from app.main import app
 from app.stream import StreamSession
-from tools.probe_output import sample_jpeg
-
 
 class OutputContractTests(unittest.TestCase):
-    def setUp(self):
-        streams.clear()
-        self.original_admin_token = settings.admin_token
-        self.original_mobile_token = settings.mobile_token
-        settings.admin_token = "output-test-admin"
-        settings.mobile_token = "output-test-mobile"
+    def test_mjpeg_has_no_frame_output(self):
+        with nullcontext(TestClient(app)) as client, patch("app.main.get_stream", side_effect=AssertionError("resource lookup")):
+            for prefix in ("/aiyoloapi/streams", "/aiyoloapi/projects/unknown/streams"):
+                response = client.get(prefix + "/camera/mjpeg")
+                self.assertEqual(410, response.status_code, response.text)
+                self.assertNotIn("multipart", response.headers["content-type"])
+                self.assertIn("no-store", response.headers["cache-control"])
 
-    def tearDown(self):
-        settings.admin_token = self.original_admin_token
-        settings.mobile_token = self.original_mobile_token
+    def test_jpeg_websocket_cannot_subscribe_or_receive_frames(self):
+        with nullcontext(TestClient(app)) as client:
+            for prefix in ("/aiyoloapi/streams", "/aiyoloapi/projects/unknown/streams"):
+                with self.assertRaises(WebSocketDisconnect) as caught:
+                    with client.websocket_connect(prefix + "/camera/ws"):
+                        self.fail("retired WebSocket accepted")
+                self.assertEqual(1008, caught.exception.code)
 
-    def test_mjpeg_content_type_and_websocket_jpeg(self):
-        with TestClient(app) as client:
-            admin_headers = {"X-Admin-Token": settings.admin_token}
-            mobile_headers = {"X-Video-Service-Token": settings.mobile_token}
-            stream_id = f"output-contract-{uuid.uuid4().hex}"
-            try:
-                self.assertEqual(client.post(
-                    "/aiyoloapi/streams", json={"stream_id": stream_id}, headers=admin_headers
-                ).status_code, 201)
-                with client.websocket_connect(
-                    f"/aiyoloapi/streams/{stream_id}/ingest", headers=mobile_headers
-                ) as ingest:
-                    with client.websocket_connect(
-                        f"/aiyoloapi/streams/{stream_id}/ws", headers=admin_headers
-                    ) as output:
-                        ingest.send_bytes(sample_jpeg())
-                        frame = output.receive_bytes()
-                        self.assertTrue(frame.startswith(b"\xff\xd8"))
-
-                async def read_part():
-                    return await anext(mjpeg_generator(streams[stream_id]))
-
-                part = asyncio.run(read_part())
-                self.assertIn(b"Content-Type: image/jpeg", part)
-                self.assertIn(b"Content-Length:", part)
-            finally:
-                client.delete(f"/aiyoloapi/streams/{stream_id}", headers=admin_headers)
-
-    def test_mjpeg_generator_stops_without_replaying_last_frame_after_close(self):
-        async def exercise():
-            stream = StreamSession("restart-preview")
-            await stream.ingest_jpeg(sample_jpeg())
-            generator = mjpeg_generator(stream)
-            first = await anext(generator)
+    def test_internal_preview_hooks_are_inert_before_and_after_close(self):
+        async def check():
+            stream = StreamSession("camera")
+            self.assertFalse(stream.try_subscribe())
+            self.assertIsNone(await stream.wait_frame())
             await stream.close()
-            with self.assertRaises(StopAsyncIteration):
-                await asyncio.wait_for(anext(generator), timeout=0.2)
-            return first, stream.active_subscribers
-
-        first, subscribers = asyncio.run(exercise())
-        self.assertIn(b"Content-Type: image/jpeg", first)
-        self.assertEqual(subscribers, 0)
-
-    def test_mjpeg_response_disables_caching_and_proxy_buffering(self):
-        route = next(route for route in app.routes if getattr(route, "path", None) == "/aiyoloapi/streams/{stream_id}/mjpeg")
-        source = __import__("inspect").getsource(route.endpoint)
-        self.assertIn('"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"', source)
-        self.assertIn('"X-Accel-Buffering": "no"', source)
-
-
-if __name__ == "__main__":
-    unittest.main()
+            self.assertIsNone(await stream.wait_frame())
+            self.assertEqual(0, stream.active_subscribers)
+        asyncio.run(check())

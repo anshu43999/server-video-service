@@ -88,10 +88,6 @@ spec:
               value: "true"
             - name: CONVERSION_VERIFIER_PYTHON
               value: /usr/local/bin/python
-            - name: MEDIAMTX_RTSP_URL
-              value: rtsp://aiyolo-mediamtx:8554
-            - name: MEDIAMTX_API_URL
-              value: http://aiyolo-mediamtx:9997
           resources:
             requests:
               cpu: "1"

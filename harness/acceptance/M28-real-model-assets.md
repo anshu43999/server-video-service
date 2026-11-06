@@ -2,7 +2,7 @@
 major_task_id: M28
 result: passed
 owner: codex
-accepted_at: 2026-09-21T09:24:32+08:00
+accepted_at: 2026-10-19T16:04:40+08:00
 ---
 
 # M28 管理后台模型资产去 Mock 化测试验收报告
@@ -11,7 +11,7 @@ accepted_at: 2026-09-21T09:24:32+08:00
 
 **通过**
 
-管理后台模型资产已固定接入真实目录，并完成上传、转换、校准集、卸载、激活及本次 PT 选择反馈与完成态清理；上传页在桌面与窄屏均可清晰操作，失败保留重试输入，成功清空对应控件。
+M28 全部 13 个子任务完成；原验收覆盖模型资产真实目录及上传、转换等能力，补充核验 M28-T13 模型可用性与安全绑定门禁。遗留风险：旧 test_model_catalog 有 3 项因转换目录锁启动失败，按记录未解锁，未宣称通过。
 
 ## 验收标准
 
@@ -32,15 +32,19 @@ accepted_at: 2026-09-21T09:24:32+08:00
 | M28-T07 | 实现校准集资产管理与按任务选择 | completed | [M28-T07.md](../records/M28/M28-T07.md) |
 | M28-T08 | 拆分独立校准集资产工作区 | completed | [M28-T08.md](../records/M28/M28-T08.md) |
 | M28-T09 | 增强训练模型上传选择反馈与完成态清理 | completed | [M28-T09.md](../records/M28/M28-T09.md) |
+| M28-T10 | 显示模型上传与后台转换实时进度 | completed | [M28-T10.md](../records/M28/M28-T10.md) |
+| M28-T11 | 内置离线测试校准集保障生产转换 | completed | [M28-T11.md](../records/M28/M28-T11.md) |
+| M28-T12 | 接入真实 COCO8 校准集 | completed | [M28-T12.md](../records/M28/M28-T12.md) |
+| M28-T13 | 统一模型资产可用性与安全绑定门禁 | completed | [M28-T13.md](../records/M28/M28-T13.md) |
 
 ## 测试结果
 
-- 模型上传、模型市场、校准集、参数、转换 API 与转换回归测试通过；JavaScript 语法检查通过；浏览器窄屏及 1440x900 视觉验证通过；Harness 30 项单测与 validate 通过。
+- M28-T13 记录的 46 项相关 Python 回归、Node 前端行为/语法检查及 Harness 30 项检查；T13 记录中明确保留 3 项锁占用启动失败。此前 M28 验收报告中的模型资产 API、管理后台及转换测试。
 
 ## 验收证据
 
-- harness/records/M28/M28-T01.md; harness/records/M28/M28-T02.md; harness/records/M28/M28-T03.md; harness/records/M28/M28-T04.md; harness/records/M28/M28-T05.md; harness/records/M28/M28-T06.md; harness/records/M28/M28-T07.md; harness/records/M28/M28-T08.md; harness/records/M28/M28-T09.md
+- harness/acceptance/M28-real-model-assets.md; harness/records/M28/M28-T13.md; app/model_catalog.py; tests/test_model_version_lifecycle.py; tests/model_asset_availability.test.cjs
 
 ## 遗留风险
 
-- 全量 `test_admin_*.py` 当前为 61/62：`test_admin_stream_live.AdminStreamLiveContractTests.test_persisted_configuration_and_runtime_states_are_distinct` 仍期待旧的 `app.js?v=20260917-stream-preview-stale-frame`，与当前工作区已有的 `20260920-calibration-workspace` 不一致。该断言不覆盖模型资产上传资源，责任范围属于视频流管理缓存版本测试；本次 M28 模型资产相关测试全部通过。
+- 无；若存在遗留风险，必须在正式通过前改写本节并给出责任人和截止日期。

@@ -17,7 +17,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    jsonb = postgresql.JSONB(astext_type=sa.Text())
+    jsonb = sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql")
     op.create_table(
         "alert_rules",
         sa.Column("rule_id", sa.String(64), primary_key=True),

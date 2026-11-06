@@ -13,8 +13,8 @@ class StreamModelBindingTests(unittest.TestCase):
     def test_binding_replaces_only_target_stream_and_keeps_metadata(self):
         first = StreamSession("first")
         second = StreamSession("second")
-        first.bind_model(model_id="model-a", model_path="models/a.pt", scenario="intrusion", purpose="business", labels=["person"], imgsz=416)
-        second.bind_model(model_id="model-b", model_path="models/b.pt", scenario="safety", purpose="development", labels=["helmet"], imgsz=640)
+        first.bind_model(model_id="model-a", model_path="models/a.pt", scenario="intrusion", labels=["person"], imgsz=416)
+        second.bind_model(model_id="model-b", model_path="models/b.pt", scenario="safety", labels=["helmet"], imgsz=640)
         self.assertEqual(first.model_metadata()["catalog_model_id"], "model-a")
         self.assertEqual(first.model_metadata()["scenario"], "intrusion")
         self.assertEqual(second.model_metadata()["catalog_model_id"], "model-b")

@@ -27,8 +27,9 @@ class ApiPrefixTests(unittest.TestCase):
 
     def test_runtime_clients_do_not_reference_legacy_api_prefix(self):
         for relative in (
-            "app/static/app.js",
-            "app/static/conversion.js",
+            "admin-web/src/api/client.ts",
+            "admin-web/src/api/auth.ts",
+            "admin-web/src/api/realtime.ts",
             "tools/e2e_smoke.py",
             "tools/probe_output.py",
             "tools/push_video.py",

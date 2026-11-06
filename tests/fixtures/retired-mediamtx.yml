@@ -1,0 +1,31 @@
+###############################################
+# Legacy MediaMTX 1.20.x negative-test fixture ONLY; never deploy.
+# This file intentionally contains no credentials or certificates.
+###############################################
+logLevel: info
+logDestinations: [stdout]
+api: true
+apiAddress: :9997
+apiEncryption: false
+rtsp: true
+rtspAddress: :8554
+rtmp: false
+srt: false
+moq: false
+hls: true
+hlsAddress: :8888
+hlsVariant: lowLatency
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+webrtc: true
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+
+# The retired callback rejects EVERY action, including read/publish/api.
+# Kept only to exercise a leftover old server against the deny-only endpoint.
+authMethod: http
+authHTTPAddress: http://video-service:8080/aiyoloapi/internal/media/authorize
+authHTTPExclude: []
+paths:
+  all_others: {}

@@ -35,6 +35,9 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertIn("ADMIN_TOKEN|MOBILE_TOKEN", script)
         self.assertIn("development-only", script)
         self.assertIn("pg_dump --no-password --format=custom", script)
+        self.assertIn('PGDATABASE="${pg_dump_url}" pg_dump', script)
+        self.assertNotIn('--dbname="${pg_dump_url}"', script)
+        self.assertIn('umask 077', script)
         self.assertIn("pg_dump is required for cloud database backups", script)
         self.assertIn('database_url="${DATABASE_URL:-}"', script)
         self.assertIn('"${ENV_FILE}"', script)
@@ -44,6 +47,18 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertIn("--no-build --wait --wait-timeout 300", script)
         self.assertIn("smoke)", script)
         self.assertIn("MINIO_OK", script)
+        self.assertIn("production deployment refuses automatic database migrations", script)
+
+    def test_production_database_upgrade_requires_offline_migration(self) -> None:
+        self.assertIn('RUN_DATABASE_MIGRATIONS: "${RUN_DATABASE_MIGRATIONS:-false}"', self.compose)
+        self.assertIn("RUN_DATABASE_MIGRATIONS=false", self.env_example)
+        self.assertNotIn("RUN_DATABASE_MIGRATIONS=true", self.env_example)
+        rejected = validate_environment({"DEPLOYMENT_ENV": "production", "RUN_DATABASE_MIGRATIONS": "true"})
+        self.assertTrue(any("RUN_DATABASE_MIGRATIONS must be false" in error for error in rejected))
+        for value in ("false", ""):
+            with self.subTest(value=value):
+                allowed = validate_environment({"DEPLOYMENT_ENV": "production", "RUN_DATABASE_MIGRATIONS": value})
+                self.assertFalse(any("RUN_DATABASE_MIGRATIONS" in error for error in allowed))
 
     def test_runtime_image_is_non_root_and_self_checking(self) -> None:
         self.assertIn("USER app", self.dockerfile)
@@ -54,6 +69,36 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertIn("YOLO_CONFIG_DIR=/tmp/Ultralytics", self.dockerfile)
         self.assertNotIn("COPY .env", self.dockerfile)
 
+    def test_both_images_enforce_cpu_dependencies_and_audit_before_shipping(self) -> None:
+        for dockerfile in (self.dockerfile, self.converter_dockerfile):
+            self.assertIn("COPY requirements-cpu.txt constraints-cpu.txt ./", dockerfile)
+            self.assertIn("PIP_CONSTRAINT=/app/constraints-cpu.txt", dockerfile)
+            self.assertIn('PIP_FIND_LINKS="https://download.pytorch.org/whl/cpu/torch/ https://download.pytorch.org/whl/cpu/torchvision/"', dockerfile)
+            self.assertIn('CUDA_VISIBLE_DEVICES=""', dockerfile)
+            self.assertIn("JAX_PLATFORMS=cpu", dockerfile)
+            self.assertIn("&& pip check", dockerfile)
+            self.assertIn("&& python tools/check_cpu_runtime.py", dockerfile)
+        self.assertIn('YOLO_DEVICE: "cpu"', self.compose)
+        self.assertIn("YOLO_DEVICE=cpu", self.env_example)
+        dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+        self.assertIn("!tools/check_cpu_runtime.py", dockerignore)
+
+    def test_admin_frontend_is_reproducibly_built_outside_python_runtime(self) -> None:
+        package = json.loads((ROOT / "admin-web" / "package.json").read_text(encoding="utf-8"))
+        lock = json.loads((ROOT / "admin-web" / "package-lock.json").read_text(encoding="utf-8"))
+        dockerignore = (ROOT / ".dockerignore").read_text(encoding="utf-8")
+        self.assertEqual(3, lock["lockfileVersion"])
+        self.assertEqual(package["name"], lock["name"])
+        self.assertIn("FROM node:", self.dockerfile)
+        self.assertIn("AS admin-build", self.dockerfile)
+        self.assertIn("COPY admin-web/package.json admin-web/package-lock.json", self.dockerfile)
+        self.assertIn("RUN npm ci --no-audit --no-fund", self.dockerfile)
+        self.assertIn("RUN npm run test && npm run build && npm run build:preview", self.dockerfile)
+        self.assertIn("/admin-web/dist ./admin-web/dist", self.dockerfile)
+        self.assertIn("/admin-web/dist-preview ./admin-web/dist-preview", self.dockerfile)
+        self.assertIn("**/node_modules", dockerignore)
+        self.assertIn("admin-web/dist", dockerignore)
+
     def test_container_model_catalog_seed_is_valid_and_empty(self) -> None:
         registry = ROOT / "deploy" / "container-models" / "registry.json"
         catalog = ModelCatalog(registry)
@@ -62,7 +107,12 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertIn("MODEL_SEED_PATH: /models", self.compose)
 
     def test_checked_in_seed_artifacts_match_registry(self) -> None:
-        registry = json.loads((ROOT / "models" / "registry.json").read_text(encoding="utf-8"))
+        # Compare one committed snapshot: the working catalog may contain local
+        # uploads that intentionally never enter Git or a deployment seed.
+        registry = json.loads(subprocess.run(
+            ["git", "show", "HEAD:models/registry.json"], cwd=ROOT,
+            check=True, capture_output=True,
+        ).stdout)
         attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8")
         self.assertIn("models/**/*.json text eol=lf", attributes)
         for model in registry["models"]:
@@ -80,12 +130,11 @@ class DockerDeploymentTests(unittest.TestCase):
                         artifact["sha256"].lower(), hashlib.sha256(committed).hexdigest()
                     )
 
-    def test_compose_has_database_media_and_application_health_gates(self) -> None:
-        for service in ("mediamtx:", "model-converter:", "video-service:"):
+    def test_compose_has_only_application_and_converter_health_gates(self) -> None:
+        for service in ("model-converter:", "video-service:"):
             self.assertIn(service, self.compose)
-        self.assertIn("image: bluenviron/mediamtx:1.20.1", self.compose)
-        self.assertIn('test: ["CMD", "/mediamtx", "--version"]', self.compose)
-        self.assertEqual(2, self.compose.count("condition: service_healthy"))
+        self.assertNotIn("mediamtx:", self.compose)
+        self.assertEqual(1, self.compose.count("condition: service_healthy"))
         self.assertNotIn("postgres:", self.compose)
         self.assertNotIn("postgres-data", self.compose)
         self.assertIn("model-data:/app/models", self.compose)
@@ -99,6 +148,7 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertIn('CONVERSION_REMOTE_ENDPOINT: "http://model-converter:8090"', self.compose)
         self.assertIn("AIYOLO_REMOTE_CONVERSION_TOKEN", self.compose)
         self.assertIn("CONVERTER_TOKEN", self.compose)
+        self.assertNotIn("MEDIAMTX_", self.compose)
         self.assertIn("CALIBRATION_ROOT: /app/calibration", self.compose)
         self.assertIn("CONVERTER_BUILTIN_CALIBRATION_MANIFEST: /app/calibration-builtin/manifest.json", self.compose)
         self.assertIn("mem_limit:", self.compose)
@@ -142,9 +192,8 @@ class DockerDeploymentTests(unittest.TestCase):
     def test_compose_hardens_mounts_ports_and_logs(self) -> None:
         self.assertIn(":/models:ro,Z", self.compose)
         self.assertIn("CONTROL_BIND_ADDRESS:-127.0.0.1", self.compose)
-        self.assertIn("DIAGNOSTIC_BIND_ADDRESS:-127.0.0.1", self.compose)
-        self.assertIn("MEDIA_WEBRTC_UDP_PORT:-8189}:8189/udp", self.compose)
-        self.assertIn("SRT_BIND_ADDRESS:-127.0.0.1", self.compose)
+        self.assertNotIn("MEDIA_WEBRTC_UDP_PORT", self.compose)
+        self.assertNotIn("SRT_BIND_ADDRESS", self.compose)
         self.assertNotIn("5432:5432", self.compose)
         self.assertNotIn("9997:9997", self.compose)
         self.assertIn("read_only: true", self.compose)
@@ -159,8 +208,7 @@ class DockerDeploymentTests(unittest.TestCase):
     def test_production_environment_rejects_missing_security_settings(self) -> None:
         errors = validate_environment({"DEPLOYMENT_ENV": "production"})
         for field in (
-            "DATABASE_URL", "MEDIAMTX_ENABLED",
-            "MEDIAMTX_WHEP_URL", "MEDIAMTX_LLHLS_URL", "YOLO_MODEL_PATH",
+            "DATABASE_URL", "YOLO_MODEL_PATH",
             "MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_BUCKET",
         ):
             self.assertTrue(any(field in error for error in errors), field)
@@ -183,17 +231,23 @@ class DockerDeploymentTests(unittest.TestCase):
                 "MINIO_ACCESS_KEY": "access-key",
                 "MINIO_SECRET_KEY": "secret-key",
                 "MINIO_BUCKET": "aiyolo-alerts",
-                "MEDIAMTX_ENABLED": "true",
-                "MEDIAMTX_WHEP_URL": "https://video.example.com:8889",
-                "MEDIAMTX_LLHLS_URL": "https://video.example.com:8888",
                 "REQUIRE_YOLO_MODEL": "true",
                 "YOLO_MODEL_PATH": model.name,
             })
         self.assertEqual([], errors)
 
+    def test_retired_media_settings_do_not_affect_production_validation(self):
+        missing = validate_environment({"DEPLOYMENT_ENV": "production"})
+        placeholder = validate_environment({
+            "DEPLOYMENT_ENV": "production",
+            "MEDIAMTX_INTERNAL_TOKEN": "CHANGE_ME_WITH_32_RANDOM_CHARACTERS",
+        })
+        self.assertEqual(missing, placeholder)
+        self.assertFalse(any("MEDIAMTX" in error for error in missing))
+
     def test_example_requires_operator_owned_values(self) -> None:
         for field in (
-            "DATABASE_URL", "CONVERTER_TOKEN", "MEDIA_PUBLIC_HOST",
+            "DATABASE_URL", "CONVERTER_TOKEN",
             "MINIO_ENDPOINT", "MINIO_ACCESS_KEY", "MINIO_SECRET_KEY", "MINIO_BUCKET",
             "CONVERSION_DEFAULT_CALIBRATION_DATASET_ID", "CALIBRATION_MAX_UPLOAD_BYTES",
             "CALIBRATION_MAX_EXPANDED_BYTES", "CALIBRATION_MAX_FILES",
@@ -211,7 +265,7 @@ class DockerDeploymentTests(unittest.TestCase):
     def test_example_is_ready_for_direct_http_deployment(self) -> None:
         self.assertIn("CONTROL_BIND_ADDRESS=0.0.0.0", self.env_example)
         self.assertIn("CONTROL_PORT=18080", self.env_example)
-        self.assertIn("MEDIA_BIND_ADDRESS=0.0.0.0", self.env_example)
+        self.assertNotIn("MEDIA_BIND_ADDRESS", self.env_example)
         self.assertNotIn("127.0.0.1", self.env_example)
         self.assertNotIn("DIAGNOSTIC_BIND_ADDRESS=", self.env_example)
         self.assertNotIn("SRT_BIND_ADDRESS=", self.env_example)

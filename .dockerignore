@@ -1,6 +1,13 @@
 .git
 .gitignore
 .venv
+**/node_modules
+admin-web/dist
+admin-web/dist-preview
+admin-web/test-results
+admin-web/test-results-production
+admin-web/playwright-report
+.npm-task-cache
 .env
 .env.*
 !.env.example
@@ -19,6 +26,7 @@ tests
 docs
 tools/*
 !tools/conversion_worker.py
+!tools/check_cpu_runtime.py
 tmp*
 .test-*
 models
@@ -27,4 +35,3 @@ deploy/mediamtx/*.crt
 deploy/mediamtx/*.key
 deploy/mediamtx/*.yml
 deploy/mediamtx/*.yaml
-!deploy/mediamtx/*.example

@@ -1,5 +1,7 @@
 # MediaMTX 推流实现（M08-T03）
 
+> 2026-10-15 / M34-T04：本文直播输出、发布编码器、播放分发或移动远程视频的方案/操作/验收仅作历史，不再生效，不得据此启动旧服务或放行端口。现行范围以 [ADR-003](adr-003-analysis-alerts-only.md) 和 [退役升级手册](media-retirement-upgrade.md) 为准；输入解码、PC专用预览、YOLO、正式告警与证据仍保留。历史未测项不能标为当前通过。
+
 每个 `StreamSession` 持有一个 `MediaMTXPublisher`。首帧到达时按帧尺寸惰性创建 H.264 编码器，并将编码后的 Annex-B 数据写入长驻 FFmpeg 子进程，由 FFmpeg 通过 RTSP 推送到固定路径：
 
 `{MEDIAMTX_RTSP_URL}/{stream_id}`

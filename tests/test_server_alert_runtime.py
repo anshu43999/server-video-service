@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import hashlib
 from pathlib import Path
 
 import numpy as np
@@ -28,15 +29,55 @@ class CaptureEvidenceStore:
     def __init__(self):
         self.saved = []
 
-    def store_bytes(self, event_id, content, content_type):
-        self.saved.append((event_id, content, content_type))
-        return {
-            "snapshotUri": f"/aiyoloapi/alerts/{event_id}/evidence",
-            "objectStorage": {"provider": "minio", "objectKey": f"alerts/{event_id}.jpg"},
-        }
+    def store_tiered_bytes(self, project_id, event_id, evidence_type, version,
+                           content, content_type, digest):
+        self.saved.append((project_id, event_id, evidence_type, version, content, content_type, digest))
+        return {"provider": "minio", "bucket": "alerts",
+                "objectKey": f"alerts/{project_id}/{event_id}/{evidence_type}/{version}/{digest}.jpg"}
+
+    def remove_tiered(self, object_storage):
+        self.removed = getattr(self, "removed", []) + [object_storage]
+
+
+class InMemoryTieredEvidenceStore(CaptureEvidenceStore):
+    bucket = "alerts"
+
+    def __init__(self):
+        super().__init__()
+        self.objects = {}
+
+    def store_tiered_bytes(self, project_id, event_id, evidence_type, version,
+                           content, content_type, digest):
+        reference = super().store_tiered_bytes(project_id, event_id, evidence_type, version,
+                                                content, content_type, digest)
+        self.objects[reference["objectKey"]] = content
+        return reference
+
+    def read_tiered(self, reference, project_id, event_id, evidence_type, version):
+        from app.alert_evidence import EvidenceBody
+        return EvidenceBody(self.objects[reference["objectStorage"]["objectKey"]],
+                            reference["contentType"])
+
+    def remove_tiered(self, object_storage):
+        super().remove_tiered(object_storage)
+        self.objects.pop(object_storage["objectKey"], None)
 
 
 class ServerAlertRuntimeTests(unittest.TestCase):
+    def test_local_evidence_path_rejects_non_server_event_ids(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "evidence"
+            runtime = ServerAlertRuntime(
+                model_provider=lambda model_id: MODEL,
+                parameter_store=ModelParameterStore(Path(temp) / "profiles.json"),
+                event_store=AlertDispositionStore(),
+                delivery_service=CaptureDelivery(),
+                evidence_root=root,
+            )
+
+            self.assertIsNone(runtime.evidence_path("../outside"))
+            self.assertIsNone(runtime.evidence_path("evt-server-" + "a" * 23 + "/"))
+
     def test_server_evidence_uses_object_storage_when_configured(self):
         with tempfile.TemporaryDirectory() as temp:
             evidence = CaptureEvidenceStore()
@@ -51,10 +92,56 @@ class ServerAlertRuntimeTests(unittest.TestCase):
             reference = runtime._save_evidence(
                 "evt-server-minio", np.zeros((10, 10, 3), dtype=np.uint8)
             )
-            self.assertEqual(reference["objectStorage"]["provider"], "minio")
-            self.assertEqual(evidence.saved[0][0], "evt-server-minio")
-            self.assertEqual(evidence.saved[0][2], "image/jpeg")
+            self.assertEqual(set(reference), {"snapshotUri", "thumbnail", "original"})
+            self.assertEqual([item[2] for item in evidence.saved], ["thumbnail", "original"])
+            self.assertEqual([item[3] for item in evidence.saved], [1, 1])
+            self.assertEqual(evidence.saved[0][1], "evt-server-minio")
+            self.assertEqual(evidence.saved[0][5], "image/jpeg")
+            self.assertLessEqual(len(evidence.saved[0][4]), 128 * 1024)
+            self.assertLessEqual(len(evidence.saved[1][4]), 5 * 1024 * 1024)
+            self.assertNotEqual(reference["thumbnail"]["1"]["sha256"], "")
+            self.assertNotEqual(reference["original"]["1"]["sha256"], "")
             self.assertFalse((Path(temp) / "evidence").exists())
+
+    def test_server_evidence_rolls_back_first_tier_when_original_upload_fails(self):
+        class PartialFailureStore(CaptureEvidenceStore):
+            def store_tiered_bytes(self, *args):
+                reference = super().store_tiered_bytes(*args)
+                if args[2] == "original":
+                    raise OSError("original unavailable")
+                return reference
+        with tempfile.TemporaryDirectory() as temp:
+            evidence = PartialFailureStore()
+            runtime = ServerAlertRuntime(lambda model_id: MODEL,
+                ModelParameterStore(Path(temp) / "profiles.json"), AlertDispositionStore(),
+                CaptureDelivery(), Path(temp) / "evidence", evidence_store=evidence)
+            with self.assertRaises(OSError):
+                runtime._save_evidence("evt-server-minio", np.zeros((10, 10, 3), dtype=np.uint8))
+            self.assertIn("/thumbnail/1/", evidence.removed[0]["objectKey"])
+
+    def test_two_tiers_persist_with_event_and_are_independently_readable(self):
+        with tempfile.TemporaryDirectory() as temp:
+            events = AlertDispositionStore()
+            evidence = InMemoryTieredEvidenceStore()
+            runtime = ServerAlertRuntime(lambda model_id: MODEL,
+                ModelParameterStore(Path(temp) / "profiles.json"), events, CaptureDelivery(),
+                Path(temp) / "evidence", evidence_store=evidence)
+            result = InferenceResult(detections=(Detection(0, "head", .9),),
+                model_id="runtime-model", class_names=("head", "helmet"), provides=("BOX",))
+            for timestamp in (1_000_000, 1_200_000, 1_400_000, 1_800_000):
+                emitted = runtime.process(source_id="camera-1", captured_at_us=timestamp,
+                    result=result, frame=np.zeros((720, 1280, 3), dtype=np.uint8), project_id="project-a")
+            event = emitted[0]
+            saved = events.get(event["eventId"], "project-a")
+            self.assertEqual({"1"}, set(saved["evidence"]["thumbnail"]))
+            self.assertEqual({"1"}, set(saved["evidence"]["original"]))
+            thumbnail = events.read_evidence(event["eventId"], "project-a", "thumbnail", 1,
+                lambda ref: evidence.read_tiered(ref, "project-a", event["eventId"], "thumbnail", 1))
+            original = events.read_evidence(event["eventId"], "project-a", "original", 1,
+                lambda ref: evidence.read_tiered(ref, "project-a", event["eventId"], "original", 1))
+            self.assertLess(len(thumbnail.content), len(original.content))
+            with self.assertRaises(KeyError):
+                events.read_evidence(event["eventId"], "project-b", "original", 1, lambda ref: ref)
 
     def test_model_defaults_generate_confirmed_event_end_it_and_save_evidence(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -83,7 +170,15 @@ class ServerAlertRuntimeTests(unittest.TestCase):
             self.assertEqual(emitted[0]["origin"], "SERVER_STREAM")
             self.assertEqual(emitted[0]["streamId"], "camera-1")
             self.assertEqual(delivery.events, [event_id])
-            self.assertTrue((Path(temp) / "evidence" / f"{event_id}.jpg").is_file())
+            project_partition = hashlib.sha256(
+                b"00000000-0000-0000-0000-000000000001"
+            ).hexdigest()
+            self.assertTrue(
+                (
+                    Path(temp) / "evidence" / "projects" /
+                    project_partition / f"{event_id}.jpg"
+                ).is_file()
+            )
             self.assertEqual(events.get(event_id)["state"], "CONFIRMED")
 
             ended = runtime.process(

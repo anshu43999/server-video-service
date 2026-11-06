@@ -1,32 +1,18 @@
+import io
 import json
-import subprocess
-import sys
+from contextlib import redirect_stdout
+from unittest.mock import patch
 import unittest
-from pathlib import Path
 
-from tools.player_compatibility_probe import percentile, probe_rtsp, probe_whep
+from tools.player_compatibility_probe import main
 
 
-class PlayerCompatibilityProbeTests(unittest.TestCase):
-    def test_percentile_is_deterministic(self):
-        self.assertEqual(percentile([1, 2, 3, 4], 0.5), 2.5)
-        self.assertIsNone(percentile([], 0.95))
-
-    def test_whep_without_browser_offer_is_blocked(self):
-        result = probe_whep("http://127.0.0.1:8889/cam/whep", None, 1, 0.1)
-        self.assertEqual(result["status"], "blocked")
-        self.assertIn("SDP offer", result["reason"])
-
-    def test_rtsp_without_ffprobe_is_blocked(self):
-        result = probe_rtsp("rtsp://127.0.0.1:8554/cam", "definitely-missing-ffprobe", 0.1)
-        self.assertEqual(result["status"], "blocked")
-
-    def test_cli_marks_missing_endpoints_frozen(self):
-        root = Path(__file__).resolve().parents[1]
-        completed = subprocess.run([sys.executable, str(root / "tools/player_compatibility_probe.py")], capture_output=True, text=True, check=True)
-        payload = json.loads(completed.stdout)
-        self.assertTrue(payload["frozen"])
-        self.assertEqual(payload["whep"]["status"], "blocked")
+class PlayerCompatibilityRetirementTests(unittest.TestCase):
+    def test_probe_never_opens_network_or_launches_player(self):
+        output = io.StringIO()
+        with patch("socket.socket", side_effect=AssertionError("network")), patch("subprocess.Popen", side_effect=AssertionError("player")), redirect_stdout(output):
+            self.assertEqual(2, main())
+        self.assertEqual("live_video_retired", json.loads(output.getvalue())["error"])
 
 
 if __name__ == "__main__":

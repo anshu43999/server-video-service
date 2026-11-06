@@ -1,0 +1,514 @@
+{
+  "contractVersion": "app-update/v1",
+  "testOnly": true,
+  "notice": "Example domains, digests and public test key are not production materials.",
+  "examples": {
+    "checkRequest": {
+      "type": "CheckRequest",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 100,
+        "currentVersionName": "0.1.0",
+        "sdkInt": 27,
+        "supportedAbis": [
+          "x86_64"
+        ],
+        "signerSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "serverContractVersion": 1,
+        "lastPolicyRevision": 11
+      }
+    },
+    "checkAvailable": {
+      "type": "CheckPayload",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 100,
+        "policyRevision": 12,
+        "issuedAt": "2026-10-29T04:00:00Z",
+        "authorizationExpiresAt": "2026-10-29T04:10:00Z",
+        "messageType": "check",
+        "result": "update_available",
+        "release": {
+          "releaseId": "release-101",
+          "artifactId": "apk-101",
+          "sourceId": "external-101",
+          "sourceRevision": 1,
+          "versionCode": 101,
+          "versionName": "0.1.1",
+          "sizeBytes": 104857600,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signerSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "minSdk": 27,
+          "abis": [
+            "arm64-v8a",
+            "armeabi-v7a",
+            "x86_64"
+          ],
+          "serverContractRange": {
+            "min": 1,
+            "max": 1
+          },
+          "dataSchemaVersion": 19,
+          "readableDataSchemaRange": {
+            "min": 18,
+            "max": 19
+          },
+          "publishedAt": "2026-10-29T03:00:00Z",
+          "notes": [
+            "�޸�Ѳ������"
+          ],
+          "importance": "normal",
+          "releasePurpose": "normal",
+          "rollbackOperationId": null,
+          "restoresBehaviorFromReleaseId": null,
+          "affectedReleaseIds": []
+        },
+        "compatibility": {
+          "minSupportedVersionCode": 1,
+          "onlineAction": "allow",
+          "restrictedCapabilities": [],
+          "reasonCode": null
+        }
+      }
+    },
+    "up_to_date": {
+      "type": "CheckPayload",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 100,
+        "policyRevision": 12,
+        "issuedAt": "2026-10-29T04:00:00Z",
+        "authorizationExpiresAt": "2026-10-29T04:10:00Z",
+        "messageType": "check",
+        "result": "up_to_date",
+        "release": null,
+        "compatibility": {
+          "minSupportedVersionCode": 1,
+          "onlineAction": "allow",
+          "restrictedCapabilities": [],
+          "reasonCode": null
+        }
+      }
+    },
+    "no_compatible_release": {
+      "type": "CheckPayload",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 100,
+        "policyRevision": 12,
+        "issuedAt": "2026-10-29T04:00:00Z",
+        "authorizationExpiresAt": "2026-10-29T04:10:00Z",
+        "messageType": "check",
+        "result": "no_compatible_release",
+        "release": null,
+        "compatibility": {
+          "minSupportedVersionCode": 1,
+          "onlineAction": "allow",
+          "restrictedCapabilities": [],
+          "reasonCode": null
+        }
+      }
+    },
+    "client_unsupported": {
+      "type": "CheckPayload",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 100,
+        "policyRevision": 12,
+        "issuedAt": "2026-10-29T04:00:00Z",
+        "authorizationExpiresAt": "2026-10-29T04:10:00Z",
+        "messageType": "check",
+        "result": "client_unsupported",
+        "release": null,
+        "compatibility": {
+          "minSupportedVersionCode": 1,
+          "onlineAction": "allow",
+          "restrictedCapabilities": [],
+          "reasonCode": null
+        }
+      }
+    },
+    "recovery_pending": {
+      "type": "CheckPayload",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 100,
+        "policyRevision": 12,
+        "issuedAt": "2026-10-29T04:00:00Z",
+        "authorizationExpiresAt": "2026-10-29T04:10:00Z",
+        "messageType": "check",
+        "result": "recovery_pending",
+        "release": null,
+        "compatibility": {
+          "minSupportedVersionCode": 1,
+          "onlineAction": "allow",
+          "restrictedCapabilities": [],
+          "reasonCode": null
+        }
+      }
+    },
+    "checkRecovery": {
+      "type": "CheckPayload",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 101,
+        "policyRevision": 12,
+        "issuedAt": "2026-10-29T04:00:00Z",
+        "authorizationExpiresAt": "2026-10-29T04:10:00Z",
+        "messageType": "check",
+        "result": "update_available",
+        "release": {
+          "releaseId": "release-102",
+          "artifactId": "apk-102",
+          "sourceId": "minio-102",
+          "sourceRevision": 1,
+          "versionCode": 102,
+          "versionName": "0.1.1",
+          "sizeBytes": 104857600,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "signerSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "minSdk": 27,
+          "abis": [
+            "arm64-v8a",
+            "armeabi-v7a",
+            "x86_64"
+          ],
+          "serverContractRange": {
+            "min": 1,
+            "max": 1
+          },
+          "dataSchemaVersion": 19,
+          "readableDataSchemaRange": {
+            "min": 18,
+            "max": 19
+          },
+          "publishedAt": "2026-10-29T03:00:00Z",
+          "notes": [
+            "�޸�Ѳ������"
+          ],
+          "importance": "important",
+          "releasePurpose": "recovery",
+          "rollbackOperationId": "rollback-101",
+          "restoresBehaviorFromReleaseId": "release-100",
+          "affectedReleaseIds": [
+            "release-101"
+          ]
+        },
+        "compatibility": {
+          "minSupportedVersionCode": 1,
+          "onlineAction": "allow",
+          "restrictedCapabilities": [],
+          "reasonCode": null
+        }
+      }
+    },
+    "checkCompatibilityGate": {
+      "type": "CheckPayload",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 100,
+        "policyRevision": 12,
+        "issuedAt": "2026-10-29T04:00:00Z",
+        "authorizationExpiresAt": "2026-10-29T04:10:00Z",
+        "messageType": "check",
+        "result": "update_available",
+        "release": {
+          "releaseId": "release-101",
+          "artifactId": "apk-101",
+          "sourceId": "external-101",
+          "sourceRevision": 1,
+          "versionCode": 101,
+          "versionName": "0.1.1",
+          "sizeBytes": 104857600,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "signerSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "minSdk": 27,
+          "abis": [
+            "arm64-v8a",
+            "armeabi-v7a",
+            "x86_64"
+          ],
+          "serverContractRange": {
+            "min": 1,
+            "max": 1
+          },
+          "dataSchemaVersion": 19,
+          "readableDataSchemaRange": {
+            "min": 18,
+            "max": 19
+          },
+          "publishedAt": "2026-10-29T03:00:00Z",
+          "notes": [
+            "�޸�Ѳ������"
+          ],
+          "importance": "normal",
+          "releasePurpose": "normal",
+          "rollbackOperationId": null,
+          "restoresBehaviorFromReleaseId": null,
+          "affectedReleaseIds": []
+        },
+        "compatibility": {
+          "minSupportedVersionCode": 101,
+          "onlineAction": "restrict_declared_capabilities",
+          "restrictedCapabilities": [
+            "online_inspection"
+          ],
+          "reasonCode": "server_contract_retired"
+        }
+      }
+    },
+    "downloadRequest": {
+      "type": "DownloadRequest",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 100,
+        "releaseId": "release-101",
+        "artifactId": "apk-101",
+        "sourceId": "external-101",
+        "sourceRevision": 1,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sizeBytes": 104857600,
+        "expectedPolicyRevision": 12
+      }
+    },
+    "downloadExternal": {
+      "type": "DownloadPayload",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 100,
+        "policyRevision": 12,
+        "issuedAt": "2026-10-29T04:00:00Z",
+        "authorizationExpiresAt": "2026-10-29T04:10:00Z",
+        "releaseId": "release-101",
+        "artifactId": "apk-101",
+        "sourceId": "external-101",
+        "sourceRevision": 1,
+        "versionCode": 101,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sizeBytes": 104857600,
+        "signerSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "messageType": "download",
+        "storageMode": "external",
+        "accessMode": "public",
+        "downloadUrl": "https://apk.example.com/inspection/101",
+        "downloadUrlExpiresAt": null,
+        "allowedDownloadHosts": [
+          "apk.example.com"
+        ]
+      }
+    },
+    "downloadMinio": {
+      "type": "DownloadPayload",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 100,
+        "policyRevision": 12,
+        "issuedAt": "2026-10-29T04:00:00Z",
+        "authorizationExpiresAt": "2026-10-29T04:10:00Z",
+        "releaseId": "release-101",
+        "artifactId": "apk-101",
+        "sourceId": "minio-101",
+        "sourceRevision": 2,
+        "versionCode": 101,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sizeBytes": 104857600,
+        "signerSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "messageType": "download",
+        "storageMode": "internal",
+        "accessMode": "presigned",
+        "downloadUrl": "https://objects.example.com/apks/101?test=public-fixture",
+        "downloadUrlExpiresAt": "2026-10-29T04:15:00Z",
+        "allowedDownloadHosts": [
+          "objects.example.com"
+        ]
+      }
+    },
+    "installRequest": {
+      "type": "InstallPermissionRequest",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 100,
+        "releaseId": "release-101",
+        "artifactId": "apk-101",
+        "sourceId": "external-101",
+        "sourceRevision": 1,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sizeBytes": 104857600,
+        "expectedPolicyRevision": 12,
+        "verifiedVersionCode": 101,
+        "verifiedSignerSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    "installPermission": {
+      "type": "InstallPermissionPayload",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 100,
+        "policyRevision": 12,
+        "issuedAt": "2026-10-29T04:00:00Z",
+        "authorizationExpiresAt": "2026-10-29T04:02:00Z",
+        "releaseId": "release-101",
+        "artifactId": "apk-101",
+        "sourceId": "external-101",
+        "sourceRevision": 1,
+        "versionCode": 101,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "sizeBytes": 104857600,
+        "signerSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "messageType": "install_permission",
+        "permissionId": "permission-1",
+        "userActionRequired": true,
+        "offlineInstallAllowed": false
+      }
+    },
+    "healthyReceipt": {
+      "type": "Receipt",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "requestId": "request-1",
+        "installationId": "installation-1",
+        "currentVersionCode": 101,
+        "eventId": "event-1",
+        "attemptId": "attempt-1",
+        "sequence": 7,
+        "policyRevision": 12,
+        "releaseId": "release-101",
+        "artifactId": "apk-101",
+        "sourceId": "external-101",
+        "sourceRevision": 1,
+        "stage": "healthy",
+        "fromVersionCode": 100,
+        "targetVersionCode": 101,
+        "observedVersionCode": 101,
+        "occurredAt": "2026-10-29T04:01:00Z",
+        "errorCode": null
+      }
+    },
+    "rollbackPreviewRequest": {
+      "type": "RollbackPreviewRequest",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "expectedPolicyRevision": 12,
+        "affectedReleaseIds": [
+          "release-101"
+        ],
+        "stableReleaseId": "release-100",
+        "recoveryReleaseId": "release-102"
+      }
+    },
+    "rollbackRequest": {
+      "type": "RollbackRequest",
+      "value": {
+        "contractVersion": "app-update/v1",
+        "publisherId": "enterprise-primary",
+        "packageName": "com.aiyolo.inspection",
+        "channel": "enterprise-stable",
+        "deploymentId": "test-deployment",
+        "expectedPolicyRevision": 12,
+        "affectedReleaseIds": [
+          "release-101"
+        ],
+        "stableReleaseId": "release-100",
+        "recoveryReleaseId": "release-102",
+        "idempotencyKey": "rollback-once",
+        "reason": "101 startup failure",
+        "previewFingerprint": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    }
+  },
+  "signedVector": {
+    "publicKeyBase64Url": "x4Vz1nNWNChAZyONakxSk5tk23eoWb-eyS9_070kqFw",
+    "payloadUtf8": "{\"contractVersion\":\"app-update/v1\",\"publisherId\":\"enterprise-primary\",\"packageName\":\"com.aiyolo.inspection\",\"channel\":\"enterprise-stable\",\"deploymentId\":\"test-deployment\",\"requestId\":\"request-1\",\"installationId\":\"installation-1\",\"currentVersionCode\":100,\"policyRevision\":12,\"issuedAt\":\"2026-10-29T04:00:00Z\",\"authorizationExpiresAt\":\"2026-10-29T04:10:00Z\",\"messageType\":\"check\",\"result\":\"update_available\",\"release\":{\"releaseId\":\"release-101\",\"artifactId\":\"apk-101\",\"sourceId\":\"external-101\",\"sourceRevision\":1,\"versionCode\":101,\"versionName\":\"0.1.1\",\"sizeBytes\":104857600,\"sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"signerSha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"minSdk\":27,\"abis\":[\"arm64-v8a\",\"armeabi-v7a\",\"x86_64\"],\"serverContractRange\":{\"min\":1,\"max\":1},\"dataSchemaVersion\":19,\"readableDataSchemaRange\":{\"min\":18,\"max\":19},\"publishedAt\":\"2026-10-29T03:00:00Z\",\"notes\":[\"�޸�Ѳ������\"],\"importance\":\"normal\",\"releasePurpose\":\"normal\",\"rollbackOperationId\":null,\"restoresBehaviorFromReleaseId\":null,\"affectedReleaseIds\":[]},\"compatibility\":{\"minSupportedVersionCode\":1,\"onlineAction\":\"allow\",\"restrictedCapabilities\":[],\"reasonCode\":null}}",
+    "envelope": {
+      "keyId": "golden-test-key",
+      "payloadBase64Url": "eyJjb250cmFjdFZlcnNpb24iOiJhcHAtdXBkYXRlL3YxIiwicHVibGlzaGVySWQiOiJlbnRlcnByaXNlLXByaW1hcnkiLCJwYWNrYWdlTmFtZSI6ImNvbS5haXlvbG8uaW5zcGVjdGlvbiIsImNoYW5uZWwiOiJlbnRlcnByaXNlLXN0YWJsZSIsImRlcGxveW1lbnRJZCI6InRlc3QtZGVwbG95bWVudCIsInJlcXVlc3RJZCI6InJlcXVlc3QtMSIsImluc3RhbGxhdGlvbklkIjoiaW5zdGFsbGF0aW9uLTEiLCJjdXJyZW50VmVyc2lvbkNvZGUiOjEwMCwicG9saWN5UmV2aXNpb24iOjEyLCJpc3N1ZWRBdCI6IjIwMjYtMTAtMjlUMDQ6MDA6MDBaIiwiYXV0aG9yaXphdGlvbkV4cGlyZXNBdCI6IjIwMjYtMTAtMjlUMDQ6MTA6MDBaIiwibWVzc2FnZVR5cGUiOiJjaGVjayIsInJlc3VsdCI6InVwZGF0ZV9hdmFpbGFibGUiLCJyZWxlYXNlIjp7InJlbGVhc2VJZCI6InJlbGVhc2UtMTAxIiwiYXJ0aWZhY3RJZCI6ImFway0xMDEiLCJzb3VyY2VJZCI6ImV4dGVybmFsLTEwMSIsInNvdXJjZVJldmlzaW9uIjoxLCJ2ZXJzaW9uQ29kZSI6MTAxLCJ2ZXJzaW9uTmFtZSI6IjAuMS4xIiwic2l6ZUJ5dGVzIjoxMDQ4NTc2MDAsInNoYTI1NiI6ImFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWEiLCJzaWduZXJTaGEyNTYiOiJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiYmJiIiwibWluU2RrIjoyNywiYWJpcyI6WyJhcm02NC12OGEiLCJhcm1lYWJpLXY3YSIsIng4Nl82NCJdLCJzZXJ2ZXJDb250cmFjdFJhbmdlIjp7Im1pbiI6MSwibWF4IjoxfSwiZGF0YVNjaGVtYVZlcnNpb24iOjE5LCJyZWFkYWJsZURhdGFTY2hlbWFSYW5nZSI6eyJtaW4iOjE4LCJtYXgiOjE5fSwicHVibGlzaGVkQXQiOiIyMDI2LTEwLTI5VDAzOjAwOjAwWiIsIm5vdGVzIjpbIuS_ruWkjeW3oeajgOmXrumimCJdLCJpbXBvcnRhbmNlIjoibm9ybWFsIiwicmVsZWFzZVB1cnBvc2UiOiJub3JtYWwiLCJyb2xsYmFja09wZXJhdGlvbklkIjpudWxsLCJyZXN0b3Jlc0JlaGF2aW9yRnJvbVJlbGVhc2VJZCI6bnVsbCwiYWZmZWN0ZWRSZWxlYXNlSWRzIjpbXX0sImNvbXBhdGliaWxpdHkiOnsibWluU3VwcG9ydGVkVmVyc2lvbkNvZGUiOjEsIm9ubGluZUFjdGlvbiI6ImFsbG93IiwicmVzdHJpY3RlZENhcGFiaWxpdGllcyI6W10sInJlYXNvbkNvZGUiOm51bGx9fQ",
+      "signatureBase64Url": "7R7ojGH5ZuSYL1v0A6JGrUwjFi5MGbj-D08vLqwsvcu5a7n1IwwabTbG_uTklKyiEMUItKbSKCls9c2xcQYpAg"
+    }
+  }
+}

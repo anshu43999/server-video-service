@@ -1,6 +1,6 @@
 # 远程模型转换 HTTP 协议
 
-对应任务：`M27-T01`，服务端实现由 `M00-T07` 补齐。调用方是视频服务，提供方可以部署在本机、局域网 GPU/CPU 主机或独立转换服务器。统一生产编排使用同一 `compose.yml` 项目中的 `model-converter` 容器，远程 URL 是 HTTP API endpoint，不冒充 Python 路径。
+对应任务：`M27-T01`，服务端实现由 `M00-T07` 补齐。调用方是视频服务，提供方可以部署在本机、局域网 CPU 主机或独立转换服务器。当前转换与复验统一使用 CPU。统一生产编排使用同一 `compose.yml` 项目中的 `model-converter` 容器，远程 URL 是 HTTP API endpoint，不冒充 Python 路径。
 
 ## 配置与秘密
 

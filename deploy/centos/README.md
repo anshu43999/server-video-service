@@ -7,7 +7,7 @@ AlmaLinux 9、Ubuntu 等 Linux 服务器统一使用项目根目录的 `compose.
 CentOS/RHEL 系宿主机仅需额外处理以下事项：
 
 1. 使用 Docker CE 官方仓库安装 Docker Engine 与 Compose 插件；
-2. 直接 HTTP 部署时使用 `firewall-cmd` 放行 `18080/tcp`、`8889/tcp`、`8888/tcp` 和 `8189/udp`；
+2. 完成本地验收并获准部署后，仅开放 HTTPS 网关或受信内网 `18080/tcp`；不开放移动媒体分发端口；
 3. 保持 Compose 挂载中的 `:Z`，让 Docker 为 bind mount 设置 SELinux 标签；
 4. 通过 systemd 启用 Docker：`sudo systemctl enable --now docker`。
 
@@ -25,14 +25,13 @@ sudo dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin d
 sudo systemctl enable --now docker
 ```
 
-媒体端口示例：
+受信内网 API 端口示例（执行前限制来源网段；公网改用 HTTPS 网关）：
 
 ```bash
 sudo firewall-cmd --permanent --add-port=18080/tcp
-sudo firewall-cmd --permanent --add-port=8889/tcp
-sudo firewall-cmd --permanent --add-port=8888/tcp
-sudo firewall-cmd --permanent --add-port=8189/udp
 sudo firewall-cmd --reload
 ```
 
 完整部署步骤见 `docs/docker-deployment.md`。
+
+升级前按 `docs/media-retirement-upgrade.md` 核对旧服务/规则归属；不要误停输入 RTSP 源、删除业务卷或直接恢复带分发功能的旧镜像。

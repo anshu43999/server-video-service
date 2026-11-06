@@ -6,6 +6,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
+from typing import Any
 
 import cv2
 
@@ -13,9 +14,9 @@ from .config import settings
 from .detection import FrameDetections
 from .detector import YoloDetector, decode_image
 from .overlay import draw_overlay
-from .publisher import MediaMTXPublisher, PublisherConfig
 from .protocol import InputRateLimitError, MAX_FRAME_BYTES, MAX_FRAME_HEIGHT, MAX_FRAME_WIDTH, StreamState
 from .stream_config import redact_source_url
+from .database import DEFAULT_PROJECT_ID
 
 
 OPENCV_FFMPEG_CAPTURE_OPTIONS = "OPENCV_FFMPEG_CAPTURE_OPTIONS"
@@ -67,6 +68,7 @@ class _FrameRateLimiter:
 class StreamSession:
     stream_id: str
     source_url: str | int | None = None
+    project_id: str = DEFAULT_PROJECT_ID
     detector: YoloDetector = field(
         default_factory=lambda: YoloDetector(
             settings.yolo_model_path,
@@ -104,39 +106,25 @@ class StreamSession:
     _active_subscribers: int = field(default=0, init=False)
     _pending_frame: object | None = field(default=None, init=False)
     _processing_task: asyncio.Task | None = field(default=None, init=False)
-    _pending_preview_frame: object | None = field(default=None, init=False)
-    _preview_task: asyncio.Task | None = field(default=None, init=False)
     _received_times: list[float] = field(default_factory=list, init=False)
     _processed_times: list[float] = field(default_factory=list, init=False)
-    _output_times: list[float] = field(default_factory=list, init=False)
     _latencies: list[float] = field(default_factory=list, init=False)
     _last_frame_received_at: float | None = field(default=None, init=False)
     _last_captured_at_us: int = field(default=0, init=False)
     _state: StreamState = field(default=StreamState.CREATED, init=False)
-    publisher: MediaMTXPublisher = field(init=False)
+    _analysis_generation: int = field(default=0, init=False)
+    # Bounded, in-memory admin preview. JPEG work happens only on a PC request;
+    # it is never a publisher and never gates inference or alert persistence.
+    _preview_frame: Any | None = field(default=None, init=False)
+    _preview_result: Any | None = field(default=None, init=False)
+    _preview_lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
+    _preview_cache: Any | None = field(default=None, init=False)
     model_catalog_id: str | None = field(default=None, init=False)
+    model_version: str | None = field(default=None, init=False)
     model_scenario: str | None = field(default=None, init=False)
-    model_purpose: str | None = field(default=None, init=False)
     alert_runtime: Any | None = None
+    model_authorizer: Any | None = None
     alert_error: str | None = None
-
-    def __post_init__(self) -> None:
-        self.publisher = MediaMTXPublisher(
-            self.stream_id,
-            PublisherConfig(
-                enabled=settings.mediamtx_enabled,
-                base_url=settings.mediamtx_rtsp_url,
-                api_url=settings.mediamtx_api_url,
-                ffmpeg_path=settings.mediamtx_ffmpeg_path,
-                reconnect_delay=settings.mediamtx_reconnect_delay,
-                max_reconnect_attempts=settings.mediamtx_max_reconnect_attempts,
-                whep_base_url=settings.mediamtx_whep_url,
-                llhls_base_url=settings.mediamtx_llhls_url,
-                http_scheme=settings.mediamtx_http_scheme,
-                fps=self.max_fps,
-                encoder=settings.mediamtx_video_encoder,
-            ),
-        )
 
     @property
     def state(self) -> StreamState:
@@ -152,10 +140,9 @@ class StreamSession:
 
     async def close(self):
         self._closed = True
+        self._analysis_generation += 1
         self._state = StreamState.CLOSED
-        # Wake output consumers before waiting for capture/encoder cleanup.  This
-        # lets browsers tear down the old multipart response immediately while
-        # the remaining session resources finish closing in the background.
+        # Wake internal observers before waiting for capture/inference cleanup.
         async with self._condition:
             self._condition.notify_all()
         async with self._detection_condition:
@@ -168,96 +155,68 @@ class StreamSession:
             self._processing_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._processing_task
-        if self._preview_task:
-            self._preview_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._preview_task
-        await self.publisher.close()
+        self._pending_frame = None
+        self.latest_detections = None
+        self._preview_frame = None
+        self._preview_result = None
+        self._preview_cache = None
 
     async def set_yolo(self, enabled: bool):
+        self._analysis_generation += 1
         self.yolo_enabled = enabled
+        self._preview_result = None
+        self._preview_cache = None
+        self.latest_detections = None
+        self._pending_frame = None
         if enabled:
             self.detector._load()
         else:
-            # YOLO 关闭时不保留检测结果：旁路通道按协议 §6.2 只发心跳。
-            self.latest_detections = None
-            if self._pending_frame is not None:
-                self._pending_frame = None
+            self._state = StreamState.INGESTING if self.frames_received else StreamState.CREATED
         async with self._detection_condition:
             self._detection_condition.notify_all()
 
     def bind_model(self, *, model_id: str, model_path: str, scenario: str | None = None,
-                   purpose: str | None = None, labels: list[str] | None = None,
-                   imgsz: int | None = None, device: str | None = None) -> dict:
+                   labels: list[str] | None = None,
+                   imgsz: int | None = None, device: str | None = None,
+                   version: str | None = None, detection: dict | None = None,
+                   enabled_labels: list[str] | None = None) -> dict:
         """Switch only this stream to a validated registered model.
 
         A fresh detector is used so its lazy-loaded runtime and error state cannot
         leak into another stream (or retain the previously bound model).
         """
+        self._analysis_generation += 1
+        self.latest_detections = None
+        self._preview_result = None
+        self._preview_cache = None
+        self._pending_frame = None
         previous = self.detector
         self.detector = YoloDetector(
             model_path,
-            previous.confidence,
+            detection["confidenceThreshold"] if detection is not None else previous.confidence,
             int(imgsz or previous.imgsz),
-            device or (previous.device or "auto"),
+            "cpu",
             labels or None,
             model_id=model_id,
+            iou=detection["iouThreshold"] if detection is not None else previous.iou,
+            max_detections=detection["maxDetections"] if detection is not None else previous.max_detections,
+            enabled_labels=enabled_labels,
         )
         self.model_catalog_id = model_id
+        self.model_version = version
         self.model_scenario = scenario
-        self.model_purpose = purpose
         return self.model_metadata()
 
     def model_metadata(self) -> dict:
         metadata = self.detector.metadata()
         metadata.update({"catalog_model_id": self.model_catalog_id or metadata.get("model_id"),
                          "modelId": self.model_catalog_id or metadata.get("model_id"),
-                         "scenario": self.model_scenario, "purpose": self.model_purpose})
+                         "modelVersion": self.model_version,
+                         "scenario": self.model_scenario})
         return metadata
 
-    async def _publish_frame(self, frame, *, pace_output: bool = True) -> None:
-        if pace_output:
-            await self._wait_for_emit_slot()
-        await self.publisher.publish(frame)
-        await self.publisher.refresh_viewers()
-        async with self._condition:
-            self.last_error = None
-            self._state = StreamState.OUTPUTTING
-            emitted_at = time.monotonic()
-            self._output_times.append(emitted_at)
-            self._output_times = self._output_times[-60:]
-            self.output_fps = self._window_fps(self._output_times)
-        if self.latest_jpeg is None:
-            # Preserve the existing ingest contract: the first frame is ready
-            # when ingest_frame returns, even before a preview client connects.
-            await self._encode_preview(frame)
-        elif self.active_subscribers:
-            self._pending_preview_frame = frame
-            if self._preview_task is None or self._preview_task.done():
-                self._preview_task = asyncio.create_task(self._preview_worker())
-
-    async def _encode_preview(self, frame) -> None:
-        ok, encoded = await asyncio.to_thread(
-            cv2.imencode,
-            ".jpg",
-            frame,
-            [int(cv2.IMWRITE_JPEG_QUALITY), max(10, min(settings.jpeg_quality, 100))],
-        )
-        if not ok:
-            raise ValueError("failed to encode processed frame")
-        async with self._condition:
-            self.latest_jpeg = encoded.tobytes()
-            self._condition.notify_all()
-
-    async def _preview_worker(self) -> None:
-        """Encode only the newest browser-preview frame off the RTSP path."""
-        while self._pending_preview_frame is not None and not self._closed:
-            frame = self._pending_preview_frame
-            self._pending_preview_frame = None
-            await self._encode_preview(frame)
-
-    async def _wait_for_emit_slot(self) -> None:
-        """Pace output while the RTSP reader keeps only its latest frame."""
+    async def _wait_for_analysis_slot(self) -> None:
+        """Pace inference while input retains only the latest pending frame."""
         now = time.monotonic()
         interval = 1.0 / max(self.max_fps, 1.0)
         if not self._last_emit:
@@ -292,76 +251,99 @@ class StreamSession:
             "detections_last": self.latest_detections.result.detection_count if self.latest_detections else 0,
             "alert_error": self.alert_error,
         }
-        result.update(self.publisher.metrics())
+        # Legacy metric keys remain truthful while clients migrate to analysis status.
+        result.update({"publish_state": "retired", "viewers": 0, "frames_published": 0})
         return result
 
     async def _yolo_worker(self):
         while not self._closed:
+            if self._pending_frame is None:
+                return
+            await self._wait_for_analysis_slot()
             pending = self._pending_frame
             self._pending_frame = None
             if pending is None:
                 return
-            frame, frame_seq, captured_at_us = pending
+            frame, frame_seq, captured_at_us, generation, received_at = pending
+            detector = self.detector
+
+            def current() -> bool:
+                return (
+                    not self._closed and self.yolo_enabled
+                    and generation == self._analysis_generation
+                    and detector is self.detector
+                    and (self.model_authorizer is None or self.model_authorizer())
+                )
+
             try:
-                detector = self.detector
+                if not current():
+                    self.latest_detections = None
+                    continue
                 if detector.load_error:
-                    processed = frame
+                    self.latest_detections = None
+                    self._preview_result = None
+                    self._preview_cache = None
                     self.frames_fallback += 1
-                else:
-                    result = await asyncio.to_thread(detector.infer, frame)
-                    # A model switch may happen while inference is in flight.
-                    # Drop the stale result rather than publishing it as if it
-                    # came from the newly bound model.
-                    if detector is not self.detector:
-                        continue
-                    # 推理可能跨越 YOLO 开关变更；关闭后丢弃在途结果，避免旁路
-                    # 在心跳模式下短暂发布过期检测消息。
-                    if not self.yolo_enabled:
-                        processed = frame
-                    elif result.fallback_reason:
-                        processed = frame
-                        self.frames_fallback += 1
-                    else:
-                        self.latest_detections = FrameDetections(
-                            self.stream_id, frame_seq, captured_at_us, result
-                        )
-                        async with self._detection_condition:
-                            self._detection_version += 1
-                            self._detection_condition.notify_all()
-                        # 叠加是结构化结果的下游，可关闭；关闭时输出原始帧。
-                        processed = (
-                            draw_overlay(frame, result.detections) if self.overlay_enabled else frame
-                        )
-                        self.frames_processed += 1
+                    self._state = StreamState.ERROR
+                    self.last_error = "analysis model unavailable"
+                    continue
+                self._state = StreamState.ANALYZING
+                result = await asyncio.to_thread(detector.infer, frame)
+                # Stop/restart, rebind and authorization changes invalidate in-flight work.
+                if not current():
+                    self.latest_detections = None
+                    continue
+                if result.fallback_reason:
+                    self.latest_detections = None
+                    self._preview_result = None
+                    self._preview_cache = None
+                    self.frames_fallback += 1
+                    self._state = StreamState.ERROR
+                    self.last_error = "analysis inference unavailable"
+                    continue
+                self.latest_detections = FrameDetections(
+                    self.stream_id, frame_seq, captured_at_us, result
+                )
+                self._preview_result = (frame, result, received_at, generation)
+                async with self._detection_condition:
+                    self._detection_version += 1
+                    self._detection_condition.notify_all()
+                self.frames_processed += 1
                 finished_at = time.monotonic()
                 self._processed_times.append(finished_at)
                 self._processed_times = self._processed_times[-60:]
                 self.processed_fps = self._window_fps(self._processed_times)
-                if self._last_frame_received_at is not None:
-                    latency = (finished_at - self._last_frame_received_at) * 1000
-                    self.last_latency_ms = round(latency, 2)
-                    self._latencies.append(latency)
-                    self._latencies = self._latencies[-100:]
-                    ordered = sorted(self._latencies)
-                    index = min(len(ordered) - 1, max(0, int(len(ordered) * 0.95) - 1))
-                    self.p95_latency_ms = round(ordered[index], 2)
-                await self._publish_frame(processed)
-                if self.alert_runtime is not None and not detector.load_error and not result.fallback_reason:
+                latency = (finished_at - received_at) * 1000
+                self.last_latency_ms = round(latency, 2)
+                self._latencies.append(latency)
+                self._latencies = self._latencies[-100:]
+                ordered = sorted(self._latencies)
+                index = min(len(ordered) - 1, max(0, int(len(ordered) * 0.95) - 1))
+                self.p95_latency_ms = round(ordered[index], 2)
+                self.last_error = None
+                # Alert persistence is independent of PC preview requests.
+                # No publisher or media server is involved.
+                if self.alert_runtime is not None:
                     try:
+                        evidence_frame = draw_overlay(frame, result.detections) if self.overlay_enabled else frame
                         self.alert_runtime.process(
+                            project_id=self.project_id,
                             source_id=self.stream_id,
                             captured_at_us=captured_at_us,
                             result=result,
-                            frame=processed,
+                            frame=evidence_frame,
+                            evidence_baked_in=self.overlay_enabled,
                         )
                         self.alert_error = None
-                    except Exception as exc:
-                        # Persistence and delivery failures must not take down video.
-                        self.alert_error = str(exc)[:500]
+                    except Exception:
+                        self.alert_error = "alert persistence or delivery failed"
             except asyncio.CancelledError:
                 raise
-            except Exception as exc:
-                self.last_error = str(exc)
+            except Exception:
+                self.latest_detections = None
+                self._preview_result = None
+                self._preview_cache = None
+                self.last_error = "analysis processing failed"
                 self._state = StreamState.ERROR
 
     async def ingest_jpeg(self, payload: bytes):
@@ -377,6 +359,8 @@ class StreamSession:
         pace_output: bool = True,
     ) -> None:
         """Ingest an already decoded BGR frame without a lossy JPEG round trip."""
+        if self._closed:
+            raise ValueError("stream is closed")
         now = time.monotonic()
         min_input_interval = 1.0 / max(settings.max_input_fps, 1.0)
         if enforce_rate_limit and self._last_input and now - self._last_input < min_input_interval:
@@ -394,32 +378,75 @@ class StreamSession:
         captured_at_us = max(self._last_captured_at_us, time.time_ns() // 1000)
         self._last_captured_at_us = captured_at_us
         self._last_frame_received_at = now
+        self._preview_frame = frame
         self._received_times.append(now)
         self._received_times = self._received_times[-60:]
         if self.yolo_enabled:
             if self._pending_frame is not None:
                 self.frames_dropped += 1
-            self._pending_frame = (frame, self.frame_seq, captured_at_us)
+            self._pending_frame = (frame, self.frame_seq, captured_at_us, self._analysis_generation, now)
             if self._processing_task is None or self._processing_task.done():
                 self._processing_task = asyncio.create_task(self._yolo_worker())
             return
-        await self._publish_frame(frame, pace_output=pace_output)
+        # YOLO disabled: the PC may request the raw preview; no background relay.
+        self.last_error = None
+
+    async def admin_preview(self) -> tuple[bytes, str] | None:
+        """Latest PC snapshot, capped at 5 JPEG encodes/sec and 1280px width.
+
+        A stale/disconnected source never returns a frozen last frame. Only a
+        matching, still-authorized inference generation may supply an overlay.
+        Legacy wait_frame/subscription APIs intentionally remain retired.
+        """
+        async with self._preview_lock:
+            now = time.monotonic()
+            if self._closed or self._preview_frame is None or self._last_frame_received_at is None:
+                return None
+            if now - self._last_frame_received_at > 3.0:
+                self._preview_cache = None
+                return None
+            generation = self._analysis_generation
+            authorized = self.model_authorizer is None or self.model_authorizer()
+            candidate = self._preview_result
+            annotated = bool(self.yolo_enabled and self.overlay_enabled and authorized
+                             and candidate is not None and candidate[3] == generation
+                             and now - candidate[2] <= 2.0)
+            mode = "yolo" if annotated else "raw"
+            key = (generation, mode)
+            if self._preview_cache is not None:
+                cached_at, cached_key, payload = self._preview_cache
+                if cached_key == key and now - cached_at < 0.2:
+                    return payload, mode
+            frame = candidate[0] if annotated else self._preview_frame
+
+            def encode():
+                image = draw_overlay(frame, candidate[1].detections) if annotated else frame
+                height, width = image.shape[:2]
+                if width > 1280:
+                    image = cv2.resize(image, (1280, max(1, int(height * 1280 / width))))
+                ok, data = cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                return data.tobytes() if ok else None
+
+            payload = await asyncio.to_thread(encode)
+            # Recheck after encoding: shutdown/rebind/revocation may happen while
+            # the worker thread runs. The HTTP layer also rechecks project access.
+            if (self._closed or generation != self._analysis_generation
+                    or time.monotonic() - self._last_frame_received_at > 3.0
+                    or (annotated and (not self.overlay_enabled or
+                        (self.model_authorizer is not None and not self.model_authorizer())))):
+                return None
+            if payload is None:
+                return None
+            self._preview_cache = (now, key, payload)
+            return payload, mode
 
     async def set_max_fps(self, fps: float) -> None:
         self.max_fps = fps
         self._last_emit = 0.0
-        await self.publisher.set_fps(fps)
 
     async def wait_frame(self, previous: bytes | None = None) -> bytes | None:
-        async with self._condition:
-            # Compare object identity: two consecutive frames may encode to identical bytes.
-            await self._condition.wait_for(lambda: self._closed or self.latest_jpeg is not previous)
-            # A closed session must terminate every MJPEG/WebSocket consumer.  Returning
-            # the retained last frame here makes a consumer spin without waiting and
-            # repeatedly send that stale frame after the browser has disconnected.
-            if self._closed:
-                return None
-            return self.latest_jpeg
+        """Retired internal preview hook: never retain or emit a video frame."""
+        return None
 
     @property
     def detection_version(self) -> int:
@@ -446,10 +473,7 @@ class StreamSession:
             return self._detection_version, self.latest_detections
 
     def try_subscribe(self) -> bool:
-        if self._active_subscribers >= settings.max_output_subscribers:
-            return False
-        self._active_subscribers += 1
-        return True
+        return False
 
     def unsubscribe(self) -> None:
         self._active_subscribers = max(0, self._active_subscribers - 1)

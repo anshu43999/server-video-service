@@ -16,15 +16,25 @@ from sqlalchemy import delete, select
 from ..database import (
     AlertVerificationConfigRecord,
     AlertVerificationRecord,
+    DEFAULT_PROJECT_ID,
     DatabaseManager,
 )
+from ..project_business import audit_change, lock_project
+from .verification_provider import VerificationProvider
+from .verification_attempts import VerificationAttempts
 
 
-class AlertVerificationStore:
-    def __init__(self, daily_limit: int = 100, database_manager: DatabaseManager | None = None) -> None:
+class VerificationConfigConflict(ValueError):
+    pass
+
+
+class AlertVerificationStore(VerificationAttempts):
+    def __init__(self, daily_limit: int = 100, database_manager: DatabaseManager | None = None,
+                 provider: VerificationProvider | None = None) -> None:
         self._lock = threading.RLock()
-        self._results: dict[str, dict[str, Any]] = {}
+        self._results: dict[tuple[str, str], dict[str, Any]] = {}
         self._calls_today = 0
+        self._revision = 0
         self._day = self._day_key()
         self.daily_limit = max(0, int(daily_limit))
         self.enabled = False
@@ -32,6 +42,48 @@ class AlertVerificationStore:
         self.model_id = ""
         self.provider_configured = False
         self._database = database_manager
+        self._provider = provider
+        self._active_project = DEFAULT_PROJECT_ID
+        self._project_states: dict[str, dict[str, Any]] = {}
+
+    def _state_payload(self) -> dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "image_egress_authorized": self.image_egress_authorized,
+            "daily_limit": self.daily_limit,
+            "model_id": self.model_id,
+            "provider_configured": self.provider_configured,
+            "day": self._day,
+            "calls_today": self._calls_today,
+            "revision": self._revision,
+        }
+
+    def _switch_project(self, project_id: str) -> None:
+        if project_id == self._active_project:
+            return
+        self._project_states[self._active_project] = self._state_payload()
+        state = self._project_states.get(project_id, {
+            "enabled": False,
+            "image_egress_authorized": False,
+            "daily_limit": 100,
+            "model_id": "",
+            "provider_configured": False,
+            "day": self._day_key(),
+            "calls_today": 0,
+            "revision": 0,
+        })
+        self._restore_state(state)
+        self._active_project = project_id
+
+    def _restore_state(self, state) -> None:
+        self.enabled = bool(state["enabled"])
+        self.image_egress_authorized = bool(state["image_egress_authorized"])
+        self.daily_limit = int(state["daily_limit"])
+        self.model_id = str(state["model_id"])
+        self.provider_configured = bool(state["provider_configured"])
+        self._day = int(state["day"])
+        self._calls_today = int(state["calls_today"])
+        self._revision = int(state["revision"])
 
     @property
     def database_manager(self) -> DatabaseManager | None:
@@ -41,6 +93,16 @@ class AlertVerificationStore:
         with self._lock:
             self._database = database_manager
 
+    def configure_provider(self, provider: VerificationProvider | None) -> None:
+        """Replace the process provider; credentials never enter project state."""
+        with self._lock:
+            self._provider = provider
+
+    @property
+    def provider_available(self) -> bool:
+        with self._lock:
+            return self._provider is not None
+
     def _config_payload(self) -> dict[str, Any]:
         return {
             "enabled": self.enabled,
@@ -49,13 +111,15 @@ class AlertVerificationStore:
             "modelId": self.model_id,
             "providerConfigured": self.provider_configured,
             "day": self._day,
+            "revision": self._revision,
         }
 
-    def _load_config(self, session) -> None:
-        row = session.get(AlertVerificationConfigRecord, "default")
+    def _load_config(self, session, project_id: str) -> None:
+        row = session.get(AlertVerificationConfigRecord, (project_id, "default"))
         if row is None:
             return
         payload = dict(row.payload or {})
+        self._revision = int(payload.get("revision", 0))
         self.enabled = bool(payload.get("enabled", self.enabled))
         self.image_egress_authorized = bool(payload.get("imageEgressAuthorized", self.image_egress_authorized))
         self.daily_limit = max(0, int(payload.get("dailyLimit", row.calls_day)))
@@ -66,11 +130,12 @@ class AlertVerificationStore:
         self._calls_today = int(row.calls_today or 0)
         self._rollover()
 
-    def _save_config(self, session) -> None:
-        row = session.get(AlertVerificationConfigRecord, "default")
+    def _save_config(self, session, project_id: str) -> None:
+        row = session.get(AlertVerificationConfigRecord, (project_id, "default"))
         payload = self._config_payload()
         if row is None:
             session.add(AlertVerificationConfigRecord(
+                project_id=project_id,
                 config_key="default", calls_day=self.daily_limit,
                 calls_today=self._calls_today, payload=payload,
             ))
@@ -89,120 +154,33 @@ class AlertVerificationStore:
             self._day = day
             self._calls_today = 0
 
-    def get(self, event_id: str) -> dict[str, Any] | None:
-        if self._database is not None:
-            with self._database.session() as session:
-                row = session.get(AlertVerificationRecord, event_id)
-                return deepcopy(dict(row.payload)) if row else None
-        with self._lock:
-            result = self._results.get(event_id)
-            return deepcopy(result) if result else None
-
-    def request(self, event: Mapping[str, Any], *, actor: str, image_ref: str | None = None) -> dict[str, Any]:
-        event_id = str(event.get("eventId") or event.get("event_id") or "").strip()
-        if not event_id:
-            raise ValueError("eventId is required")
+    def get(self, event_id: str, project_id: str = DEFAULT_PROJECT_ID) -> dict[str, Any] | None:
         with self._lock:
             if self._database is not None:
-                return self._request_database(event, event_id, actor, image_ref)
-            self._rollover()
-            existing = self._results.get(event_id)
-            if existing:
-                return deepcopy(existing)
-            now = time.time_ns() // 1000
-            base = {
-                "eventId": event_id,
-                "status": "PENDING",
-                "verdict": None,
-                "reason": "已接受人工发起请求",
-                "modelId": self.model_id,
-                "promptVersion": "verify-v1",
-                "latencyMs": 0,
-                "requestedAtUs": now,
-                "completedAtUs": None,
-                "source": "MANUAL_PC",
-                "actor": actor,
-                "image": image_ref,
-            }
-            # These checks are intentionally ordered from privacy to spend.
-            if not self.enabled:
-                base.update(status="FAILED", reason="智能复核未开启", failureKind="DISABLED")
-            elif not self.image_egress_authorized:
-                base.update(status="FAILED", reason="未授权图像出站，未发送任何图片", failureKind="NOT_AUTHORIZED")
-            elif not image_ref:
-                base.update(status="FAILED", reason="告警缺少可用证据图片", failureKind="MISSING_IMAGE")
-            elif self._calls_today >= self.daily_limit:
-                base.update(status="FAILED", reason="今日复核额度已用尽", failureKind="QUOTA_EXHAUSTED")
-            elif not self.provider_configured:
-                self._calls_today += 1
-                base.update(status="FAILED", reason="未配置可用的复核供应商或模型", failureKind="NOT_CONFIGURED")
-            else:
-                self._calls_today += 1
-                base.update(status="FAILED", reason="服务端复核适配器尚未启用", failureKind="PROVIDER_UNAVAILABLE")
-            base["completedAtUs"] = time.time_ns() // 1000
-            self._results[event_id] = base
-            return deepcopy(base)
+                with self._database.session() as session:
+                    lock_project(session, project_id, enforce_lifecycle=False)
+                    row = session.get(AlertVerificationRecord, (project_id, event_id))
+                    if row is None:
+                        return None
+                    result = self._expire_payload(row.payload)
+                    if result != row.payload:
+                        row.status, row.payload = result["status"], result
+                    return self._public_result(result)
+            result = self._results.get((project_id, event_id))
+            if result is not None:
+                result = self._expire_payload(result)
+                self._results[(project_id, event_id)] = result
+            return self._public_result(result) if result else None
 
-    def _request_database(self, event: Mapping[str, Any], event_id: str, actor: str,
-                          image_ref: str | None) -> dict[str, Any]:
-        database_manager = self._database
-        with self._database.session() as session:
-            # Test and embedded callers may intentionally use an in-memory alert
-            # store while this singleton is database-backed. Keep that explicit
-            # isolation working without weakening the production FK contract.
-            from ..database import AlertEventRecord
-            if session.get(AlertEventRecord, event_id) is None:
-                self._database = None
-                try:
-                    return self.request(event, actor=actor, image_ref=image_ref)
-                finally:
-                    self._database = database_manager
-            config = session.scalar(select(AlertVerificationConfigRecord).where(
-                AlertVerificationConfigRecord.config_key == "default"
-            ).with_for_update())
-            if config is not None:
-                self.enabled = bool((config.payload or {}).get("enabled", self.enabled))
-                self.image_egress_authorized = bool((config.payload or {}).get("imageEgressAuthorized", self.image_egress_authorized))
-                self.daily_limit = max(0, int((config.payload or {}).get("dailyLimit", config.calls_day)))
-                self.model_id = str((config.payload or {}).get("modelId") or "")
-                self.provider_configured = bool((config.payload or {}).get("providerConfigured", self.provider_configured))
-                self._day = int((config.payload or {}).get("day", self._day_key()))
-                self._calls_today = int(config.calls_today or 0)
-            self._rollover()
-            existing = session.get(AlertVerificationRecord, event_id)
-            if existing is not None:
-                return deepcopy(dict(existing.payload))
-            now = time.time_ns() // 1000
-            base = {
-                "eventId": event_id, "status": "PENDING", "verdict": None,
-                "reason": "已接受人工发起请求", "modelId": self.model_id,
-                "promptVersion": "verify-v1", "latencyMs": 0,
-                "requestedAtUs": now, "completedAtUs": None, "source": "MANUAL_PC",
-                "actor": actor, "image": image_ref,
-            }
-            if not self.enabled:
-                base.update(status="FAILED", reason="智能复核未开启", failureKind="DISABLED")
-            elif not self.image_egress_authorized:
-                base.update(status="FAILED", reason="未授权图像出站，未发送任何图片", failureKind="NOT_AUTHORIZED")
-            elif not image_ref:
-                base.update(status="FAILED", reason="告警缺少可用证据图片", failureKind="MISSING_IMAGE")
-            elif self._calls_today >= self.daily_limit:
-                base.update(status="FAILED", reason="今日复核额度已用尽", failureKind="QUOTA_EXHAUSTED")
-            elif not self.provider_configured:
-                self._calls_today += 1
-                base.update(status="FAILED", reason="未配置可用的复核供应商或模型", failureKind="NOT_CONFIGURED")
-            else:
-                self._calls_today += 1
-                base.update(status="FAILED", reason="服务端复核适配器尚未启用", failureKind="PROVIDER_UNAVAILABLE")
-            base["completedAtUs"] = time.time_ns() // 1000
-            session.add(AlertVerificationRecord(event_id=event_id, status=base["status"], payload=base))
-            self._save_config(session)
-            return deepcopy(base)
-
-    def reset(self) -> None:
+    def reset(self, *, allow_database_delete: bool = False) -> None:
         with self._lock:
+            if self._database is not None and not allow_database_delete:
+                raise ValueError("database reset requires explicit allow_database_delete=True on an isolated test database")
             self._results.clear()
+            self._project_states.clear()
+            self._active_project = DEFAULT_PROJECT_ID
             self._calls_today = 0
+            self._revision = 0
             self._day = self._day_key()
             if self._database is not None:
                 with self._database.session() as session:
@@ -210,30 +188,55 @@ class AlertVerificationStore:
                     session.execute(delete(AlertVerificationConfigRecord))
 
     def configure(self, *, enabled: bool, image_egress_authorized: bool,
-                  daily_limit: int, model_id: str, provider_configured: bool) -> dict[str, Any]:
+                  daily_limit: int, model_id: str, provider_configured: bool,
+                  project_id: str = DEFAULT_PROJECT_ID, expected_revision: int | None = None,
+                  context=None, request_id: str | None = None) -> dict[str, Any]:
         with self._lock:
-            self.enabled = bool(enabled)
-            self.image_egress_authorized = bool(image_egress_authorized)
-            self.daily_limit = max(0, int(daily_limit))
-            self.model_id = str(model_id or "").strip()
-            self.provider_configured = bool(provider_configured)
-            self._rollover()
+            self._switch_project(project_id)
+            previous_state = self._state_payload()
+
+            def update(session):
+                if session is not None:
+                    lock_project(session, project_id)
+                    self._load_config(session, project_id)
+                self._rollover()
+                before = self._config_payload()
+                if expected_revision is not None and expected_revision != self._revision:
+                    raise VerificationConfigConflict("verification policy was changed by another operator")
+                self.enabled = bool(enabled)
+                self.image_egress_authorized = bool(image_egress_authorized)
+                self.daily_limit = max(0, int(daily_limit))
+                self.model_id = str(model_id or "").strip()
+                self.provider_configured = bool(provider_configured)
+                self._revision += 1
+                if session is not None:
+                    self._save_config(session, project_id)
+                audit_change(session, context, request_id, "verification_policy.update",
+                             "verification_policy", "default", before, self._config_payload())
+            try:
+                if self._database is not None:
+                    with self._database.session() as session:
+                        update(session)
+                else:
+                    update(None)
+            except Exception:
+                self._project_states[project_id] = previous_state
+                self._restore_state(previous_state)
+                raise
+            self._project_states[project_id] = self._state_payload()
+            return self.config(project_id)
+
+    def config(self, project_id: str = DEFAULT_PROJECT_ID) -> dict[str, Any]:
+        with self._lock:
+            self._switch_project(project_id)
             if self._database is not None:
                 with self._database.session() as session:
-                    row = session.scalar(select(AlertVerificationConfigRecord).where(
-                        AlertVerificationConfigRecord.config_key == "default"
-                    ).with_for_update())
-                    if row is not None:
-                        self._calls_today = int(row.calls_today or 0)
-                        self._day = int((row.payload or {}).get("day", self._day_key()))
-                        self._rollover()
-                    self.enabled = bool(enabled)
-                    self.image_egress_authorized = bool(image_egress_authorized)
-                    self.daily_limit = max(0, int(daily_limit))
-                    self.model_id = str(model_id or "").strip()
-                    self.provider_configured = bool(provider_configured)
-                    self._save_config(session)
+                    self._load_config(session, project_id)
+            self._rollover()
+            self._project_states[project_id] = self._state_payload()
             return {
+                "projectId": project_id,
+                "revision": self._revision,
                 "enabled": self.enabled,
                 "imageEgressAuthorized": self.image_egress_authorized,
                 "dailyLimit": self.daily_limit,
@@ -242,19 +245,26 @@ class AlertVerificationStore:
                 "callsToday": self._calls_today,
             }
 
-    def config(self) -> dict[str, Any]:
+    def statistics(self, project_id: str, start_us: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         with self._lock:
             if self._database is not None:
                 with self._database.session() as session:
-                    self._load_config(session)
-            return {
-                "enabled": self.enabled,
-                "imageEgressAuthorized": self.image_egress_authorized,
-                "dailyLimit": self.daily_limit,
-                "modelId": self.model_id,
-                "providerConfigured": self.provider_configured,
-                "callsToday": self._calls_today,
-            }
+                    rows = session.scalars(select(AlertVerificationRecord).where(
+                        AlertVerificationRecord.project_id == project_id)).all()
+                    results = [self._public_result(row.payload) for row in rows
+                               if int(row.payload.get("requestedAtUs", 0)) >= start_us]
+            else:
+                results = [self._public_result(value) for (pid, _), value in self._results.items()
+                           if pid == project_id and int(value.get("requestedAtUs", 0)) >= start_us]
+            return results, self.config(project_id)
 
 
 alert_verification_store = AlertVerificationStore()
+
+
+def result_status(verdict: str) -> str:
+    return {
+        "CONFIRMED": "CONFIRMED",
+        "SUSPECTED_FALSE_POSITIVE": "SUSPECTED_FALSE_POSITIVE",
+        "INCONCLUSIVE": "INCONCLUSIVE",
+    }.get(verdict, "INCONCLUSIVE")

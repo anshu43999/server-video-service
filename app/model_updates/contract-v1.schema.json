@@ -1,0 +1,2718 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:aiyolo:mobile-model-update:v1",
+  "title": "M111 model update contract v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/binding_request"
+    },
+    {
+      "$ref": "#/$defs/binding_response"
+    },
+    {
+      "$ref": "#/$defs/unbind_request"
+    },
+    {
+      "$ref": "#/$defs/unbind_response"
+    },
+    {
+      "$ref": "#/$defs/inventory_request"
+    },
+    {
+      "$ref": "#/$defs/inventory_response"
+    },
+    {
+      "$ref": "#/$defs/delta_request"
+    },
+    {
+      "$ref": "#/$defs/delta_response"
+    },
+    {
+      "$ref": "#/$defs/snapshot_request"
+    },
+    {
+      "$ref": "#/$defs/snapshot_response"
+    },
+    {
+      "$ref": "#/$defs/report_request"
+    },
+    {
+      "$ref": "#/$defs/report_response"
+    },
+    {
+      "$ref": "#/$defs/push"
+    },
+    {
+      "$ref": "#/$defs/status_request"
+    },
+    {
+      "$ref": "#/$defs/status_response"
+    },
+    {
+      "$ref": "#/$defs/error"
+    }
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,128}$"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "binding": {
+      "type": "object",
+      "properties": {
+        "origin": {
+          "type": "string",
+          "pattern": "^https://[A-Za-z0-9.-]+(?::[0-9]{1,5})?$"
+        },
+        "accountId": {
+          "$ref": "#/$defs/id"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/id"
+        },
+        "bindingEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "origin",
+        "accountId",
+        "deviceId",
+        "bindingEpoch"
+      ],
+      "additionalProperties": false
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "$ref": "#/$defs/id"
+            },
+            "kind": {
+              "const": "assignment"
+            },
+            "assignmentId": {
+              "$ref": "#/$defs/id"
+            },
+            "platform": {
+              "const": "mobile"
+            },
+            "sourceEpoch": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "projectId",
+            "kind",
+            "assignmentId",
+            "platform",
+            "sourceEpoch"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "$ref": "#/$defs/id"
+            },
+            "kind": {
+              "const": "scene"
+            },
+            "sceneId": {
+              "$ref": "#/$defs/id"
+            },
+            "selectionDigest": {
+              "$ref": "#/$defs/digest"
+            },
+            "platform": {
+              "const": "mobile"
+            },
+            "sourceEpoch": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "selection": {
+              "type": "object",
+              "properties": {
+                "planIds": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/id"
+                  },
+                  "maxItems": 1000,
+                  "uniqueItems": true
+                },
+                "memberIds": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/id"
+                  },
+                  "minItems": 1,
+                  "maxItems": 1000,
+                  "uniqueItems": true
+                }
+              },
+              "required": [
+                "planIds",
+                "memberIds"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "projectId",
+            "kind",
+            "sceneId",
+            "selectionDigest",
+            "platform",
+            "sourceEpoch",
+            "selection"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "artifact": {
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "$ref": "#/$defs/model_id"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "artifactDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "manifestDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "parameterRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "parameterDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "modelId",
+        "version",
+        "artifactDigest",
+        "manifestDigest",
+        "parameterRevision",
+        "parameterDigest",
+        "sizeBytes"
+      ],
+      "additionalProperties": false
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "updateId": {
+          "$ref": "#/$defs/id"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "approvalRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "successCriteria": {
+          "enum": [
+            "installed",
+            "activated",
+            "revision_selected"
+          ]
+        },
+        "successCriteriaRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact"
+          },
+          "maxItems": 1000,
+          "minItems": 1
+        },
+        "targetDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "supersedesUpdateId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "updateId",
+        "source",
+        "approvalRevision",
+        "successCriteria",
+        "successCriteriaRevision",
+        "artifacts",
+        "targetDigest",
+        "supersedesUpdateId"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source": {
+                "properties": {
+                  "kind": {
+                    "const": "scene"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "successCriteria": {
+                "const": "revision_selected"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "successCriteria": {
+                "enum": [
+                  "installed",
+                  "activated"
+                ]
+              },
+              "artifacts": {
+                "maxItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "stage": {
+      "enum": [
+        "available",
+        "waiting_approval",
+        "waiting_user",
+        "waiting_project",
+        "waiting_network",
+        "waiting_storage",
+        "waiting_idle",
+        "downloading",
+        "verifying",
+        "staged",
+        "warming",
+        "committing",
+        "installed",
+        "retry_wait",
+        "blocked",
+        "quarantined",
+        "rolled_back",
+        "invalidated",
+        "superseded"
+      ]
+    },
+    "item": {
+      "type": "object",
+      "properties": {
+        "updateId": {
+          "$ref": "#/$defs/id"
+        },
+        "itemRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "kind": {
+          "enum": [
+            "release_available",
+            "update_ready"
+          ]
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/target"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "release": {
+          "type": "object",
+          "properties": {
+            "projectId": {
+              "$ref": "#/$defs/id"
+            },
+            "modelId": {
+              "$ref": "#/$defs/model_id"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "artifactDigest": {
+              "$ref": "#/$defs/digest"
+            }
+          },
+          "required": [
+            "projectId",
+            "modelId",
+            "version",
+            "artifactDigest"
+          ],
+          "additionalProperties": false
+        },
+        "discovery": {
+          "enum": [
+            "pending_discovery",
+            "discovered",
+            "seen"
+          ]
+        },
+        "stage": {
+          "$ref": "#/$defs/stage"
+        },
+        "errorCode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "updateId",
+        "itemRevision",
+        "kind",
+        "target",
+        "release",
+        "discovery",
+        "stage",
+        "errorCode"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "release_available"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "type": "null"
+              },
+              "stage": {
+                "enum": [
+                  "waiting_approval",
+                  "superseded",
+                  "invalidated"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/target"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "change": {
+      "type": "object",
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "operation": {
+          "enum": [
+            "upsert",
+            "invalidate",
+            "lifecycle"
+          ]
+        },
+        "item": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/item"
+            },
+            {
+              "$ref": "#/$defs/lifecycle_fact"
+            }
+          ]
+        }
+      },
+      "required": [
+        "sequence",
+        "operation",
+        "item"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "const": "lifecycle"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "item": {
+                "$ref": "#/$defs/lifecycle_fact"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "item": {
+                "$ref": "#/$defs/item"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "properties": {
+        "entryId": {
+          "$ref": "#/$defs/id"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "retainedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "selectionGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "active": {
+          "type": "boolean"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact"
+          },
+          "maxItems": 1000,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "entryId",
+        "source",
+        "retainedRevision",
+        "selectionGeneration",
+        "active",
+        "artifacts"
+      ],
+      "additionalProperties": false
+    },
+    "settings": {
+      "type": "object",
+      "properties": {
+        "connectTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300
+        },
+        "readTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "totalTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 10,
+          "maximum": 3600
+        },
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      },
+      "required": [
+        "connectTimeoutSeconds",
+        "readTimeoutSeconds",
+        "totalTimeoutSeconds",
+        "maxAttempts"
+      ],
+      "additionalProperties": false
+    },
+    "report": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "$ref": "#/$defs/id"
+        },
+        "updateId": {
+          "$ref": "#/$defs/id"
+        },
+        "itemRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "attemptId": {
+          "$ref": "#/$defs/id"
+        },
+        "reportSeq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "stage": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/stage"
+            },
+            {
+              "enum": [
+                "discovered",
+                "seen"
+              ]
+            }
+          ]
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "completedCriteria": {
+          "anyOf": [
+            {
+              "enum": [
+                "installed",
+                "activated",
+                "revision_selected"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "errorCode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "eventId",
+        "updateId",
+        "itemRevision",
+        "attemptId",
+        "reportSeq",
+        "stage",
+        "digest",
+        "completedCriteria",
+        "errorCode"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "stage": {
+                "const": "installed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "completedCriteria": {
+                "enum": [
+                  "installed",
+                  "activated",
+                  "revision_selected"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "completedCriteria": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "appVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "apiLevel": {
+          "type": "integer",
+          "minimum": 27,
+          "maximum": 100
+        },
+        "abis": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "arm64-v8a",
+              "armeabi-v7a",
+              "x86_64",
+              "x86"
+            ]
+          },
+          "maxItems": 4,
+          "minItems": 1
+        },
+        "contractVersions": {
+          "type": "array",
+          "items": {
+            "const": 1
+          },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "resourceLifecycleVersions": {
+          "type": "array",
+          "items": {
+            "const": 1
+          },
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "appVersion",
+        "apiLevel",
+        "abis",
+        "contractVersions"
+      ],
+      "additionalProperties": false
+    },
+    "binding_request": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "binding_request"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "installationId": {
+          "$ref": "#/$defs/id"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/capabilities"
+        },
+        "pushProvider": {
+          "enum": [
+            "none",
+            "fcm"
+          ]
+        },
+        "token": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tokenGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "notificationPermission": {
+          "enum": [
+            "granted",
+            "denied",
+            "not_requested"
+          ]
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "installationId",
+        "capabilities",
+        "pushProvider",
+        "token",
+        "tokenGeneration",
+        "notificationPermission"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "pushProvider": {
+                "const": "none"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "token": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "token": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "tokenGeneration": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              }
+            }
+          }
+        }
+      ]
+    },
+    "binding_response": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "binding_response"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "serverTime": {
+          "$ref": "#/$defs/time"
+        },
+        "resourceLifecycleVersion": {
+          "const": 1
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "binding",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
+    "unbind_request": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "unbind_request"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "binding"
+      ],
+      "additionalProperties": false
+    },
+    "unbind_response": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "unbind_response"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "revoked": {
+          "const": true
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "revoked"
+      ],
+      "additionalProperties": false
+    },
+    "inventory_request": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "inventory_request"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "inventoryRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entry"
+          },
+          "maxItems": 1000,
+          "minItems": 0
+        },
+        "lifecycleEntries": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "$ref": "#/$defs/lifecycle_inventoryEntry"
+          }
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "binding",
+        "inventoryRevision",
+        "entries"
+      ],
+      "additionalProperties": false
+    },
+    "inventory_response": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "inventory_response"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "acceptedRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "rebuildRequested": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "acceptedRevision",
+        "rebuildRequested"
+      ],
+      "additionalProperties": false
+    },
+    "delta_request": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "delta_request"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "cursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "binding",
+        "cursor",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "delta_response": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "delta_response"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "fromCursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "nextCursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/change"
+          },
+          "maxItems": 200,
+          "minItems": 0
+        },
+        "hasMore": {
+          "type": "boolean"
+        },
+        "serverTime": {
+          "$ref": "#/$defs/time"
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "binding",
+        "fromCursor",
+        "nextCursor",
+        "items",
+        "hasMore",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
+    "snapshot_request": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "snapshot_request"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "pageToken": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "binding",
+        "pageToken",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "snapshot_response": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "snapshot_response"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "snapshotId": {
+          "$ref": "#/$defs/id"
+        },
+        "snapshotCursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "expiresAt": {
+          "$ref": "#/$defs/time"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/item"
+          },
+          "maxItems": 200,
+          "minItems": 0
+        },
+        "nextPageToken": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "serverTime": {
+          "$ref": "#/$defs/time"
+        },
+        "lifecycleSnapshot": {
+          "$ref": "#/$defs/lifecycle_snapshotPage"
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "binding",
+        "snapshotId",
+        "snapshotCursor",
+        "expiresAt",
+        "items",
+        "nextPageToken",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
+    "report_request": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "report_request"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "reports": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/report"
+              },
+              {
+                "$ref": "#/$defs/lifecycle_receipt"
+              }
+            ]
+          },
+          "maxItems": 100,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "binding",
+        "reports"
+      ],
+      "additionalProperties": false
+    },
+    "report_result": {
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "$ref": "#/$defs/id"
+        },
+        "outcome": {
+          "enum": [
+            "accepted",
+            "duplicate",
+            "stale",
+            "rejected"
+          ]
+        },
+        "permanent": {
+          "type": "boolean"
+        },
+        "errorCode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "eventId",
+        "outcome",
+        "permanent",
+        "errorCode"
+      ],
+      "additionalProperties": false
+    },
+    "report_response": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "report_response"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/report_result"
+          },
+          "maxItems": 100,
+          "minItems": 0
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "results"
+      ],
+      "additionalProperties": false
+    },
+    "push": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "model_updates_changed"
+        },
+        "contractVersion": {
+          "const": "1"
+        },
+        "eventId": {
+          "$ref": "#/$defs/id"
+        }
+      },
+      "required": [
+        "type",
+        "contractVersion",
+        "eventId"
+      ],
+      "additionalProperties": false
+    },
+    "status_request": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "status_request"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "projectId": {
+          "$ref": "#/$defs/id"
+        },
+        "updateId": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deviceStatus": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/stage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pageToken": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "projectId",
+        "updateId",
+        "deviceStatus",
+        "pageToken",
+        "limit"
+      ],
+      "additionalProperties": false
+    },
+    "status_response": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "status_response"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "deviceId": {
+                "$ref": "#/$defs/id"
+              },
+              "updateId": {
+                "$ref": "#/$defs/id"
+              },
+              "stage": {
+                "$ref": "#/$defs/stage"
+              },
+              "discovery": {
+                "enum": [
+                  "pending_discovery",
+                  "discovered",
+                  "seen"
+                ]
+              },
+              "lastContact": {
+                "$ref": "#/$defs/time"
+              },
+              "staleContact": {
+                "type": "boolean"
+              },
+              "errorCode": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/id"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "deviceId",
+              "updateId",
+              "stage",
+              "discovery",
+              "lastContact",
+              "staleContact",
+              "errorCode"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 200,
+          "minItems": 0
+        },
+        "nextPageToken": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "serverTime": {
+          "$ref": "#/$defs/time"
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "items",
+        "nextPageToken",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "messageType": {
+          "const": "error"
+        },
+        "contractVersion": {
+          "const": 1
+        },
+        "status": {
+          "enum": [
+            400,
+            401,
+            403,
+            404,
+            409,
+            410,
+            413,
+            429,
+            500,
+            503
+          ]
+        },
+        "errorCode": {
+          "enum": [
+            "invalid_request",
+            "login_required",
+            "access_revoked",
+            "unsupported_contract",
+            "target_changed",
+            "binding_changed",
+            "cursor_expired",
+            "snapshot_expired",
+            "capacity_exceeded",
+            "rate_limited",
+            "temporarily_unavailable"
+          ]
+        },
+        "retryAfterSeconds": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 21600
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "messageType",
+        "contractVersion",
+        "status",
+        "errorCode",
+        "retryAfterSeconds"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": 400
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "errorCode": {
+                "enum": [
+                  "invalid_request"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": 401
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "errorCode": {
+                "enum": [
+                  "login_required"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": 403
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "errorCode": {
+                "enum": [
+                  "access_revoked"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": 404
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "errorCode": {
+                "enum": [
+                  "unsupported_contract"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": 409
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "errorCode": {
+                "enum": [
+                  "target_changed",
+                  "binding_changed"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": 410
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "errorCode": {
+                "enum": [
+                  "cursor_expired",
+                  "snapshot_expired"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": 413
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "errorCode": {
+                "enum": [
+                  "capacity_exceeded"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": 429
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "errorCode": {
+                "enum": [
+                  "rate_limited"
+                ]
+              },
+              "retryAfterSeconds": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 21600
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": 500
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "errorCode": {
+                "enum": [
+                  "temporarily_unavailable"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": 503
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "errorCode": {
+                "enum": [
+                  "temporarily_unavailable"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "checkpoint": {
+      "type": "object",
+      "properties": {
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "targetDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "signatureDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "sourceEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "selectionGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "relativePath": {
+          "type": "string",
+          "pattern": "^updates/[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+[.]part$"
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "etag": {
+          "type": "string",
+          "pattern": "^\"[^\"\\\\\r\n]+\"$"
+        },
+        "settings": {
+          "$ref": "#/$defs/settings"
+        },
+        "elapsedMillis": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "round": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10
+        },
+        "rangeRestarted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "binding",
+        "targetDigest",
+        "signatureDigest",
+        "sourceEpoch",
+        "selectionGeneration",
+        "relativePath",
+        "offset",
+        "totalBytes",
+        "etag",
+        "settings",
+        "elapsedMillis",
+        "attempt",
+        "round",
+        "rangeRestarted"
+      ],
+      "additionalProperties": false
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "lifecycle_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_.:-]+$"
+    },
+    "lifecycle_revision": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "lifecycle_epoch": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "lifecycle_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "lifecycle_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "serviceOrigin",
+        "accountId",
+        "deviceId",
+        "bindingEpoch"
+      ],
+      "properties": {
+        "serviceOrigin": {
+          "type": "string",
+          "format": "uri",
+          "maxLength": 2048,
+          "pattern": "^https?://[^/?#@]+$"
+        },
+        "accountId": {
+          "$ref": "#/$defs/lifecycle_id"
+        },
+        "deviceId": {
+          "$ref": "#/$defs/lifecycle_id"
+        },
+        "bindingEpoch": {
+          "$ref": "#/$defs/lifecycle_revision"
+        }
+      }
+    },
+    "lifecycle_source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "assignmentId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "standalone"
+            },
+            "assignmentId": {
+              "$ref": "#/$defs/lifecycle_id"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "sceneId",
+            "sceneRevision",
+            "planId",
+            "selectionDigest"
+          ],
+          "properties": {
+            "kind": {
+              "const": "suite"
+            },
+            "sceneId": {
+              "$ref": "#/$defs/lifecycle_id"
+            },
+            "sceneRevision": {
+              "$ref": "#/$defs/lifecycle_revision"
+            },
+            "planId": {
+              "$ref": "#/$defs/lifecycle_id"
+            },
+            "selectionDigest": {
+              "$ref": "#/$defs/lifecycle_sha256"
+            },
+            "memberId": {
+              "$ref": "#/$defs/lifecycle_id"
+            }
+          }
+        }
+      ]
+    },
+    "lifecycle_resource": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "projectId",
+            "target",
+            "modelId",
+            "version",
+            "artifactId",
+            "artifactSha256",
+            "grantSource"
+          ],
+          "properties": {
+            "kind": {
+              "const": "model_release"
+            },
+            "projectId": {
+              "$ref": "#/$defs/lifecycle_id"
+            },
+            "target": {
+              "enum": [
+                "pc",
+                "mobile"
+              ]
+            },
+            "modelId": {
+              "$ref": "#/$defs/lifecycle_id"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            "artifactId": {
+              "$ref": "#/$defs/lifecycle_id"
+            },
+            "artifactSha256": {
+              "$ref": "#/$defs/lifecycle_sha256"
+            },
+            "grantSource": {
+              "$ref": "#/$defs/lifecycle_source"
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "grantSource": {
+                    "properties": {
+                      "kind": {
+                        "const": "suite"
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "grantSource": {
+                    "required": [
+                      "memberId"
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "projectId",
+            "target",
+            "sceneId",
+            "incarnation",
+            "sceneRevision",
+            "selectionDigest",
+            "grantSource"
+          ],
+          "properties": {
+            "kind": {
+              "const": "scene_revision"
+            },
+            "projectId": {
+              "$ref": "#/$defs/lifecycle_id"
+            },
+            "target": {
+              "enum": [
+                "pc",
+                "mobile"
+              ]
+            },
+            "sceneId": {
+              "$ref": "#/$defs/lifecycle_id"
+            },
+            "incarnation": {
+              "$ref": "#/$defs/lifecycle_id"
+            },
+            "sceneRevision": {
+              "$ref": "#/$defs/lifecycle_revision"
+            },
+            "selectionDigest": {
+              "$ref": "#/$defs/lifecycle_sha256"
+            },
+            "grantSource": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/lifecycle_source"
+                },
+                {
+                  "properties": {
+                    "kind": {
+                      "const": "suite"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "lifecycle_inventoryEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inventoryEntryId",
+        "sourceEpoch",
+        "localRetentionState",
+        "resourceKey"
+      ],
+      "properties": {
+        "inventoryEntryId": {
+          "$ref": "#/$defs/lifecycle_id"
+        },
+        "sourceEpoch": {
+          "$ref": "#/$defs/lifecycle_epoch"
+        },
+        "localRetentionState": {
+          "enum": [
+            "retained",
+            "staging",
+            "unknown_legacy"
+          ]
+        },
+        "resourceKey": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/lifecycle_resource"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "localRetentionState": {
+                "const": "unknown_legacy"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "resourceKey": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "resourceKey": {
+                "$ref": "#/$defs/lifecycle_resource"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "lifecycle_result": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "visibility",
+            "authorizationState",
+            "reasonCode"
+          ],
+          "properties": {
+            "visibility": {
+              "const": "opaque"
+            },
+            "authorizationState": {
+              "const": "denied"
+            },
+            "reasonCode": {
+              "const": "scope_inaccessible"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "visibility",
+            "resourceKey",
+            "distributionState",
+            "authorizationState",
+            "reasonCode",
+            "confirmedAt"
+          ],
+          "properties": {
+            "visibility": {
+              "const": "visible"
+            },
+            "resourceKey": {
+              "oneOf": [
+                {
+                  "$ref": "#/$defs/lifecycle_resource"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "distributionState": {
+              "enum": [
+                "available",
+                "stopped",
+                "removed",
+                "unknown"
+              ]
+            },
+            "authorizationState": {
+              "enum": [
+                "eligible",
+                "denied",
+                "unknown"
+              ]
+            },
+            "reasonCode": {
+              "enum": [
+                "current",
+                "unknown",
+                "distribution_stopped",
+                "project_grant_removed",
+                "release_revoked",
+                "release_removed",
+                "scene_disabled",
+                "scene_removed"
+              ]
+            },
+            "confirmedAt": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "Z$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "reasonCode": {
+                    "const": "unknown"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "distributionState": {
+                    "const": "unknown"
+                  },
+                  "authorizationState": {
+                    "const": "unknown"
+                  },
+                  "confirmedAt": {
+                    "type": "null"
+                  }
+                }
+              },
+              "else": {
+                "properties": {
+                  "resourceKey": {
+                    "$ref": "#/$defs/lifecycle_resource"
+                  },
+                  "confirmedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "Z$"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "reasonCode": {
+                    "const": "current"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "distributionState": {
+                    "const": "available"
+                  },
+                  "authorizationState": {
+                    "const": "eligible"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "reasonCode": {
+                    "const": "distribution_stopped"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "distributionState": {
+                    "const": "stopped"
+                  },
+                  "authorizationState": {
+                    "enum": [
+                      "eligible",
+                      "denied"
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "reasonCode": {
+                    "const": "project_grant_removed"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "distributionState": {
+                    "enum": [
+                      "available",
+                      "stopped"
+                    ]
+                  },
+                  "authorizationState": {
+                    "const": "denied"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "reasonCode": {
+                    "enum": [
+                      "release_revoked",
+                      "scene_disabled"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "distributionState": {
+                    "const": "stopped"
+                  },
+                  "authorizationState": {
+                    "const": "denied"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "reasonCode": {
+                    "enum": [
+                      "release_removed",
+                      "scene_removed"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "distributionState": {
+                    "const": "removed"
+                  },
+                  "authorizationState": {
+                    "const": "denied"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "reasonCode": {
+                    "enum": [
+                      "release_revoked",
+                      "release_removed"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "resourceKey": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "model_release"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "reasonCode": {
+                    "enum": [
+                      "scene_disabled",
+                      "scene_removed"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "resourceKey": {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "scene_revision"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "lifecycle_fact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "binding",
+        "inventoryRevision",
+        "inventoryEntryId",
+        "sourceEpoch",
+        "lifecycleItemId",
+        "lifecycleRevision",
+        "result"
+      ],
+      "properties": {
+        "kind": {
+          "const": "resource_lifecycle"
+        },
+        "binding": {
+          "$ref": "#/$defs/lifecycle_binding"
+        },
+        "inventoryRevision": {
+          "$ref": "#/$defs/lifecycle_revision"
+        },
+        "inventoryEntryId": {
+          "$ref": "#/$defs/lifecycle_id"
+        },
+        "sourceEpoch": {
+          "$ref": "#/$defs/lifecycle_epoch"
+        },
+        "lifecycleItemId": {
+          "$ref": "#/$defs/lifecycle_id"
+        },
+        "lifecycleRevision": {
+          "$ref": "#/$defs/lifecycle_revision"
+        },
+        "result": {
+          "$ref": "#/$defs/lifecycle_result"
+        }
+      }
+    },
+    "lifecycle_snapshotPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "messageType",
+        "binding",
+        "inventoryRevision",
+        "snapshotId",
+        "snapshotCursor",
+        "pageIndex",
+        "inventoryCount",
+        "coveredCount",
+        "nextPageToken",
+        "items"
+      ],
+      "properties": {
+        "messageType": {
+          "const": "lifecycle_snapshot_page"
+        },
+        "binding": {
+          "$ref": "#/$defs/lifecycle_binding"
+        },
+        "inventoryRevision": {
+          "$ref": "#/$defs/lifecycle_revision"
+        },
+        "snapshotId": {
+          "$ref": "#/$defs/lifecycle_id"
+        },
+        "snapshotCursor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "pageIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inventoryCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "coveredCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "nextPageToken": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "items": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/lifecycle_fact"
+          }
+        }
+      }
+    },
+    "lifecycle_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reportKind",
+        "eventId",
+        "binding",
+        "inventoryEntryId",
+        "sourceEpoch",
+        "reportSeq",
+        "stage"
+      ],
+      "properties": {
+        "reportKind": {
+          "const": "resource_lifecycle"
+        },
+        "eventId": {
+          "$ref": "#/$defs/lifecycle_id"
+        },
+        "binding": {
+          "$ref": "#/$defs/lifecycle_binding"
+        },
+        "inventoryEntryId": {
+          "$ref": "#/$defs/lifecycle_id"
+        },
+        "sourceEpoch": {
+          "$ref": "#/$defs/lifecycle_epoch"
+        },
+        "reportSeq": {
+          "$ref": "#/$defs/lifecycle_revision"
+        },
+        "lifecycleItemId": {
+          "$ref": "#/$defs/lifecycle_id"
+        },
+        "lifecycleRevision": {
+          "$ref": "#/$defs/lifecycle_revision"
+        },
+        "stage": {
+          "enum": [
+            "discovered",
+            "authorization_invalidated",
+            "references_removed",
+            "files_cleaned",
+            "cleanup_blocked"
+          ]
+        },
+        "freedBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "blockedReasons": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "REFERENCED",
+              "UNKNOWN_LEGACY",
+              "INVALID_REFERENCE",
+              "UNTRACKED",
+              "PREPARING",
+              "RUNNING",
+              "CANDIDATE",
+              "ACTIVE",
+              "PREVIOUS",
+              "ROLLBACK",
+              "UNSAFE_PATH",
+              "UNEXPECTED_FILE",
+              "INVALID_JOURNAL",
+              "DELETE_FAILED",
+              "STORAGE_FAILED"
+            ]
+          }
+        }
+      },
+      "dependentRequired": {
+        "lifecycleItemId": [
+          "lifecycleRevision"
+        ],
+        "lifecycleRevision": [
+          "lifecycleItemId"
+        ]
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "stage": {
+                "enum": [
+                  "discovered",
+                  "authorization_invalidated"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "lifecycleItemId",
+              "lifecycleRevision"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "stage": {
+                "const": "files_cleaned"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "freedBytes"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "freedBytes"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "stage": {
+                "const": "cleanup_blocked"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "blockedReasons"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "blockedReasons"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "lifecycle_impact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "messageType",
+        "operationScope",
+        "expectedRevision",
+        "dependentCounts",
+        "knownDevices",
+        "unknownDeviceCount",
+        "safeToRemove"
+      ],
+      "properties": {
+        "messageType": {
+          "const": "removal_impact"
+        },
+        "operationScope": {
+          "$ref": "#/$defs/lifecycle_operationScope"
+        },
+        "expectedRevision": {
+          "$ref": "#/$defs/lifecycle_revision"
+        },
+        "dependentCounts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "assignments",
+            "scenes",
+            "plans",
+            "streams",
+            "activeSlots"
+          ],
+          "properties": {
+            "assignments": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "scenes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "plans": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "streams": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "activeSlots": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "knownDevices": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unknownDeviceCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "safeToRemove": {
+          "type": "boolean"
+        }
+      }
+    },
+    "lifecycle_operationScope": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "projectId",
+            "sceneId",
+            "incarnation"
+          ],
+          "properties": {
+            "kind": {
+              "const": "scene"
+            },
+            "projectId": {
+              "$ref": "#/$defs/lifecycle_id"
+            },
+            "sceneId": {
+              "$ref": "#/$defs/lifecycle_id"
+            },
+            "incarnation": {
+              "$ref": "#/$defs/lifecycle_id"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "modelId",
+            "version"
+          ],
+          "properties": {
+            "kind": {
+              "const": "model_version"
+            },
+            "modelId": {
+              "$ref": "#/$defs/lifecycle_id"
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "modelId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "model_family"
+            },
+            "modelId": {
+              "$ref": "#/$defs/lifecycle_id"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

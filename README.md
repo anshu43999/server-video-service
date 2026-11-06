@@ -1,57 +1,57 @@
 # Server Video Service
 
-独立的服务器端视频流处理服务：接收移动端推送的 JPEG 帧（或拉取 RTSP/文件源），按需在服务器运行 YOLO，把结果编码为一路 H.264 交给媒体服务器分发给 App 和浏览器，并把结构化检测结果通过独立通道下发。
+独立的服务器端视频流处理服务：接入 RTSP/文件等视频源，在服务器运行 YOLO 与正式告警规则，提供按项目隔离的 PC 实时预览；符合规则的告警持久化后由告警功能展示和提示。
 
-输出传输协议见 [docs/adr-002-production-transport.md](docs/adr-002-production-transport.md)：**WebRTC/WHEP 是唯一生产播放路径，LL-HLS 是过渡与回退，RTSP 只给诊断工具，MJPEG/WebSocket JPEG 降级为测试与诊断通道。** App 只播放服务端推理后的流，不在远程流上做推理。
+当前视频边界见 [ADR-003](docs/adr-003-analysis-alerts-only.md)：**保留后台/PC接入、实时预览和YOLO分析；取消PC推流及移动端远程视频/直播收流，不再通过MediaMTX向移动端分发。** PC专用预览使用同源登录Cookie和当前项目权限，最高5fps/宽1280；关闭YOLO仍可看原画面。旧播放接口继续退役。M34/M101仍在实施，Android清理、告警闭环及真实三端验收不能视为已完成；ADR-002中的分发方案仅作历史参考。
 
 告警引擎规格见 [docs/alert-engine-spec.md](docs/alert-engine-spec.md)（状态：冻结，机器可读契约 [docs/alert-engine.schema.json](docs/alert-engine.schema.json)）：**服务端与 App 共用同一份规格**，服务端实现远程视频流事件（`M11`），App 侧实现本地图片与相机事件（`M15`）。这是一个告警引擎，不是预警引擎，不做趋势外推与未来状态预测。双侧共用的一致性金样向量在 [docs/alert-engine-conformance/](docs/alert-engine-conformance/README.md)（29 条，服务端加载器 `tests/test_alert_engine_conformance.py`，App 侧原样复制执行）。
 
 项目的正式定位、范围、需求、接口契约和验收标准见 [PRODUCT_REQUIREMENTS.md](PRODUCT_REQUIREMENTS.md)。该服务只承接视频流链路，不修改现有 `mobile-app/`，移动端图片分析和本地相机分析继续保持原方案。
 
-启动后访问 `http://localhost:8080/` 可打开管理控制台；控制台用于人工查看流、切换 YOLO 和调整单路运行参数，移动端仍应使用独立 API/播放接口。
+启动后访问 `http://localhost:8080/` 会跳转到 `/admin/` Vue 管理控制台；控制台用于查看流、切换 YOLO 和调整单路运行参数，移动端使用项目告警接口而非播放接口。前端源码和业务服务分别位于 `admin-web/` 与 `app/`，采用 [ADR-004](docs/adr-004-admin-frontend-engineering.md) 的同源部署架构。先完成本地真实验收，再进行容器部署。
+
+## 管理前端开发与构建
+
+Vue 3 + TypeScript + Vite 工程位于 `admin-web/`，要求 Node.js 22.12+。首次安装及验证：
+
+```powershell
+cd E:\aiyolo\server-video-service\admin-web
+npm ci
+npm run typecheck
+npm run test
+npm run build          # /admin/ 产物写入 dist/
+npm run build:preview  # /admin-next/ 产物写入 dist-preview/
+```
+
+本地联调先启动 FastAPI，再在另一个终端执行 `npm run dev`，打开 `http://127.0.0.1:5173/admin-next/`。Vite 同源代理 `/aiyoloapi`（含 WebSocket）和 `/healthz` 到 `ADMIN_API_TARGET`，默认 `http://127.0.0.1:8080`；该配置只接受不含账号、路径或查询参数的 HTTP(S) origin。
+
+`ADMIN_FRONTEND_MODE` 默认 `vue`，`/admin/` 使用 `dist`；产物缺失则启动失败并提示构建命令，不静默切回旧页面。本机首次运行或更新前先在 `admin-web/` 执行 `npm ci`、`npm run build`。容器镜像通过独立 Node 阶段执行锁文件安装、测试和两套构建，Python 运行层不包含 Node.js。
+
+只要 `dist-preview/index.html` 存在，FastAPI 就会提供独立 `/admin-next/` 预览。应整体发布同一次构建的 HTML 和 assets，HTML 使用 `no-cache`，带内容哈希的资源使用一年 `immutable` 缓存，缺失资源为 404；网关不能把 API 错误改为 SPA HTML。旧前端已归档到本机 `E:\aiyolo\archives\server-admin-legacy\20261009-M32-T11` 并从产品目录删除，当前仅支持 `ADMIN_FRONTEND_MODE=vue`。历史查询与带备份恢复见 [本地档案说明](../archives/server-admin-legacy/README.md)，详细验证命令和缓存策略见 [管理前端发布与回退](docs/admin-frontend-release.md)。
 
 模型资产页现提供 **PT 上传与异步本机/WSL 转换**：PT 在服务端验证后可直接按流绑定；TFLite 单独转换并登记下载产物。配置现有虚拟环境、校准集、任务重试与当前 App 接线边界见 [本机模型转换说明](docs/local-model-conversion.md)。COCO 仅用于用户功能测试。
 
 ## 一键启动（Windows）
 
-直接双击 `start-server.bat`。脚本会自动创建 `.venv` 并安装基础依赖，然后启动服务。
-
-PowerShell 高级用法：
+先构建上文 Vue 产物，再双击 `start-server.bat`，或在本工程目录执行：
 
 ```powershell
-.\start-server.ps1                 # 默认 8080 端口
-.\start-server.ps1 -Port 8090      # 指定端口
-.\start-server.ps1 -InstallYolo    # 同时安装 ultralytics YOLO 依赖
-.\start-server.ps1 -Reload         # 开发模式，代码变更自动重载
-.\start-server.ps1 -NoInstall      # 不安装依赖，仅使用已有虚拟环境
-.\start-server.ps1 -WithMediaMtx   # 同时启动本机 H.264/WHEP/LL-HLS 分发
+.\start-server.ps1 -NoInstall       # 使用已有虚拟环境，默认 8080
+.\start-server.ps1 -InstallYolo     # 需要时安装 YOLO 依赖
+.\start-server.ps1 -Port 8090
+.\start-server.ps1 -Reload
 ```
 
-首次运行需要联网下载依赖；之后脚本通过 `.venv/.server-video-service-deps` 标记避免重复安装。未配置 `YOLO_MODEL_PATH` 时服务仍可启动并提供原始视频流，开启 YOLO 会显示模型未就绪提示。
+首次安装需要联网；无模型时 PC 可以看原画面预览，YOLO 分析和告警要求可用、已授权模型。脚本不再启动分发进程；旧 `-WithMediaMtx` / `-Media*` 参数会被拒绝，旧输出环境变量被忽略。
 
-使用工作区内的 RTSP 视频发送端进行完整本机联调：
+本地真实 RTSP 验收可以使用既有的摄像机地址；若使用工作区的文件循环测试源，在工作区根目录单独运行 `tools/rtsp/start_rtsp_video.ps1 -NoAdbReverse`，再在本工程执行 `start-server.ps1 -NoInstall`。测试源作为输入，不是后台的输出分发服务；不要误停共享的摄像机源，也不要打开 Android 直播。
 
-```powershell
-# 终端 1：启动文件循环 RTSP 源，默认地址 rtsp://127.0.0.1:18554/file-test
-cd E:\aiyolo
-.\tools\rtsp\start_rtsp_video.ps1 -NoAdbReverse
-
-# 终端 2：启动后台及独立的输出 MediaMTX
-cd E:\aiyolo\server-video-service
-.\start-server.ps1 -WithMediaMtx
-```
-
-随后打开 `http://127.0.0.1:8080/admin/`，在“视频流管理”中新建流，填写唯一流 ID，并将服务端拉流地址设为 `rtsp://127.0.0.1:18554/file-test`。脚本默认把后台输出 MediaMTX 绑定到 RTSP `19554`、LL-HLS `18888`、WHEP `18889`、WebRTC UDP `18189` 和 API `19997`；所有端口均可用对应的 `-Media*Port` 参数覆盖。按 `Ctrl+C` 停止后台时，脚本会同时停止它启动的 MediaMTX。
-
-Android 模拟器不能使用服务端返回的 `127.0.0.1` 媒体地址，因为该地址在 Android 中指向模拟器自身。联调模拟器时使用 Android Emulator 的宿主机别名，并显式开放媒体监听地址：
-
-```powershell
-.\start-server.ps1 -WithMediaMtx -NoInstall -MediaBindAddress 0.0.0.0 -MediaPublicHost 10.0.2.2
-```
-
-此时 App 的视频服务地址应为 `http://10.0.2.2:8080`，播放接口会返回 `10.0.2.2:18889` 的 WHEP 地址和 `10.0.2.2:18888` 的 LL-HLS 地址。真机联调时将 `MediaPublicHost` 和 App 服务地址改为电脑的局域网 IPv4 地址，例如 `192.168.1.210`；同时只在受信任网络中放行 TCP `8080/18888/18889` 与 UDP `18189`。不传这两个参数时仍默认绑定和发布 `127.0.0.1`，保持仅本机可访问。
+PC 登录后进入明确项目，在“视频流管理”创建安全字符 ID（如 `inspection-001`），配置 RTSP 输入地址并按权限绑定模型。视频墙和流详情通过同源 Cookie 查看实时 JPEG 预览，最高 5fps、宽1280；切模型、撤权、断流与无人预览均需验证。移动端只使用服务地址访问模型与告警功能，不填写媒体地址。
 
 ## 开发任务 Harness
+
+App 全量 APK 升级的自有上传接口、MinIO 版本固定、运行配置和恢复流程见 [APK 上传说明](docs/app-apk-upload.md)。默认关闭。
+第三方公开 HTTPS 链接的登记、逐跳核验和临时文件清理见 [外链 APK 说明](docs/app-apk-external.md)；发布下载和 Android 安装流程仍在后续任务中。
 
 服务器项目有独立的任务驱动开发流程，位于 `harness/`：
 
@@ -61,26 +61,18 @@ python harness/harness.py status
 python harness/harness.py next
 ```
 
-当前主线是 `M07 生产传输协议重构与架构重定位`，`next` 会给出当前可启动的任务。完整任务拆分见 [harness/TASK_BOARD.md](harness/TASK_BOARD.md)，规则见 [harness/README.md](harness/README.md)。
+当前视频范围由 `M34` 与 Android `M101` 跟踪，`next` 会给出可启动的任务。完整任务拆分见 [harness/TASK_BOARD.md](harness/TASK_BOARD.md)，规则见 [harness/README.md](harness/README.md)。
 
 ## 功能
 
-- 每个 `stream_id` 一个独立会话，支持多个客户端订阅。
-- `POST /aiyoloapi/streams/{stream_id}/yolo` 手动开启/关闭 YOLO。
-- YOLO 模型惰性加载，未安装 `ultralytics` 或模型文件不存在时服务仍可输出原始视频。
-- 输入方式：
-  - WebSocket 推送：`/aiyoloapi/streams/{stream_id}/ingest`，每条 binary message 是一张 JPEG/PNG。
-  - 服务端拉流：创建流时传入 `source_url`（RTSP、HTTP、摄像头索引或本地文件）。
-- 输出方式（目标形态，见 ADR-002）：
-  - WebRTC/WHEP：生产播放路径，H.264，由 MediaMTX 提供（默认 `:8889`）。
-  - LL-HLS：WebRTC 打不通时的回退路径（默认 `:8888`）。
-  - RTSP：只给 VLC/ffprobe 等诊断工具（默认 `:8554`），不进 App。
-  - 检测结果 WebSocket 旁路：结构化 JSON，与视频帧解耦。
-- 测试与诊断通道（已实现，非生产输出）：
-  - MJPEG：`GET /aiyoloapi/streams/{stream_id}/mjpeg`，用于管理页预览和自动化测试。
-  - WebSocket JPEG：`/aiyoloapi/streams/{stream_id}/ws`，用于联调探针。
-
-当前代码库已实现输入、YOLO 开关、MJPEG/WebSocket JPEG 诊断输出、H.264 编码、MediaMTX 推流、WHEP/LL-HLS 播放、检测结果旁路和模型管理。
+- 以 `(project_id, stream_id)` 隔离配置、运行会话、模型绑定与告警来源；重启恢复启用流，保留停用流和历史记录。
+- 平台账号、项目空间、成员关系和项目权限持续生效；项目负责人维护源/参数，项目用户按权限使用模型、预览和告警功能。
+- 支持 RTSP/HTTP/文件/摄像头输入，以及已鉴权的服务/设备 ingest；不提供 PC 或 Android 推流界面。
+- YOLO 使用 latest-only 和独立限速；关闭或模型故障不取消 PC 原画面预览。无人观看时分析与正式告警仍运行。
+- PC 同源快照预览/视频墙；不提供 WHEP、LL-HLS、RTSP 分发、通用 MJPEG 或逐帧检测 WebSocket。
+- 告警按规则及冷却去重持久化，PC/移动端从告警功能查询、提示、处置和读取受保护证据。
+- 移动端旧数据审批功能与数据表已移除；旧数据不读取、不迁移。升级到当前版本会删除旧审批相关数据库表。
+- 保留模型资产、转换、签名、项目分配、证据与运行状态；正式链路的联合验收仍由后续任务执行。
 
 ## 快速开始
 
@@ -92,12 +84,14 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
-项目已内置从移动端迁移的 YOLO11n 开发模型 `models/yolo11n.pt`，安装 YOLO 依赖后新建视频流默认使用该模型。部署其他模型时设置 `YOLO_MODEL_PATH`，并安装 `requirements-yolo.txt`：
+模型权重不作为默认部署保证。安装 `requirements-yolo.txt`，通过模型资产登记可用的模型并按项目分配、按流绑定；默认模型路径可用 `YOLO_MODEL_PATH` 设置：
 
 ```powershell
 pip install -r requirements-yolo.txt
 $env:YOLO_MODEL_PATH='E:\models\best.pt'
 ```
+
+服务端统一使用 CPU：`requirements-yolo.txt` 包含 CPU 版 PyTorch/TorchVision 和兼容版本约束，视频推理、按流切换模型、PT 校验、ONNX/LiteRT 导出与 TFLite 复验均不使用显卡。旧 `YOLO_DEVICE=auto` 或 GPU 配置按 CPU 处理。Linux 镜像会执行 GPU 依赖审计与 CPU NMS 冒烟测试；重建和升级说明见 [Docker CPU 运行说明](docs/docker-deployment.md#cpu-only)。
 
 模型转换工具：
 
@@ -110,75 +104,37 @@ python tools/convert_model.py --weights models/yolo11n.pt --format mobile --imgs
 python tools/convert_model.py --weights models/yolo11n.pt --format all --imgsz 640
 ```
 
-`server` 默认生成 ONNX 服务端候选模型；使用 `--server-format pt` 可复制一份可直接加载的 PT，使用 `both` 同时生成两者。`mobile` 使用与移动端一致的 LiteRT INT8 导出链生成 TFLite，`all` 两者都生成；每次转换同时生成带 SHA-256、源权重哈希、输入尺寸和工具平台信息的 Manifest。转换依赖只用于开发机，不进入运行服务镜像。若要在服务端激活 ONNX，需按目标 Python/平台额外安装 `requirements-onnx.txt`；PT 模型无需该运行时。
+`server` 默认生成 ONNX 服务端候选模型；使用 `--server-format pt` 可复制一份可直接加载的 PT，使用 `both` 同时生成两者。`mobile` 使用与移动端一致的 LiteRT INT8 导出链生成 TFLite，`all` 两者都生成；每次转换同时生成带 SHA-256、源权重哈希、输入尺寸和工具平台信息的 Manifest。转换依赖只进入开发机和独立转换器镜像，视频服务镜像仅保留推理与 LiteRT 复验依赖。若要在服务端激活 ONNX，需按目标 Python/平台额外安装 `requirements-onnx.txt`；PT 模型无需该运行时。
 
 注意：Ultralytics 当前 LiteRT 导出器不支持 Windows 原生环境。Windows 上可正常生成 ONNX/PT；要生成移动端 TFLite，请在 WSL2 Ubuntu/Linux x86 或 macOS 中安装同一份 `requirements-convert.txt` 后执行 `mobile` 命令。工具会在不支持的平台返回明确错误，不会伪造 TFLite 产物。
 
-也可以直接使用统一 Docker Compose。仓库只分发转换后的 ONNX/TFLite，默认允许无服务端模型启动：
-
-```bash
-cp .env.example .env
-# 编辑 .env，替换全部 CHANGE_ME
-bash deploy/deploy.sh config
-bash deploy/deploy.sh up
-```
+本地启动不需要 Docker 或 MediaMTX。先完成真实视频源、模型、PostgreSQL、PC 和 Android 的本地验收；本轮静态配置测试不是该验收的替代品。
 
 ## Linux 服务器部署
 
-项目只保留一套根目录 `compose.yml`，CentOS Stream 9、Rocky Linux、AlmaLinux、Ubuntu 等 Linux 服务器共用同一编排。它包含后端、独立模型转换服务和 MediaMTX；PostgreSQL 使用云数据库，通过 `DATABASE_URL` 注入，并启用配置门禁、自动数据库迁移、健康检查、持久卷、只读模型/校准集挂载、非 root 进程、转换资源限制和日志轮转。部署前先阅读 [Docker 部署说明](docs/docker-deployment.md)：
+根目录唯一 `compose.yml` 只编排 `video-service` 与独立 `model-converter`。PostgreSQL 和 MinIO 仍为外部服务；保留四个命名卷、只读模型挂载、非 root/资源限制/健康检查与日志轮转。生产启动禁止自动数据库迁移。
 
-首次启动成功后仍需完成管理员初始化、防火墙、App 地址、转换输入尺寸/校准集和 Android 模型签名；真实部署问题与逐项命令见部署说明的“部署完成后的手动配置清单”。小规格测试服务器的资源补偿措施仅在文档补充说明中列出，不作为通用生产步骤。
+部署步骤见 [Docker 部署说明](docs/docker-deployment.md)，旧部署须先阅读 [分发退役升级/回退](docs/media-retirement-upgrade.md)。`deploy.sh up/pull-up` 需要运维提供已经审阅的 `AIYOLO_LOCAL_ACCEPTANCE_RECORD`；这是人工验收门禁，不代表脚本能判断报告真假。本地验收完成前只做静态校验，不执行构建、启动、推送或集群变更。
 
-服务器上的签名、测试媒体等私有 Compose 覆盖文件由 `deploy/deploy.sh` 自动读取
-`/etc/aiyolo/compose-overrides.list`；不要直接修改仓库中的基础 `compose.yml`。
-
-```bash
-cp .env.example .env
-# 编辑 .env，替换全部 CHANGE_ME
-bash deploy/deploy.sh config
-bash deploy/deploy.sh up
-```
-
-CentOS/RHEL 的 Docker 安装、firewalld 和 SELinux 注意事项单独记录在 `deploy/centos/README.md`，不再维护第二套 Compose。CentOS Linux 7 已停止维护，不作为生产支持目标。
+服务器私有挂载清单仍由 `/etc/aiyolo/compose-overrides.list` 维护。升级前检查它不含旧媒体分发服务、端口和环境变量；不要删除存储卷，也不要用旧镜像回退重新开启移动直播。
 
 ## API 示例
 
-创建一个等待移动端推送的会话：
+先登录并选择有权限的项目，使用明确的项目路由：
 
 ```http
-POST /aiyoloapi/streams
+POST /aiyoloapi/projects/{project_id}/streams
 Content-Type: application/json
 
-{"stream_id":"巡检-001"}
+{"stream_id":"inspection-001","source_url":"rtsp://camera.example/live"}
 ```
 
-开启 YOLO：
+按当前项目授权绑定模型，再向 `/aiyoloapi/projects/{project_id}/streams/inspection-001/yolo` 发送 `{"enabled":true}`。不要在日志中保存完整输入凭据。
 
-```http
-POST /aiyoloapi/streams/巡检-001/yolo
-Content-Type: application/json
+PC 同源登录 Cookie 访问 `GET /aiyoloapi/projects/{project_id}/streams/inspection-001/preview`；有效画面返回 200 JPEG，无帧/断流返回 204，Bearer 请求拒绝。接口定义见 [项目视频契约](docs/project-stream-isolation.md) 和 `/docs`。
 
-{"enabled":true}
-```
-
-移动端将摄像头帧 JPEG 二进制写入 ingest WebSocket；诊断预览可访问：
-
-```text
-http://server:8080/aiyoloapi/streams/巡检-001/mjpeg
-```
-
-生产播放先调用 `GET /aiyoloapi/streams/{stream_id}/playback` 获取 MediaMTX 的 WHEP 地址（H.264），例如 `http://server:8889/巡检-001/whep`；WebRTC 不可用时回退 `http://server:8888/巡检-001/index.m3u8`。接口同时返回 RTSP 诊断地址及各协议当前可用性。
-
-完整接口可打开 `http://server:8080/docs` 查看。
-
-运维指标接口：`GET /aiyoloapi/metrics`，返回进程 CPU/内存、可选 NVIDIA GPU 和各视频流 FPS/延迟/丢帧指标。
-
-## 媒体服务器
-
-分发由 MediaMTX 1.20.1（MIT，Copyright (c) 2019 aler9）承担，已随工作区安装在 `E:\aiyolo\tools\rtsp\mediamtx\1.20.1\`，SHA-256 登记在 `tools/rtsp/installed-tools.json`。`mediamtx.yml` 中已开启：RTSP `:8554`、RTMP、HLS `:8888`（`hlsVariant: lowLatency`、`hlsSegmentCount: 7`、`hlsSegmentDuration: 1s`、`hlsPartDuration: 200ms`）、WebRTC `:8889`（`webrtcLocalUDPAddress: :8189`）、SRT `:8890`。
-
-部署时媒体服务器与本服务一起编排；服务端不假设它已就绪，推流失败要能识别并重建。RTSP 端口只对诊断网络开放。
+旧 `playback/mjpeg` 返回 410，旧 `ws/detections` 关闭 1008；旧媒体鉴权回调无条件 403。兼容字段 `publish_state=retired`、`frames_published=0`、`viewers=0` 不是健康故障，也不是 PC 观看人数。监控应观察输入/处理帧、模型与告警错误。
 
 ## 当前边界
 
-服务端已实现 H.264 编码、MediaMTX 推流、播放地址接口和检测结果 WebSocket 旁路；MJPEG/WebSocket JPEG 仍仅用于管理页和自动化诊断。ADR-002 中的四项未验证假设（libwebrtc 在 API 27 的可用性与体积、公网 NAT 穿透、加入编码后的并发容量、实测端到端延迟）都还没有实测数据，不得当作已验证。生产环境需在前置网关增加鉴权、TLS 和限流。服务不会修改 `mobile-app/`。
+本地真实模型/摄像机、无人预览告警提示、跨项目隔离、API27 及长稳验收仍由 M34-T05/T06、M101 等后续任务承接。本轮不修改 Android，不部署容器。历史 H.264/MediaMTX 性能记录不证明当前系统容量或验收完成。

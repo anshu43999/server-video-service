@@ -146,6 +146,69 @@ class ValidateStateTest(unittest.TestCase):
             harness.safe_repo_path("../outside.md", FIXTURE_ROOT)
 
 
+class DeploymentGateTest(unittest.TestCase):
+    def deployment_state(self) -> dict:
+        state = fixture_state()
+        state["majorTasks"][0]["subtasks"].extend(
+            [
+                {
+                    "id": "M00-T02",
+                    "title": "Pending test",
+                    "status": "pending",
+                    "dependsOn": [],
+                    "acceptance": "Test work must finish first",
+                    "record": "harness/records/M00/M00-T02.md",
+                },
+                {
+                    "id": "M00-T03",
+                    "title": "Deployment task",
+                    "status": "pending",
+                    "dependsOn": [],
+                    "acceptance": "Deployment runs last",
+                    "record": "harness/records/M00/M00-T03.md",
+                },
+            ]
+        )
+        state["executionPolicy"] = {
+            "deploymentTaskIds": ["M00-T03"],
+            "deploymentTaskOrder": ["M00-T03"],
+            "externalTaskStates": [],
+        }
+        return state
+
+    def test_deployment_start_is_blocked_by_pending_test(self) -> None:
+        state = self.deployment_state()
+        with self.assertRaisesRegex(harness.HarnessError, "M00-T02"):
+            harness.command_start(
+                state, argparse.Namespace(task_id="M00-T03", owner="test")
+            )
+
+    def test_deployment_start_is_allowed_after_tests_finish(self) -> None:
+        state = self.deployment_state()
+        state["majorTasks"][0]["subtasks"][1]["status"] = "completed"
+        with mock.patch.object(harness, "save_state"), mock.patch.object(
+            harness, "render_board"
+        ):
+            harness.command_start(
+                state, argparse.Namespace(task_id="M00-T03", owner="test")
+            )
+        self.assertEqual("in_progress", state["majorTasks"][0]["subtasks"][2]["status"])
+
+    def test_deployment_policy_rejects_unknown_task(self) -> None:
+        state = self.deployment_state()
+        state["executionPolicy"]["deploymentTaskIds"] = ["M99-T99"]
+        state["executionPolicy"]["deploymentTaskOrder"] = ["M99-T99"]
+        errors = harness.validate_state(state, FIXTURE_ROOT)
+        self.assertTrue(any("does not exist" in error for error in errors))
+
+    def test_render_marks_deployment_last(self) -> None:
+        state = self.deployment_state()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            board = harness.render_board(state, Path(temp_dir) / "TASK_BOARD.md")
+            content = board.read_text(encoding="utf-8")
+        self.assertIn("部署最后", content)
+
+
 def state_with_retired_second_task(**overrides: object) -> dict:
     state = fixture_state()
     task = {

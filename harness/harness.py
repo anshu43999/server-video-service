@@ -14,6 +14,7 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 HARNESS_ROOT = REPO_ROOT / "harness"
+WORKSPACE_ROOT = REPO_ROOT.parent
 DEFAULT_STATE_PATH = HARNESS_ROOT / "task-state.json"
 VALID_STATUSES = {
     "pending",
@@ -93,6 +94,66 @@ def find_item(
     return item, parents.get(item_id)
 
 
+def execution_policy(state: dict[str, Any]) -> dict[str, Any]:
+    """Return the optional ordering policy for deployment tasks."""
+    return state.get("executionPolicy", {})
+
+
+def deployment_task_ids(state: dict[str, Any]) -> set[str]:
+    policy = execution_policy(state)
+    return set(policy.get("deploymentTaskIds", []))
+
+
+def is_deployment_task(item_id: str, state: dict[str, Any]) -> bool:
+    return item_id in deployment_task_ids(state)
+
+
+def deployment_gate_blockers(
+    state: dict[str, Any], index: dict[str, dict[str, Any]], item_id: str
+) -> list[str]:
+    """Return unresolved local/external work that blocks deployment startup."""
+    policy = execution_policy(state)
+    deployment_ids = deployment_task_ids(state)
+    if item_id not in deployment_ids:
+        return []
+
+    blockers: list[str] = []
+    for candidate_id, candidate in index.items():
+        if "-T" not in candidate_id or candidate_id in deployment_ids:
+            continue
+        if candidate.get("status") not in TERMINAL_STATUSES:
+            blockers.append(candidate_id)
+
+    order = policy.get("deploymentTaskOrder", [])
+    if item_id in order:
+        for predecessor in order[: order.index(item_id)]:
+            predecessor_item = index.get(predecessor)
+            if predecessor_item is not None and predecessor_item.get("status") not in TERMINAL_STATUSES:
+                blockers.append(predecessor)
+
+    for external in policy.get("externalTaskStates", []):
+        project = external.get("project", "external")
+        relative_path = external.get("path")
+        if not relative_path:
+            blockers.append(f"{project}: missing task-state path")
+            continue
+        path = (WORKSPACE_ROOT / relative_path).resolve()
+        try:
+            external_state = json.loads(path.read_text(encoding="utf-8"))
+            external_index, _ = build_index(external_state)
+        except (FileNotFoundError, json.JSONDecodeError, HarnessError) as exc:
+            blockers.append(f"{project}: cannot inspect task state ({exc})")
+            continue
+        unresolved = [
+            f"{project}:{external_id}"
+            for external_id, external_item in external_index.items()
+            if "-T" in external_id
+            and external_item.get("status") not in TERMINAL_STATUSES
+        ]
+        blockers.extend(unresolved)
+    return list(dict.fromkeys(blockers))
+
+
 def is_completed(item_id: str, index: dict[str, dict[str, Any]]) -> bool:
     item = index.get(item_id)
     return item is not None and item.get("status") == "completed"
@@ -165,6 +226,53 @@ def validate_state(
         index, parents = build_index(state)
     except HarnessError as exc:
         return [str(exc)]
+
+    policy = execution_policy(state)
+    if policy:
+        deployment_ids_raw = policy.get("deploymentTaskIds", [])
+        if not isinstance(deployment_ids_raw, list) or any(
+            not isinstance(value, str) for value in deployment_ids_raw
+        ):
+            errors.append("executionPolicy.deploymentTaskIds must be a list of task ids")
+            deployment_ids_raw = []
+        deployment_ids = set(deployment_ids_raw)
+        for deployment_id in deployment_ids_raw:
+            if deployment_id not in index:
+                errors.append(
+                    f"executionPolicy deployment task does not exist: {deployment_id}"
+                )
+            elif deployment_id not in parents:
+                errors.append(
+                    f"executionPolicy deployment task must be a subtask: {deployment_id}"
+                )
+        order = policy.get("deploymentTaskOrder", [])
+        if not isinstance(order, list) or any(not isinstance(value, str) for value in order):
+            errors.append("executionPolicy.deploymentTaskOrder must be a list of task ids")
+            order = []
+        if len(order) != len(set(order)):
+            errors.append("executionPolicy.deploymentTaskOrder contains duplicates")
+        if set(order) != deployment_ids:
+            errors.append(
+                "executionPolicy.deploymentTaskOrder must contain exactly deploymentTaskIds"
+            )
+        external_states = policy.get("externalTaskStates", [])
+        if not isinstance(external_states, list):
+            errors.append("executionPolicy.externalTaskStates must be a list")
+        else:
+            for external in external_states:
+                if not isinstance(external, dict) or not external.get("project") or not external.get("path"):
+                    errors.append(
+                        "executionPolicy.externalTaskStates entries require project and path"
+                    )
+        for deployment_id in deployment_ids:
+            item = index.get(deployment_id)
+            if item is not None and item.get("status") == "in_progress":
+                blockers = deployment_gate_blockers(state, index, deployment_id)
+                if blockers:
+                    errors.append(
+                        f"{deployment_id}: deployment gate bypassed; unresolved: "
+                        + ", ".join(blockers)
+                    )
 
     for item_id, item in index.items():
         if not ID_PATTERN.fullmatch(item_id):
@@ -504,6 +612,7 @@ def render_board(
     state: dict[str, Any], output_path: Path | None = None
 ) -> Path:
     output = output_path or (HARNESS_ROOT / "TASK_BOARD.md")
+    deployment_ids = deployment_task_ids(state)
     lines = [
         "# Harness任务板",
         "",
@@ -515,6 +624,9 @@ def render_board(
         "",
         "> `superseded`表示任务定义因架构或范围变更而作废：不再执行，也不计入完成。",
         "> 终止原因见`harness/records/<大任务>/<任务>.superseded-*.md`。",
+        "",
+        "执行顺序：标记为`部署最后`的任务必须等待服务端和移动端全部测试子任务进入`completed`或`superseded`，并按部署顺序执行。",
+        "部署门禁只约束尚未开始的部署任务；历史已完成部署记录保持不变。",
         "",
     ]
     for major in state.get("majorTasks", []):
@@ -528,15 +640,17 @@ def render_board(
                 + "  ",
                 f"验收文档：`{major['acceptanceDocument']}`",
                 "",
-                "| 状态 | ID | 小任务 | 依赖 | 完成标准 |",
-                "|---|---|---|---|---|",
+                "| 状态 | ID | 小任务 | 依赖 | 执行阶段 | 完成标准 |",
+                "|---|---|---|---|---|---|",
             ]
         )
         for task in major.get("subtasks", []):
             dependencies = ", ".join(task.get("dependsOn", [])) or "无"
+            stage = "部署最后" if task["id"] in deployment_ids else "测试/开发"
             lines.append(
                 f"| {status_symbol(task['status'])} | {task['id']} | "
-                f"{task['title']} | {dependencies} | {task['acceptance']} |"
+                f"{task['title']} | {dependencies} | {stage} | "
+                f"{task['acceptance']} |"
             )
         lines.append("")
     output.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
@@ -566,6 +680,8 @@ def command_next(state: dict[str, Any], _args: argparse.Namespace) -> None:
         task = index[task_id]
         if task.get("status") != "pending":
             continue
+        if deployment_gate_blockers(state, index, task_id):
+            continue
         if unmet_dependencies(task, index):
             continue
         if unmet_dependencies(index[parent_id], index):
@@ -588,6 +704,12 @@ def command_start(state: dict[str, Any], args: argparse.Namespace) -> None:
         )
     index, _ = build_index(state)
     dependency_guard(item, parent_id, index)
+    blockers = deployment_gate_blockers(state, index, args.task_id)
+    if blockers:
+        raise HarnessError(
+            f"{args.task_id} is deployment-last and cannot start before: "
+            + ", ".join(blockers)
+        )
     item["status"] = "in_progress"
     item["owner"] = args.owner
     item["startedAt"] = now_iso()
@@ -785,7 +907,19 @@ def command_render(state: dict[str, Any], _args: argparse.Namespace) -> None:
 
 def command_show(state: dict[str, Any], args: argparse.Namespace) -> None:
     item, parent_id = find_item(state, args.item_id)
-    print(json.dumps({"parent": parent_id, **item}, ensure_ascii=False, indent=2))
+    print(
+        json.dumps(
+            {
+                "parent": parent_id,
+                "executionStage": "deployment-last"
+                if is_deployment_task(item["id"], state)
+                else "test-development",
+                **item,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

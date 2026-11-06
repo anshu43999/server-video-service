@@ -11,15 +11,25 @@ from app.config import settings
 from app.database import AlertDeliveryReceiptRecord, AlertEventRecord, DatabaseManager
 from app.detection import Detection, InferenceResult
 from app.model_parameters import ModelParameterStore
+from postgresql_support import isolated_postgresql_url
 
 
 @unittest.skipUnless(os.environ.get("RUN_POSTGRES_TESTS") == "1", "set RUN_POSTGRES_TESTS=1 for PostgreSQL integration")
 class ServerAlertPostgreSqlTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls._postgres = isolated_postgresql_url("m33_server_alert")
+        cls.database_url = cls._postgres.__enter__()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._postgres.__exit__(None, None, None)
+
     def test_server_event_and_end_state_survive_new_connection(self):
         model = {"modelId": "server-alert-pg", "name": "Server alert", "version": "1.0.0", "labels": ["head"]}
         event_store = None
         event_id = None
-        database = DatabaseManager(settings.database_url)
+        database = DatabaseManager(self.database_url)
         with tempfile.TemporaryDirectory() as temp:
             try:
                 event_store = AlertDispositionStore(database)
@@ -44,17 +54,17 @@ class ServerAlertPostgreSqlTests(unittest.TestCase):
                 self.assertEqual(len(emitted), 1)
                 event_id = emitted[0]["eventId"]
                 self.assertEqual(delivery_ids, [event_id])
-                reopened_database = DatabaseManager(settings.database_url)
+                reopened_database = DatabaseManager(self.database_url)
                 try:
                     reopened = AlertDispositionStore(reopened_database)
-                    self.assertEqual(reopened.get(event_id)["origin"], "server")
+                    self.assertEqual(reopened.get(event_id)["origin"], "SERVER_STREAM")
                 finally:
                     reopened_database.close()
                 runtime.process(
                     source_id="server-camera", captured_at_us=3_001_000_000_000,
                     result=InferenceResult(model_id=model["modelId"], class_names=("head",), provides=("BOX",)),
                 )
-                reopened_database = DatabaseManager(settings.database_url)
+                reopened_database = DatabaseManager(self.database_url)
                 try:
                     self.assertEqual(AlertDispositionStore(reopened_database).get(event_id)["state"], "ENDED")
                 finally:

@@ -1,0 +1,2541 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "CheckPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "app-update/v1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "publisherId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Publisherid",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "channel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Channel",
+          "type": "string"
+        },
+        "deploymentId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "requestId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Requestid",
+          "type": "string"
+        },
+        "installationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Installationid",
+          "type": "string"
+        },
+        "currentVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Currentversioncode",
+          "type": "integer"
+        },
+        "policyRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Policyrevision",
+          "type": "integer"
+        },
+        "issuedAt": {
+          "format": "date-time",
+          "title": "Issuedat",
+          "type": "string"
+        },
+        "authorizationExpiresAt": {
+          "format": "date-time",
+          "title": "Authorizationexpiresat",
+          "type": "string"
+        },
+        "messageType": {
+          "const": "check",
+          "title": "Messagetype",
+          "type": "string"
+        },
+        "result": {
+          "enum": [
+            "up_to_date",
+            "update_available",
+            "no_compatible_release",
+            "client_unsupported",
+            "recovery_pending"
+          ],
+          "title": "Result",
+          "type": "string"
+        },
+        "release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Target"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "compatibility": {
+          "$ref": "#/$defs/Compatibility"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "publisherId",
+        "packageName",
+        "channel",
+        "deploymentId",
+        "requestId",
+        "installationId",
+        "currentVersionCode",
+        "policyRevision",
+        "issuedAt",
+        "authorizationExpiresAt",
+        "messageType",
+        "result",
+        "release",
+        "compatibility"
+      ],
+      "title": "CheckPayload",
+      "type": "object"
+    },
+    "CheckRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "app-update/v1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "publisherId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Publisherid",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "channel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Channel",
+          "type": "string"
+        },
+        "deploymentId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "requestId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Requestid",
+          "type": "string"
+        },
+        "installationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Installationid",
+          "type": "string"
+        },
+        "currentVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Currentversioncode",
+          "type": "integer"
+        },
+        "currentVersionName": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Currentversionname",
+          "type": "string"
+        },
+        "sdkInt": {
+          "maximum": 10000,
+          "minimum": 27,
+          "title": "Sdkint",
+          "type": "integer"
+        },
+        "supportedAbis": {
+          "items": {
+            "enum": [
+              "arm64-v8a",
+              "armeabi-v7a",
+              "x86",
+              "x86_64"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Supportedabis",
+          "type": "array"
+        },
+        "signerSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Signersha256",
+          "type": "string"
+        },
+        "serverContractVersion": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Servercontractversion",
+          "type": "integer"
+        },
+        "lastPolicyRevision": {
+          "maximum": 2147483647,
+          "minimum": 0,
+          "title": "Lastpolicyrevision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "publisherId",
+        "packageName",
+        "channel",
+        "deploymentId",
+        "requestId",
+        "installationId",
+        "currentVersionCode",
+        "currentVersionName",
+        "sdkInt",
+        "supportedAbis",
+        "signerSha256",
+        "serverContractVersion",
+        "lastPolicyRevision"
+      ],
+      "title": "CheckRequest",
+      "type": "object"
+    },
+    "Compatibility": {
+      "additionalProperties": false,
+      "properties": {
+        "minSupportedVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Minsupportedversioncode",
+          "type": "integer"
+        },
+        "onlineAction": {
+          "enum": [
+            "allow",
+            "restrict_declared_capabilities"
+          ],
+          "title": "Onlineaction",
+          "type": "string"
+        },
+        "restrictedCapabilities": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Restrictedcapabilities",
+          "type": "array"
+        },
+        "reasonCode": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reasoncode"
+        }
+      },
+      "required": [
+        "minSupportedVersionCode",
+        "onlineAction",
+        "restrictedCapabilities",
+        "reasonCode"
+      ],
+      "title": "Compatibility",
+      "type": "object"
+    },
+    "ContractRange": {
+      "additionalProperties": false,
+      "properties": {
+        "min": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Min",
+          "type": "integer"
+        },
+        "max": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Max",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "min",
+        "max"
+      ],
+      "title": "ContractRange",
+      "type": "object"
+    },
+    "DownloadPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "app-update/v1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "publisherId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Publisherid",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "channel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Channel",
+          "type": "string"
+        },
+        "deploymentId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "requestId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Requestid",
+          "type": "string"
+        },
+        "installationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Installationid",
+          "type": "string"
+        },
+        "currentVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Currentversioncode",
+          "type": "integer"
+        },
+        "policyRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Policyrevision",
+          "type": "integer"
+        },
+        "issuedAt": {
+          "format": "date-time",
+          "title": "Issuedat",
+          "type": "string"
+        },
+        "authorizationExpiresAt": {
+          "format": "date-time",
+          "title": "Authorizationexpiresat",
+          "type": "string"
+        },
+        "messageType": {
+          "const": "download",
+          "title": "Messagetype",
+          "type": "string"
+        },
+        "releaseId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Releaseid",
+          "type": "string"
+        },
+        "artifactId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Artifactid",
+          "type": "string"
+        },
+        "sourceId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "sourceRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Sourcerevision",
+          "type": "integer"
+        },
+        "versionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Versioncode",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "maximum": 8589934592,
+          "minimum": 1,
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "signerSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Signersha256",
+          "type": "string"
+        },
+        "storageMode": {
+          "enum": [
+            "internal",
+            "external"
+          ],
+          "title": "Storagemode",
+          "type": "string"
+        },
+        "accessMode": {
+          "enum": [
+            "public",
+            "presigned"
+          ],
+          "title": "Accessmode",
+          "type": "string"
+        },
+        "downloadUrl": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Downloadurl",
+          "type": "string"
+        },
+        "downloadUrlExpiresAt": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Downloadurlexpiresat"
+        },
+        "allowedDownloadHosts": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Alloweddownloadhosts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "publisherId",
+        "packageName",
+        "channel",
+        "deploymentId",
+        "requestId",
+        "installationId",
+        "currentVersionCode",
+        "policyRevision",
+        "issuedAt",
+        "authorizationExpiresAt",
+        "messageType",
+        "releaseId",
+        "artifactId",
+        "sourceId",
+        "sourceRevision",
+        "versionCode",
+        "sha256",
+        "sizeBytes",
+        "signerSha256",
+        "storageMode",
+        "accessMode",
+        "downloadUrl",
+        "downloadUrlExpiresAt",
+        "allowedDownloadHosts"
+      ],
+      "title": "DownloadPayload",
+      "type": "object"
+    },
+    "DownloadRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "app-update/v1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "publisherId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Publisherid",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "channel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Channel",
+          "type": "string"
+        },
+        "deploymentId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "requestId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Requestid",
+          "type": "string"
+        },
+        "installationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Installationid",
+          "type": "string"
+        },
+        "currentVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Currentversioncode",
+          "type": "integer"
+        },
+        "expectedPolicyRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Expectedpolicyrevision",
+          "type": "integer"
+        },
+        "releaseId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Releaseid",
+          "type": "string"
+        },
+        "artifactId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Artifactid",
+          "type": "string"
+        },
+        "sourceId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "sourceRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Sourcerevision",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "maximum": 8589934592,
+          "minimum": 1,
+          "title": "Sizebytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "publisherId",
+        "packageName",
+        "channel",
+        "deploymentId",
+        "requestId",
+        "installationId",
+        "currentVersionCode",
+        "expectedPolicyRevision",
+        "releaseId",
+        "artifactId",
+        "sourceId",
+        "sourceRevision",
+        "sha256",
+        "sizeBytes"
+      ],
+      "title": "DownloadRequest",
+      "type": "object"
+    },
+    "ErrorBody": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            "invalid_request",
+            "contract_unsupported",
+            "deployment_not_allowed",
+            "authentication_required",
+            "platform_admin_required",
+            "release_not_found",
+            "release_stopped",
+            "artifact_not_verified",
+            "source_not_verified",
+            "source_revision_conflict",
+            "policy_revision_conflict",
+            "idempotency_conflict",
+            "version_not_increasing",
+            "signer_not_approved",
+            "compatibility_gate_unreachable",
+            "rollback_preview_stale",
+            "recovery_incompatible",
+            "source_unavailable",
+            "rate_limited",
+            "service_unavailable"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "requestId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Requestid",
+          "type": "string"
+        },
+        "retryable": {
+          "title": "Retryable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "requestId",
+        "retryable"
+      ],
+      "title": "ErrorBody",
+      "type": "object"
+    },
+    "ExternalArtifactRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "idempotencyKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Idempotencykey",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "downloadUrl": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Downloadurl",
+          "type": "string"
+        },
+        "allowedDownloadHosts": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Alloweddownloadhosts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "reason",
+        "packageName",
+        "downloadUrl",
+        "allowedDownloadHosts"
+      ],
+      "title": "ExternalArtifactRequest",
+      "type": "object"
+    },
+    "InstallPermissionPayload": {
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "app-update/v1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "publisherId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Publisherid",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "channel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Channel",
+          "type": "string"
+        },
+        "deploymentId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "requestId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Requestid",
+          "type": "string"
+        },
+        "installationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Installationid",
+          "type": "string"
+        },
+        "currentVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Currentversioncode",
+          "type": "integer"
+        },
+        "policyRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Policyrevision",
+          "type": "integer"
+        },
+        "issuedAt": {
+          "format": "date-time",
+          "title": "Issuedat",
+          "type": "string"
+        },
+        "authorizationExpiresAt": {
+          "format": "date-time",
+          "title": "Authorizationexpiresat",
+          "type": "string"
+        },
+        "messageType": {
+          "const": "install_permission",
+          "title": "Messagetype",
+          "type": "string"
+        },
+        "permissionId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Permissionid",
+          "type": "string"
+        },
+        "releaseId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Releaseid",
+          "type": "string"
+        },
+        "artifactId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Artifactid",
+          "type": "string"
+        },
+        "sourceId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "sourceRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Sourcerevision",
+          "type": "integer"
+        },
+        "versionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Versioncode",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "maximum": 8589934592,
+          "minimum": 1,
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "signerSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Signersha256",
+          "type": "string"
+        },
+        "userActionRequired": {
+          "const": true,
+          "title": "Useractionrequired",
+          "type": "boolean"
+        },
+        "offlineInstallAllowed": {
+          "const": false,
+          "title": "Offlineinstallallowed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "publisherId",
+        "packageName",
+        "channel",
+        "deploymentId",
+        "requestId",
+        "installationId",
+        "currentVersionCode",
+        "policyRevision",
+        "issuedAt",
+        "authorizationExpiresAt",
+        "messageType",
+        "permissionId",
+        "releaseId",
+        "artifactId",
+        "sourceId",
+        "sourceRevision",
+        "versionCode",
+        "sha256",
+        "sizeBytes",
+        "signerSha256",
+        "userActionRequired",
+        "offlineInstallAllowed"
+      ],
+      "title": "InstallPermissionPayload",
+      "type": "object"
+    },
+    "InstallPermissionRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "app-update/v1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "publisherId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Publisherid",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "channel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Channel",
+          "type": "string"
+        },
+        "deploymentId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "requestId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Requestid",
+          "type": "string"
+        },
+        "installationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Installationid",
+          "type": "string"
+        },
+        "currentVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Currentversioncode",
+          "type": "integer"
+        },
+        "expectedPolicyRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Expectedpolicyrevision",
+          "type": "integer"
+        },
+        "releaseId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Releaseid",
+          "type": "string"
+        },
+        "artifactId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Artifactid",
+          "type": "string"
+        },
+        "sourceId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "sourceRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Sourcerevision",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "maximum": 8589934592,
+          "minimum": 1,
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "verifiedVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Verifiedversioncode",
+          "type": "integer"
+        },
+        "verifiedSignerSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Verifiedsignersha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "publisherId",
+        "packageName",
+        "channel",
+        "deploymentId",
+        "requestId",
+        "installationId",
+        "currentVersionCode",
+        "expectedPolicyRevision",
+        "releaseId",
+        "artifactId",
+        "sourceId",
+        "sourceRevision",
+        "sha256",
+        "sizeBytes",
+        "verifiedVersionCode",
+        "verifiedSignerSha256"
+      ],
+      "title": "InstallPermissionRequest",
+      "type": "object"
+    },
+    "OperationResult": {
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Operationid",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "accepted",
+            "applied",
+            "failed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "effectivePolicyRevision": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Effectivepolicyrevision"
+        },
+        "recoveryState": {
+          "enum": [
+            "ready",
+            "pending"
+          ],
+          "title": "Recoverystate",
+          "type": "string"
+        },
+        "deviceCounts": {
+          "additionalProperties": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "propertyNames": {
+            "enum": [
+              "discovered",
+              "downloading",
+              "downloaded",
+              "verified",
+              "waiting_install",
+              "installer_opened",
+              "started_pending_health",
+              "healthy",
+              "failed",
+              "canceled",
+              "superseded",
+              "not_discovered",
+              "uncontacted"
+            ]
+          },
+          "title": "Devicecounts",
+          "type": "object"
+        },
+        "lastContactBefore": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Lastcontactbefore"
+        },
+        "errorCode": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Errorcode"
+        }
+      },
+      "required": [
+        "operationId",
+        "status",
+        "effectivePolicyRevision",
+        "recoveryState",
+        "deviceCounts",
+        "lastContactBefore",
+        "errorCode"
+      ],
+      "title": "OperationResult",
+      "type": "object"
+    },
+    "PublishRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "idempotencyKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Idempotencykey",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "contractVersion": {
+          "const": "app-update/v1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "publisherId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Publisherid",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "channel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Channel",
+          "type": "string"
+        },
+        "deploymentId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "expectedPolicyRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Expectedpolicyrevision",
+          "type": "integer"
+        },
+        "releaseId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Releaseid",
+          "type": "string"
+        },
+        "sourceId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "sourceRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Sourcerevision",
+          "type": "integer"
+        },
+        "minSupportedVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Minsupportedversioncode",
+          "type": "integer"
+        },
+        "restrictedCapabilities": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Restrictedcapabilities",
+          "type": "array"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "reason",
+        "contractVersion",
+        "publisherId",
+        "packageName",
+        "channel",
+        "deploymentId",
+        "expectedPolicyRevision",
+        "releaseId",
+        "sourceId",
+        "sourceRevision",
+        "minSupportedVersionCode",
+        "restrictedCapabilities"
+      ],
+      "title": "PublishRequest",
+      "type": "object"
+    },
+    "Receipt": {
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "app-update/v1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "publisherId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Publisherid",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "channel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Channel",
+          "type": "string"
+        },
+        "deploymentId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "requestId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Requestid",
+          "type": "string"
+        },
+        "installationId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Installationid",
+          "type": "string"
+        },
+        "currentVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Currentversioncode",
+          "type": "integer"
+        },
+        "eventId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "attemptId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Attemptid",
+          "type": "string"
+        },
+        "sequence": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "policyRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Policyrevision",
+          "type": "integer"
+        },
+        "releaseId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Releaseid",
+          "type": "string"
+        },
+        "artifactId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Artifactid",
+          "type": "string"
+        },
+        "sourceId": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sourceid"
+        },
+        "sourceRevision": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Sourcerevision"
+        },
+        "stage": {
+          "enum": [
+            "discovered",
+            "downloading",
+            "downloaded",
+            "verified",
+            "waiting_install",
+            "installer_opened",
+            "started_pending_health",
+            "healthy",
+            "failed",
+            "canceled",
+            "superseded"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "fromVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Fromversioncode",
+          "type": "integer"
+        },
+        "targetVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Targetversioncode",
+          "type": "integer"
+        },
+        "observedVersionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Observedversioncode",
+          "type": "integer"
+        },
+        "occurredAt": {
+          "format": "date-time",
+          "title": "Occurredat",
+          "type": "string"
+        },
+        "errorCode": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Errorcode"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "publisherId",
+        "packageName",
+        "channel",
+        "deploymentId",
+        "requestId",
+        "installationId",
+        "currentVersionCode",
+        "eventId",
+        "attemptId",
+        "sequence",
+        "policyRevision",
+        "releaseId",
+        "artifactId",
+        "sourceId",
+        "sourceRevision",
+        "stage",
+        "fromVersionCode",
+        "targetVersionCode",
+        "observedVersionCode",
+        "occurredAt",
+        "errorCode"
+      ],
+      "title": "Receipt",
+      "type": "object"
+    },
+    "ReceiptResult": {
+      "additionalProperties": false,
+      "properties": {
+        "eventId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Eventid",
+          "type": "string"
+        },
+        "accepted": {
+          "const": true,
+          "title": "Accepted",
+          "type": "boolean"
+        },
+        "duplicate": {
+          "title": "Duplicate",
+          "type": "boolean"
+        },
+        "receivedAt": {
+          "format": "date-time",
+          "title": "Receivedat",
+          "type": "string"
+        }
+      },
+      "required": [
+        "eventId",
+        "accepted",
+        "duplicate",
+        "receivedAt"
+      ],
+      "title": "ReceiptResult",
+      "type": "object"
+    },
+    "ReleaseDraftRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "idempotencyKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Idempotencykey",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "contractVersion": {
+          "const": "app-update/v1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "publisherId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Publisherid",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "channel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Channel",
+          "type": "string"
+        },
+        "deploymentId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "artifactId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Artifactid",
+          "type": "string"
+        },
+        "importance": {
+          "enum": [
+            "normal",
+            "important"
+          ],
+          "title": "Importance",
+          "type": "string"
+        },
+        "notes": {
+          "items": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Notes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "reason",
+        "contractVersion",
+        "publisherId",
+        "packageName",
+        "channel",
+        "deploymentId",
+        "artifactId",
+        "importance",
+        "notes"
+      ],
+      "title": "ReleaseDraftRequest",
+      "type": "object"
+    },
+    "ResourcePage": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ResourceView"
+          },
+          "maxItems": 100,
+          "title": "Items",
+          "type": "array"
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Nextcursor"
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ],
+      "title": "ResourcePage",
+      "type": "object"
+    },
+    "ResourceResult": {
+      "additionalProperties": false,
+      "properties": {
+        "resourceId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Resourceid",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "verifying",
+            "verified",
+            "failed",
+            "draft",
+            "published",
+            "stopped"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "revision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "resourceId",
+        "state",
+        "revision"
+      ],
+      "title": "ResourceResult",
+      "type": "object"
+    },
+    "ResourceView": {
+      "additionalProperties": false,
+      "properties": {
+        "resourceId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Resourceid",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "verifying",
+            "verified",
+            "failed",
+            "draft",
+            "published",
+            "stopped"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "revision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "resourceType": {
+          "enum": [
+            "artifact",
+            "source",
+            "release",
+            "policy",
+            "audit"
+          ],
+          "title": "Resourcetype",
+          "type": "string"
+        },
+        "details": {
+          "additionalProperties": true,
+          "title": "Details",
+          "type": "object"
+        }
+      },
+      "required": [
+        "resourceId",
+        "state",
+        "revision",
+        "resourceType",
+        "details"
+      ],
+      "title": "ResourceView",
+      "type": "object"
+    },
+    "RollbackPreview": {
+      "additionalProperties": false,
+      "properties": {
+        "expectedPolicyRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Expectedpolicyrevision",
+          "type": "integer"
+        },
+        "previewFingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Previewfingerprint",
+          "type": "string"
+        },
+        "expiresAt": {
+          "format": "date-time",
+          "title": "Expiresat",
+          "type": "string"
+        },
+        "ready": {
+          "title": "Ready",
+          "type": "boolean"
+        },
+        "blockers": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Blockers",
+          "type": "array"
+        },
+        "contactedDevices": {
+          "minimum": 0,
+          "title": "Contacteddevices",
+          "type": "integer"
+        },
+        "affectedDevices": {
+          "minimum": 0,
+          "title": "Affecteddevices",
+          "type": "integer"
+        },
+        "recoveryState": {
+          "enum": [
+            "ready",
+            "pending"
+          ],
+          "title": "Recoverystate",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expectedPolicyRevision",
+        "previewFingerprint",
+        "expiresAt",
+        "ready",
+        "blockers",
+        "contactedDevices",
+        "affectedDevices",
+        "recoveryState"
+      ],
+      "title": "RollbackPreview",
+      "type": "object"
+    },
+    "RollbackPreviewRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "app-update/v1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "publisherId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Publisherid",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "channel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Channel",
+          "type": "string"
+        },
+        "deploymentId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "expectedPolicyRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Expectedpolicyrevision",
+          "type": "integer"
+        },
+        "affectedReleaseIds": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Affectedreleaseids",
+          "type": "array"
+        },
+        "stableReleaseId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Stablereleaseid",
+          "type": "string"
+        },
+        "recoveryReleaseId": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Recoveryreleaseid"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "publisherId",
+        "packageName",
+        "channel",
+        "deploymentId",
+        "expectedPolicyRevision",
+        "affectedReleaseIds",
+        "stableReleaseId",
+        "recoveryReleaseId"
+      ],
+      "title": "RollbackPreviewRequest",
+      "type": "object"
+    },
+    "RollbackRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "idempotencyKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Idempotencykey",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "contractVersion": {
+          "const": "app-update/v1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "publisherId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Publisherid",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "channel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Channel",
+          "type": "string"
+        },
+        "deploymentId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "expectedPolicyRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Expectedpolicyrevision",
+          "type": "integer"
+        },
+        "affectedReleaseIds": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Affectedreleaseids",
+          "type": "array"
+        },
+        "stableReleaseId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Stablereleaseid",
+          "type": "string"
+        },
+        "recoveryReleaseId": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Recoveryreleaseid"
+        },
+        "previewFingerprint": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Previewfingerprint",
+          "type": "string"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "reason",
+        "contractVersion",
+        "publisherId",
+        "packageName",
+        "channel",
+        "deploymentId",
+        "expectedPolicyRevision",
+        "affectedReleaseIds",
+        "stableReleaseId",
+        "recoveryReleaseId",
+        "previewFingerprint"
+      ],
+      "title": "RollbackRequest",
+      "type": "object"
+    },
+    "SignedEnvelope": {
+      "additionalProperties": false,
+      "properties": {
+        "keyId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Keyid",
+          "type": "string"
+        },
+        "payloadBase64Url": {
+          "maxLength": 349526,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Payloadbase64Url",
+          "type": "string"
+        },
+        "signatureBase64Url": {
+          "maxLength": 86,
+          "minLength": 86,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Signaturebase64Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "keyId",
+        "payloadBase64Url",
+        "signatureBase64Url"
+      ],
+      "title": "SignedEnvelope",
+      "type": "object"
+    },
+    "SourceRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "idempotencyKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Idempotencykey",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "downloadUrl": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Downloadurl",
+          "type": "string"
+        },
+        "allowedDownloadHosts": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Alloweddownloadhosts",
+          "type": "array"
+        },
+        "expectedArtifactSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Expectedartifactsha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "reason",
+        "packageName",
+        "downloadUrl",
+        "allowedDownloadHosts",
+        "expectedArtifactSha256"
+      ],
+      "title": "SourceRequest",
+      "type": "object"
+    },
+    "StopRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "idempotencyKey": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Idempotencykey",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "contractVersion": {
+          "const": "app-update/v1",
+          "title": "Contractversion",
+          "type": "string"
+        },
+        "publisherId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Publisherid",
+          "type": "string"
+        },
+        "packageName": {
+          "const": "com.aiyolo.inspection",
+          "title": "Packagename",
+          "type": "string"
+        },
+        "channel": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Channel",
+          "type": "string"
+        },
+        "deploymentId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Deploymentid",
+          "type": "string"
+        },
+        "expectedPolicyRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Expectedpolicyrevision",
+          "type": "integer"
+        },
+        "releaseId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Releaseid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "idempotencyKey",
+        "reason",
+        "contractVersion",
+        "publisherId",
+        "packageName",
+        "channel",
+        "deploymentId",
+        "expectedPolicyRevision",
+        "releaseId"
+      ],
+      "title": "StopRequest",
+      "type": "object"
+    },
+    "Target": {
+      "additionalProperties": false,
+      "properties": {
+        "releaseId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Releaseid",
+          "type": "string"
+        },
+        "artifactId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Artifactid",
+          "type": "string"
+        },
+        "sourceId": {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+          "title": "Sourceid",
+          "type": "string"
+        },
+        "sourceRevision": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Sourcerevision",
+          "type": "integer"
+        },
+        "versionCode": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Versioncode",
+          "type": "integer"
+        },
+        "versionName": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Versionname",
+          "type": "string"
+        },
+        "sizeBytes": {
+          "maximum": 8589934592,
+          "minimum": 1,
+          "title": "Sizebytes",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "signerSha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Signersha256",
+          "type": "string"
+        },
+        "minSdk": {
+          "maximum": 10000,
+          "minimum": 27,
+          "title": "Minsdk",
+          "type": "integer"
+        },
+        "abis": {
+          "items": {
+            "enum": [
+              "arm64-v8a",
+              "armeabi-v7a",
+              "x86",
+              "x86_64"
+            ],
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Abis",
+          "type": "array"
+        },
+        "serverContractRange": {
+          "$ref": "#/$defs/ContractRange"
+        },
+        "dataSchemaVersion": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Dataschemaversion",
+          "type": "integer"
+        },
+        "readableDataSchemaRange": {
+          "$ref": "#/$defs/ContractRange"
+        },
+        "publishedAt": {
+          "format": "date-time",
+          "title": "Publishedat",
+          "type": "string"
+        },
+        "notes": {
+          "items": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Notes",
+          "type": "array"
+        },
+        "importance": {
+          "enum": [
+            "normal",
+            "important"
+          ],
+          "title": "Importance",
+          "type": "string"
+        },
+        "releasePurpose": {
+          "enum": [
+            "normal",
+            "recovery"
+          ],
+          "title": "Releasepurpose",
+          "type": "string"
+        },
+        "rollbackOperationId": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Rollbackoperationid"
+        },
+        "restoresBehaviorFromReleaseId": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Restoresbehaviorfromreleaseid"
+        },
+        "affectedReleaseIds": {
+          "items": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Affectedreleaseids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "releaseId",
+        "artifactId",
+        "sourceId",
+        "sourceRevision",
+        "versionCode",
+        "versionName",
+        "sizeBytes",
+        "sha256",
+        "signerSha256",
+        "minSdk",
+        "abis",
+        "serverContractRange",
+        "dataSchemaVersion",
+        "readableDataSchemaRange",
+        "publishedAt",
+        "notes",
+        "importance",
+        "releasePurpose",
+        "rollbackOperationId",
+        "restoresBehaviorFromReleaseId",
+        "affectedReleaseIds"
+      ],
+      "title": "Target",
+      "type": "object"
+    }
+  },
+  "title": "app-update/v1",
+  "x-api-prefix": "/aiyoloapi",
+  "x-api": [
+    {
+      "method": "POST",
+      "path": "/aiyoloapi/mobile/app-updates/check",
+      "request": "CheckRequest",
+      "response": "CheckPayload",
+      "auth": "deployment"
+    },
+    {
+      "method": "POST",
+      "path": "/aiyoloapi/mobile/app-updates/{releaseId}/download-ticket",
+      "request": "DownloadRequest",
+      "response": "DownloadPayload",
+      "auth": "deployment"
+    },
+    {
+      "method": "POST",
+      "path": "/aiyoloapi/mobile/app-updates/{releaseId}/install-permission",
+      "request": "InstallPermissionRequest",
+      "response": "InstallPermissionPayload",
+      "auth": "deployment"
+    },
+    {
+      "method": "POST",
+      "path": "/aiyoloapi/mobile/app-updates/receipts",
+      "request": "Receipt",
+      "response": "ReceiptResult",
+      "auth": "deployment"
+    },
+    {
+      "method": "POST",
+      "path": "/aiyoloapi/admin/app-updates/artifacts/upload",
+      "request": "multipart:apk,idempotencyKey,reason",
+      "response": "ResourceResult",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "POST",
+      "path": "/aiyoloapi/admin/app-updates/external-artifacts",
+      "request": "ExternalArtifactRequest",
+      "response": "ResourceResult",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "POST",
+      "path": "/aiyoloapi/admin/app-updates/artifacts/{artifactId}/download-sources",
+      "request": "SourceRequest",
+      "response": "ResourceResult",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "POST",
+      "path": "/aiyoloapi/admin/app-updates/releases",
+      "request": "ReleaseDraftRequest",
+      "response": "ResourceResult",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "POST",
+      "path": "/aiyoloapi/admin/app-updates/releases/{releaseId}/publish",
+      "request": "PublishRequest",
+      "response": "ResourceResult",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "POST",
+      "path": "/aiyoloapi/admin/app-updates/releases/{releaseId}/stop",
+      "request": "StopRequest",
+      "response": "ResourceResult",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "POST",
+      "path": "/aiyoloapi/admin/app-updates/rollback-preview",
+      "request": "RollbackPreviewRequest",
+      "response": "RollbackPreview",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "POST",
+      "path": "/aiyoloapi/admin/app-updates/rollbacks",
+      "request": "RollbackRequest",
+      "response": "OperationResult",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "GET",
+      "path": "/aiyoloapi/admin/app-updates/rollbacks/{operationId}",
+      "request": null,
+      "response": "OperationResult",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "GET",
+      "path": "/aiyoloapi/admin/app-updates/artifacts",
+      "request": null,
+      "response": "ResourcePage",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "GET",
+      "path": "/aiyoloapi/admin/app-updates/artifacts/{artifactId}",
+      "request": null,
+      "response": "ResourceView",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "GET",
+      "path": "/aiyoloapi/admin/app-updates/releases",
+      "request": null,
+      "response": "ResourcePage",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "GET",
+      "path": "/aiyoloapi/admin/app-updates/releases/{releaseId}",
+      "request": null,
+      "response": "ResourceView",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "GET",
+      "path": "/aiyoloapi/admin/app-updates/artifacts/{artifactId}/download-sources",
+      "request": null,
+      "response": "ResourcePage",
+      "auth": "PLATFORM_ADMIN"
+    },
+    {
+      "method": "GET",
+      "path": "/aiyoloapi/admin/app-updates/audit",
+      "request": null,
+      "response": "ResourcePage",
+      "auth": "PLATFORM_ADMIN"
+    }
+  ],
+  "x-errors": {
+    "invalid_request": {
+      "status": 422,
+      "retryable": false
+    },
+    "contract_unsupported": {
+      "status": 426,
+      "retryable": false
+    },
+    "deployment_not_allowed": {
+      "status": 403,
+      "retryable": false
+    },
+    "authentication_required": {
+      "status": 401,
+      "retryable": false
+    },
+    "platform_admin_required": {
+      "status": 403,
+      "retryable": false
+    },
+    "release_not_found": {
+      "status": 404,
+      "retryable": false
+    },
+    "release_stopped": {
+      "status": 410,
+      "retryable": false
+    },
+    "artifact_not_verified": {
+      "status": 409,
+      "retryable": false
+    },
+    "source_not_verified": {
+      "status": 409,
+      "retryable": false
+    },
+    "source_revision_conflict": {
+      "status": 409,
+      "retryable": true
+    },
+    "policy_revision_conflict": {
+      "status": 409,
+      "retryable": true
+    },
+    "idempotency_conflict": {
+      "status": 409,
+      "retryable": false
+    },
+    "version_not_increasing": {
+      "status": 409,
+      "retryable": false
+    },
+    "signer_not_approved": {
+      "status": 409,
+      "retryable": false
+    },
+    "compatibility_gate_unreachable": {
+      "status": 409,
+      "retryable": false
+    },
+    "rollback_preview_stale": {
+      "status": 409,
+      "retryable": true
+    },
+    "recovery_incompatible": {
+      "status": 409,
+      "retryable": false
+    },
+    "source_unavailable": {
+      "status": 503,
+      "retryable": true
+    },
+    "rate_limited": {
+      "status": 429,
+      "retryable": true
+    },
+    "service_unavailable": {
+      "status": 503,
+      "retryable": true
+    }
+  }
+}

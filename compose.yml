@@ -7,39 +7,6 @@ x-logging: &default-logging
     max-file: "5"
 
 services:
-  mediamtx:
-    image: bluenviron/mediamtx:1.20.1
-    command: ["/mediamtx.yml"]
-    environment:
-      MTX_WEBRTCADDITIONALHOSTS: "${MEDIA_PUBLIC_HOST:?Set MEDIA_PUBLIC_HOST to the server DNS name or public IP}"
-      MTX_WEBRTCALLOWORIGINS: "${MEDIA_ALLOW_ORIGINS:-*}"
-      MTX_HLSALLOWORIGINS: "${MEDIA_ALLOW_ORIGINS:-*}"
-    ports:
-      - "${MEDIA_BIND_ADDRESS:-0.0.0.0}:${MEDIA_WHEP_PORT:-8889}:8889"
-      - "${MEDIA_BIND_ADDRESS:-0.0.0.0}:${MEDIA_WEBRTC_UDP_PORT:-8189}:8189/udp"
-      - "${MEDIA_BIND_ADDRESS:-0.0.0.0}:${MEDIA_LLHLS_PORT:-8888}:8888"
-      - "${DIAGNOSTIC_BIND_ADDRESS:-127.0.0.1}:${DIAGNOSTIC_RTSP_PORT:-8554}:8554"
-      - "${SRT_BIND_ADDRESS:-127.0.0.1}:${SRT_PORT:-8890}:8890/udp"
-    expose:
-      - "9997"
-    volumes:
-      - "${MEDIAMTX_CONFIG:-./deploy/mediamtx/mediamtx.yml.example}:/mediamtx.yml:ro,Z"
-    healthcheck:
-      test: ["CMD", "/mediamtx", "--version"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
-    restart: unless-stopped
-    stop_grace_period: 20s
-    pids_limit: "${MEDIAMTX_PIDS_LIMIT:-256}"
-    security_opt:
-      - no-new-privileges:true
-    logging: *default-logging
-    networks:
-      - control
-      - media
-
   model-converter:
     image: "${MODEL_CONVERTER_IMAGE:-aiyolo-model-converter:local}"
     build:
@@ -89,7 +56,7 @@ services:
       PORT: "8080"
       DATABASE_URL: "${DATABASE_URL:?Set DATABASE_URL in the production env file}"
       DATABASE_CONNECT_TIMEOUT_SECONDS: "${DATABASE_CONNECT_TIMEOUT_SECONDS:-10}"
-      RUN_DATABASE_MIGRATIONS: "${RUN_DATABASE_MIGRATIONS:-true}"
+      RUN_DATABASE_MIGRATIONS: "${RUN_DATABASE_MIGRATIONS:-false}"
       AUTH_SESSION_DAYS: "${AUTH_SESSION_DAYS:-30}"
       MINIO_ENDPOINT: "${MINIO_ENDPOINT:?Set MINIO_ENDPOINT in the production env file}"
       MINIO_ACCESS_KEY: "${MINIO_ACCESS_KEY:?Set MINIO_ACCESS_KEY in the production env file}"
@@ -103,20 +70,13 @@ services:
       MODEL_SEED_PATH: /models
       REQUIRE_YOLO_MODEL: "${REQUIRE_YOLO_MODEL:-false}"
       YOLO_CONFIDENCE: "${YOLO_CONFIDENCE:-0.25}"
+      ADMIN_FRONTEND_MODE: "${ADMIN_FRONTEND_MODE:-vue}"
       YOLO_IMGSZ: "${YOLO_IMGSZ:-640}"
-      YOLO_DEVICE: "${YOLO_DEVICE:-auto}"
+      YOLO_DEVICE: "cpu"
       YOLO_CLASSES: "${YOLO_CLASSES:-}"
       MAX_FPS: "${MAX_FPS:-20}"
       MAX_INPUT_FPS: "${MAX_INPUT_FPS:-30}"
-      MAX_OUTPUT_SUBSCRIBERS: "${MAX_OUTPUT_SUBSCRIBERS:-4}"
-      RTSP_TRANSPORT: tcp
-      MEDIAMTX_ENABLED: "true"
-      MEDIAMTX_RTSP_URL: "rtsp://mediamtx:8554"
-      MEDIAMTX_API_URL: "http://mediamtx:9997"
-      MEDIAMTX_WHEP_URL: "${MEDIA_PUBLIC_SCHEME:-http}://${MEDIA_PUBLIC_HOST}:${MEDIA_WHEP_PORT:-8889}"
-      MEDIAMTX_LLHLS_URL: "${MEDIA_PUBLIC_SCHEME:-http}://${MEDIA_PUBLIC_HOST}:${MEDIA_LLHLS_PORT:-8888}"
-      MEDIAMTX_HTTP_SCHEME: "${MEDIA_PUBLIC_SCHEME:-http}"
-      MEDIAMTX_VIDEO_ENCODER: "${MEDIAMTX_VIDEO_ENCODER:-auto}"
+      RTSP_TRANSPORT: "${RTSP_TRANSPORT:-tcp}"
       MODEL_SIGNING_KEY_ID: "${MODEL_SIGNING_KEY_ID:-}"
       MODEL_SIGNING_PRIVATE_KEY_PATH: "${MODEL_SIGNING_PRIVATE_KEY_PATH:-}"
       AIYOLO_REMOTE_CONVERSION_TOKEN: "${CONVERTER_TOKEN:?Set CONVERTER_TOKEN in the production env file}"
@@ -151,8 +111,6 @@ services:
     security_opt:
       - no-new-privileges:true
     depends_on:
-      mediamtx:
-        condition: service_healthy
       model-converter:
         condition: service_healthy
     restart: unless-stopped
@@ -171,4 +129,6 @@ volumes:
 networks:
   control:
     internal: true
+  # Keep this existing network name for upgrade compatibility. It provides
+  # outbound camera/managed PostgreSQL/MinIO access, not media distribution.
   media:

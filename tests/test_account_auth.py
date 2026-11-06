@@ -79,8 +79,11 @@ class AccountAuthApiTests(unittest.TestCase):
         self.assertEqual(created.status_code, 200)
         login = self.client.post("/aiyoloapi/auth/login", json={"username": "inspector", "password": "operator-pass-1"})
         mobile = {"X-Video-Service-Token": login.json()["accessToken"]}
-        self.assertEqual(self.client.get("/aiyoloapi/models", headers=mobile).status_code, 200)
-        self.assertEqual(self.client.get("/aiyoloapi/dashboard/stats", headers=mobile).status_code, 401)
+        self.assertEqual(self.client.get("/aiyoloapi/models", headers=mobile).status_code, 400)
+        self.assertEqual(self.client.get("/aiyoloapi/dashboard/stats", headers=mobile).status_code, 400)
+        self.assertEqual(self.client.get("/aiyoloapi/dashboard/stats", headers={
+            **mobile, "X-Project-Id": "00000000-0000-0000-0000-000000000001",
+        }).status_code, 404)
         self.assertEqual(self.client.get("/aiyoloapi/auth/users", headers=mobile).status_code, 401)
 
     def test_password_and_session_are_not_returned_by_user_listing(self):
@@ -100,7 +103,7 @@ class AccountAuthApiTests(unittest.TestCase):
         token = setup.json()["accessToken"]
 
         with database.session() as session:
-            account = session.get(AccountRecord, "admin")
+            account = session.query(AccountRecord).filter_by(username="admin").one()
             sessions = session.query(AccountSessionRecord).all()
 
         self.assertIsNotNone(account)

@@ -1,5 +1,8 @@
 # 生产安全与流量保护
 
+多项目版本的部署停写、恢复、密钥/设备凭据轮换、审计留存及值班告警门禁见
+[M33-T17 发布与回滚手册](m33-t17-release-runbook.md)。隔离演练不构成线上发布授权。
+
 ## TLS / HTTPS / WSS
 
 推荐由 Nginx、Caddy 或云负载均衡终止 TLS，再将内网 HTTP/WebSocket 转发到 Uvicorn：
@@ -8,13 +11,13 @@
 App -- HTTPS/WSS --> TLS reverse proxy -- HTTP/WS --> video-service:8080
 ```
 
-反向代理必须转发 `Upgrade`、`Connection` 和鉴权请求头；公网不应直接暴露 Uvicorn 端口。管理页面使用 HTTPS 打开时，MJPEG 和 WebSocket 地址也必须使用 HTTPS/WSS，避免浏览器 mixed content。
+反向代理必须转发 `Upgrade`、`Connection` 和鉴权请求头；公网不应直接暴露 Uvicorn 端口。管理页面使用 HTTPS 打开时，PC同源预览和告警 WebSocket 也必须使用 HTTPS/WSS，避免浏览器 mixed content。
 
 ## 应用层保护
 
 - `MAX_INPUT_FPS` 默认 30，超过后丢弃当前帧并记录错误；
 - 单帧消息最大 5 MiB，最大有效尺寸 1920×1080；
-- `MAX_OUTPUT_SUBSCRIBERS` 默认 4，超过后 HTTP 返回 429 或 WebSocket 关闭码 4429；
+- PC预览最高5fps、宽1280、有界快照缓存；网关仍需限制请求速率。`MAX_OUTPUT_SUBSCRIBERS` 已移除；
 - 生产环境使用账号登录签发的动态 Session；不得设置开发专用的 `ADMIN_TOKEN`、`MOBILE_TOKEN`，并通过网关限制来源 IP、请求速率和连接时长；
 - 不把令牌放在 URL，日志中不得输出令牌和完整 RTSP 凭据。
 
@@ -64,20 +67,12 @@ location /aiyoloapi/ {
 
 上线前仍需使用真实证书、访问控制和压测结果替换示例值。
 
-## 媒体服务器端口与暴露面
+## PC预览与退役分发边界
 
-[ADR-002](adr-002-production-transport.md) 之后，部署拓扑增加 MediaMTX 进程，暴露面随之扩大：
+现行决策为 [ADR-003](adr-003-analysis-alerts-only.md)。PC预览仅接受同源账号 Cookie 和当前项目 `project.streams.view`，拒绝 Bearer（即使同时存在 Cookie）及跨站请求，编码后复验权限。返回 `Cache-Control: no-store, private`；网关不得缓存画面或把其他项目内容混用。合法账号在浏览器访问仍受相同权限约束，不宣称按物理设备类型隔离。
 
-| 端口 | 协议 | 暴露策略 |
-|---|---|---|
-| `:8889` | WebRTC / WHEP（HTTP 信令） | 生产播放入口，对外时经网关鉴权并使用 HTTPS |
-| `:8189/udp` | WebRTC 媒体（`webrtcLocalUDPAddress`） | 必须放通，否则只能走 LL-HLS 回退 |
-| `:8888` | LL-HLS | 回退入口，同样经网关鉴权并使用 HTTPS |
-| `:8554` | RTSP | **只对诊断网络开放，不得暴露到公网** |
-| `:8890` | SRT | 默认不对外；仅在启用服务端之间专用链路时开放 |
-| `:1935` | RTMP | 默认不对外 |
+旧媒体分发端口全部移出部署；不再配置播放 CORS、媒体 Token、STUN/TURN。旧 `/internal/media/authorize` 是无条件403墓碑，不查账号/项目/存储，不存在内部发布例外。旧 HTTP 播放410，逐帧输出/检测 WS1008，不能通过旧环境变量重新开启。
 
-- 控制面（`:8080`）与媒体面（`:8888`/`:8889`）分属不同暴露策略，不要用同一条规则放通；
-- 管理页面使用 HTTPS 打开时，WHEP 与 LL-HLS 地址必须同为 HTTPS，避免 mixed content；
-- 公网部署需要 STUN，可能需要 TURN；TURN 会把媒体带宽成本转回服务端，必须先核算再启用（ADR-002 未验证项 2）；
-- 媒体服务器的配置文件、证书（`auto.crt`/`auto.key`）和推流凭据不得提交仓库。
+输入 RTSP 解码、已授权 ingest、告警 WS、MinIO受保护证据（含已存短视频）、模型下载仍保留。日志/指标不得输出 RTSP 完整凭据、会话、模型权重或证据原图。监控输入、推理和告警持久化/投递状态；兼容发布指标的 `retired/0` 不应触发发布器故障告警。
+
+旧容器和防火墙不会因 YAML 删除自动消失；经本地验收和维护批准后按 [升级手册](media-retirement-upgrade.md) 精确清理，不影响业务卷、数据库和输入源。

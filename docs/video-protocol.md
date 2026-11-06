@@ -1,183 +1,78 @@
-# 服务端视频流联调协议
+# 服务端视频输入、PC预览与分析告警协议
 
-版本：`v2`（输出面按 [ADR-002](adr-002-production-transport.md) 重构；`v1` 的控制面语义保持不变）
-状态：生效
-适用对象：移动端视频推送客户端、移动端播放客户端、服务端视频处理服务、管理控制台
-历史：`v1`（M01-T01）冻结于 2026-09-02，输出面为 MJPEG/WebSocket JPEG
+版本：v3，2026-10-15，现行决策 [ADR-003](adr-003-analysis-alerts-only.md)。v1/v2中的移动推流/收流、WHEP/LL-HLS/RTSP输出、MJPEG和逐帧检测订阅已退役。视频输入、PC实时预览、YOLO与正式告警保留，不改变移动端图片/相机本地分析。
 
-## 1. 协议范围
+## 1. 身份、项目与权限
 
-本协议覆盖视频流链路和运行时控制，不改变移动端图片分析和本地相机分析。移动端在推流侧负责采集、编码、推送；服务端负责接收、可选 YOLO 推理、可选叠加、H.264 编码和分发；移动端在播放侧只负责播放，**不在接收到的远程流上做推理**。
+所有新业务接口使用 `/aiyoloapi/projects/{project_id}` 前缀。平台超级管理员显式进入项目留审计；项目负责人维护源/参数/模型绑定；项目用户按能力查看、使用模型、预览及消费告警。权限与生命周期以 [项目授权](project-authorization-kernel.md)、[视频隔离](project-stream-isolation.md)、[服务主体](project-service-principals.md) 为准。
 
-输入面仍使用 JPEG 帧。输出面从 v1 的 JPEG 序列改为 **H.264，由媒体服务器（MediaMTX）分发**：WebRTC/WHEP 是生产播放路径，LL-HLS 是回退，RTSP 只给诊断工具，MJPEG/WebSocket JPEG 降级为测试与诊断通道。检测结果不再只烧进画面，而是以 JSON 走独立 WebSocket 旁路。
+控制API继续接受对应权限的账号会话；PC预览只接受同源Session Cookie，拒绝Bearer（包括同时带Cookie）、旧静态Token、服务凭据和跨站读取。不要用客户端或物理设备名称当安全边界。旧非项目路由仅用于受控迁移，不能默选默认项目。
 
-`stream_id`、会话状态和 YOLO 控制语义在 v1 与 v2 之间保持一致。
+## 2. 控制面
 
-## 2. 连接与鉴权
+下表路径均加项目根前缀：
 
-- HTTP 基础地址（控制面）：`http(s)://<server-host>:8080`
-- WebSocket 基础地址（推流与元数据）：`ws(s)://<server-host>:8080`
-- 媒体基础地址（播放）：WHEP `http(s)://<media-host>:8889`、LL-HLS `http(s)://<media-host>:8888`、RTSP `rtsp://<media-host>:8554`
-- 管理员与移动端先通过账号登录获得动态 Session；管理端可使用 HttpOnly Cookie 或 `Authorization: Bearer <access-token>`。
-- 移动端可通过 `Authorization: Bearer <access-token>`，也可为兼容既有客户端通过 `X-Video-Service-Token: <access-token>` 传递同一个动态 Session。
-- `ADMIN_TOKEN`、`MOBILE_TOKEN` 只允许在 `DEPLOYMENT_ENV=development` 的本机测试中作为静态便捷凭据；生产环境不接受这两个静态 Token。
-- 令牌不得出现在 URL、日志或视频帧中。
-
-## 3. 编码、尺寸和帧率
-
-### 3.1 输入帧
-
-| 项目 | 冻结值 |
-|---|---|
-| WebSocket 消息 | binary，一条消息一张完整图片 |
-| 接受格式 | JPEG（推荐）或 PNG |
-| 推荐编码 | JPEG Baseline，质量 75–85 |
-| 最大消息大小 | 5 MiB |
-| 最大有效尺寸 | 1920×1080 |
-| 推荐尺寸 | 1280×720 或 1920×1080 |
-| 最大输入帧率 | 30 FPS |
-| 时间戳 | 输入图片不嵌入时间戳；服务端为每帧分配递增 `frame_seq` 和接收时间，用于元数据对齐 |
-
-服务端不保证保留输入图片的原始压缩字节，会解码后重新编码输出。移动端必须把每条图片消息视为独立帧，不得拆分或拼接 JPEG 数据。
-
-### 3.2 输出视频（生产）
-
-每路流只做一次 H.264 编码，编码参数为播放端硬解码能力定死：
-
-| 项目 | 冻结值 |
-|---|---|
-| 编码 | H.264（AVC） |
-| Profile | Baseline 或 Main |
-| Level | ≤ 4.0 |
-| B 帧 | 不使用（`bf=0`） |
-| GOP | 1–2 秒（25fps 下 25–50 帧） |
-| 调优 | `tune=zerolatency` |
-| 码率控制 | CBR，或 CRF + `maxrate`/`bufsize` |
-| 目标档位 | 720p @ 15–25 fps，2–3 Mbps |
-| 音频 | 无 |
-
-分发协议与地址（`{path}` 默认取 `stream_id`）：
-
-| 用途 | 协议 | 地址 |
+| 方法 | 路径 | 行为 |
 |---|---|---|
-| 生产播放 | WebRTC / WHEP | `http(s)://<media-host>:8889/{path}/whep` |
-| 回退 | LL-HLS | `http(s)://<media-host>:8888/{path}/index.m3u8` |
-| 诊断 | RTSP | `rtsp://<media-host>:8554/{path}` |
+| POST | `/streams` | 新建配置/运行会话，成功201；重复运行或不同配置409 |
+| GET | `/streams` | 列出本项目启用/停用配置、运行状态、模型/输入/告警错误 |
+| PATCH | `/streams/{stream_id}/config` | 配置显示名、启停、置信度、最大处理FPS、YOLO/叠加及模型绑定 |
+| GET / PUT | `/streams/{stream_id}/model` | 查询/绑定本项目获授权的模型版本 |
+| POST | `/streams/{stream_id}/yolo` | 开关分析；模型不可用可观测，不终止输入 |
+| DELETE | `/streams/{stream_id}` | 删除配置并释放会话，成功204；不是升级清理操作 |
+| GET | `/capabilities/sources` | 当前项目规则可用来源 |
+| GET | `/metrics` | 受项目能力控制的指标 |
 
-- 输出尺寸默认跟随输入有效尺寸，但必须满足编码器对齐要求；
-- 输出 FPS 不高于会话 `max_fps`；
-- YOLO 关闭时输出原始画面的编码结果；YOLO 开启且叠加打开时输出带框画面；
-- 播放端不得假设首帧就是关键帧之外的帧，也不得假设存在 B 帧；
-- 客户端必须先尝试 WHEP，失败后按 §6.3 回退到 LL-HLS，回退必须对用户和日志可见。
+平台 `/aiyoloapi/metrics` 另受平台能力限制，不能泄露其他项目源。输入URL中的敏感凭据不应进入日志/普通API响应。
 
-### 3.3 输出帧（测试与诊断，非生产）
-
-- MJPEG：`multipart/x-mixed-replace; boundary=frame`，每个 part `Content-Type: image/jpeg` 并带 `Content-Length`；
-- WebSocket 输出：binary，一条消息一张 JPEG；
-- 这两条通道只用于管理页预览、自动化测试和联调探针，不得作为 App 的播放路径，也不承诺带宽和延迟指标。
-
-## 4. 会话生命周期
-
-```text
-created → ingesting → outputting
-              │              │
-              └──────→ error ┘
-                         │
-                       closed
-```
-
-| 状态 | 含义 |
-|---|---|
-| `created` | 已创建，尚未收到有效帧 |
-| `ingesting` | 正在接收或拉取输入 |
-| `outputting` | 至少一帧已编码，可被订阅者读取 |
-| `error` | 最近一次输入、解码、推理或编码失败，会话仍可恢复 |
-| `closed` | 已删除或服务关闭，不再接受输入 |
-
-YOLO 模式独立于会话状态：`off` 或 `on`。模型不可用时，开启请求响应会返回 `model_error`，但不应让会话进入 `closed`。
-
-## 5. HTTP API
-
-### 5.1 创建会话
-
-`POST /aiyoloapi/streams`
-
-请求：
+创建示例：
 
 ```json
-{"stream_id":"inspection-001","display_name":"North Gate","source_type":"rtsp","source_url":null,"enabled":true}
+{"stream_id":"inspection-001","display_name":"North Gate","source_type":"rtsp","source_url":"rtsp://camera.example/live","enabled":true}
 ```
 
-`stream_id` 必须为 1–128 个 ASCII 字母、数字、点、下划线或连字符，且以字母或数字开头。`display_name`、`source_type` 和 `enabled` 可省略；`source_url=null` 表示等待移动端 WebSocket 推帧，提供 URL 时服务端主动拉流。
+`stream_id` 为1–128个ASCII字母/数字/点/下划线/连字符，以字母或数字起始。支持RTSP/RTSPS、HTTP、文件、摄像头索引；`source_url=null` 保留为已授权设备/服务等待输入，不能据此恢复移动推流UI。创建可包含 `model_id/model_version`；绑定示例 `{"model_id":"inspection-model","model_version":"1.0.0"}`。
 
-创建成功后，控制面配置写入 `stream_configs`，包括来源、模型绑定、YOLO 参数、启用状态和创建/更新时间。视频帧、WebSocket 队列与实时指标不写入业务数据库。若同一配置已经存在但当前没有运行时会话，完全一致的创建请求按幂等恢复处理；运行时会话仍存在或关键字段不一致时返回冲突。
+YOLO控制 `{"enabled":true}`。配置可包含 `confidence`（0.01–0.99）、`max_fps`（1–60）、`yolo_enabled`、`overlay_enabled`、`display_name`、`enabled`、`model_id/model_version`；实际项目模型参数约束仍有效。source_url不属于当前PATCH请求字段；不能声称修改UI中输入源就已更新运行输入。
 
-成功 `201`：
+持久化配置以 `(project_id, stream_id)` 标识；完全相同且没有运行会话的旧配置可按既有幂等流程恢复。重启只恢复启用流，停用记录保留。帧、预览缓存、运行队列不入业务配置库。
 
-```json
-{"stream_id":"inspection-001","state":"created","yolo_enabled":false}
-```
+## 3. 输入面
 
-### 5.2 查询会话
+`WS /aiyoloapi/projects/{project_id}/streams/{stream_id}/ingest` 保留项目/账号或明确授权服务主体能力检查。连接撤权和项目状态变化继续检查；这不是移动远程视频产品功能。
 
-`GET /aiyoloapi/streams`
+- binary消息每条一张完整JPEG/PNG，不拆分拼接；非法帧不导致进程退出。
+- 最大5MiB、1920×1080，默认最大输入30fps（MAX_INPUT_FPS）；配置RTSP_TRANSPORT=tcp或udp用于输入。
+- 输入限速/队列latest-only，忙时丢旧帧，不堆积延迟。
+- 文本ping格式为 `{"type":"ping","request_id":"..."}`；错误和消息限制沿用输入处理器，不把历史播放错误当输入错误。
+- RTSP断流释放VideoCapture并重试；输入连接断开不等于删除持久配置。
+- OpenCV/FFmpeg为输入解码和图片证据保留，不再调用H.264发布编码器。
 
-返回数组。每项至少包含 `stream_id`、`display_name`、`source_type`、脱敏后的 `source_url`、`enabled`、`state`、`yolo_enabled`、`frames_received`、`frames_processed`、`confidence`、`max_fps`、`last_error`，以及输出面字段 `publish_state`（`idle`/`connected`/`reconnecting`/`failed`）和 `viewers`。RTSP 用户名、密码和查询参数不会出现在普通 API 响应或拉流错误中。
+## 4. PC专用预览
 
-### 5.3 YOLO 开关
+`GET /aiyoloapi/projects/{project_id}/streams/{stream_id}/preview`：
 
-`POST /aiyoloapi/streams/{stream_id}/yolo`
+| 状态 | 语义 | 客户端处理 |
+|---|---|---|
+| 200 | 当前JPEG，`X-Preview-Mode: raw|yolo` | 替换上一帧并释放对象URL |
+| 204 | 无有效帧或输入超过3秒未更新 | 清空画面，后续轮询可恢复 |
+| 401/403 | 未登录、失效或无能力/错误通道 | 清屏，停止未授权预览 |
+| 404 | 项目不可见、流不存在/已关闭 | 清屏，不尝试其他项目 |
+| 网络失败/超时 | 不保证新帧可用 | 清空旧图，取消过期请求 |
 
-请求：`{"enabled":true}`。成功 `200` 返回 `stream_id`、`state`、`yolo_enabled`、`model_error`。
+响应包含 `Cache-Control: no-store, private`、`Cross-Origin-Resource-Policy: same-origin` 和 `X-Content-Type-Options: nosniff`。请求前及编码后复验权限/会话/流身份；网关不得缓存JPEG、改写鉴权失败或开放跨域。
 
-### 5.4 单路运行参数
+预览按需编码，最高5fps、宽1280、共享短时缓存；不是25/30fps全帧率播放器。YOLO关闭/不可用显示raw，开启且有有效匹配推理结果可显示yolo；标注超过2秒或模型代次失效则不展示。切项目/离页abort，迟到响应不可显示。已交给浏览器的单帧无法远程收回。
 
-`PATCH /aiyoloapi/streams/{stream_id}/config`
+## 5. 分析与告警
 
-可选字段：
+分析使用独立帧率和latest-only，无预览者时仍运行。检测结果是规则输入，不是逐帧推送消息。规则、冷却/去重和持久化产生正式告警后，由项目告警查询、通知、处置及证据接口消费，保留 `SERVER_STREAM/streamId` 溯源和模型/规则快照。
 
-```json
-{"confidence":0.4,"max_fps":15,"yolo_enabled":true,"overlay_enabled":true,"display_name":"North Gate","enabled":true}
-```
+独立告警接口参见 [告警隔离](project-alert-isolation.md)。断线补拉、提示去重、持久化失败、证据失败和投递失败分别可观测；不能使用直播订阅驱动通知。M34-T05/T06与Android M101负责未完成的闭环与真实联合验收，本协议不是其完成证明。
 
-`confidence` 范围 `0.01–0.99`，`max_fps` 范围 `1–60`。`enabled=false` 会持久化停用并关闭当前会话，之后可用 `enabled=true` 重新建立会话。未提供的字段保持原值。服务进程启动时会读取 `enabled=true` 的配置并恢复会话；单路来源连接失败只让该流进入可重试错误状态，不阻塞其他流和服务启动。`enabled=false` 的配置仍由列表返回，但标记为 `configuration_state=disabled`、`runtime_available=false`，不会自动恢复。
+### 5.1 内部检测序列化兼容
 
-### 5.5 播放地址
-
-`GET /aiyoloapi/streams/{stream_id}/playback`
-
-返回该流的播放入口与当前可用性，客户端据此选择路径，不硬编码地址：
-
-```json
-{"stream_id":"inspection-001",
- "publish_state":"connected",
- "whep":{"url":"http://media:8889/inspection-001/whep","available":true},
- "llhls":{"url":"http://media:8888/inspection-001/index.m3u8","available":true},
- "rtsp":{"url":"rtsp://media:8554/inspection-001","available":true,"diagnostics_only":true}}
-```
-
-`publish_state` 取 `connected`、`reconnecting`、`failed`、`idle`。`available:false` 表示该协议当前不可用，客户端应按 §6.3 顺序回退。
-
-### 5.6 删除会话
-
-`DELETE /aiyoloapi/streams/{stream_id}`，成功返回 `204`。
-
-## 6. WebSocket 与播放
-
-### 6.1 移动端推流
-
-连接：`/aiyoloapi/streams/{stream_id}/ingest`
-
-- 客户端发送 binary JPEG/PNG；
-- 服务端不要求客户端等待 ACK，可按最大 30 FPS 推送；
-- 客户端可发送文本 `{"type":"ping","request_id":"..."}`，服务端返回 `{"ok":true}`；
-- 客户端断开后服务端保留会话，是否删除由客户端调用 DELETE 决定。
-
-### 6.2 检测结果旁路
-
-连接：`/aiyoloapi/streams/{stream_id}/detections`
-
-服务端按帧发送文本 JSON：
+以下仅为 `FrameDetections.to_wire()` 保留的数据形状（叠加/规则的内部结果兼容），不是对外WebSocket或正式告警消息。客户端不能通过此示例重新订阅逐帧检测。类别名由模型提供，未跟踪时不伪造track_id，box使用归一化左上角坐标。
 
 ```json
 {"stream_id":"inspection-001","frame_seq":1024,
@@ -187,64 +82,24 @@ YOLO 模式独立于会话状态：`off` 或 `on`。模型不可用时，开启�
                 "box":{"x":0.31,"y":0.22,"w":0.12,"h":0.34}}]}
 ```
 
-- `box` 为归一化坐标（0–1，左上原点，`x`/`y` 为左上角），与输出画面尺寸无关；
-- `track_id` 为可选字段，只在来源真的提供跟踪 id 时出现；不做跟踪的模型不得伪造该字段；
-- YOLO 关闭时不发送检测消息，可发送心跳 `{"stream_id":"...","yolo_enabled":false}`；
-- 该通道与视频通道互不依赖：任一方断开重连都不影响另一方；
-- 客户端必须容忍 `frame_seq` 跳号（latest-only 丢帧属正常行为）；
-- 客户端不得依赖检测消息与视频帧的严格同步，只能按 `frame_seq`/时间戳做最佳努力对齐。
+## 6. 退役接口与错误
 
-### 6.3 播放与回退顺序
+旧项目及非项目 `/streams/{stream_id}/playback`、`mjpeg` 始终HTTP410，`detail.code=live_video_retired`，不查询资源、不返回地址。旧 `ws/detections` 关闭1008、reason为live_video_retired。内部 `POST /aiyoloapi/internal/media/authorize` 对所有请求403（含空/非法payload及read/publish/api），不查会话或存储。
 
-1. 用 `GET /aiyoloapi/streams/{stream_id}/playback` 取地址；
-2. 优先 WHEP：向 `whep.url` POST SDP offer，`Content-Type: application/sdp`，响应体为 SDP answer；
-3. WHEP 建连失败或超时（UDP 被封、ICE 失败、SDP 交换失败）后回退 LL-HLS；
-4. 两者都失败时向用户报错，不静默停留在黑屏；
-5. RTSP 只供 VLC/ffprobe 等工具排障，客户端不得把它作为回退路径；
-6. MJPEG/WebSocket JPEG 只用于管理页和自动化测试。
+不重试这些接口、不改走WHEP/LL-HLS/RTSP输出、不设置旧环境变量复活功能。输入RTSP和新的PC预览不是旧出口例外。告警WS和已存短视频证据仍保留。
 
-### 6.4 管理端诊断预览
+其他控制/输入错误：不可见资源404、重复/版本冲突409、参数422、未认证401/403；输入非法/超大帧、限速和模型错误依实际处理器与运行状态呈现。不要将历史encoder_unavailable/publish_failed/playback_unavailable作为当前服务故障类别。
 
-MJPEG：`/aiyoloapi/streams/{stream_id}/mjpeg`；WebSocket JPEG：`/aiyoloapi/streams/{stream_id}/ws`。仅用于诊断，不承诺指标。
+## 7. 状态、兼容与运维
 
-## 7. 错误码与重试
+运行状态created/ingesting/analyzing/error/closed；outputting枚举仅兼容历史。YOLO模式独立，旧metrics的publish_state=retired、frames_published=0、viewers=0不是健康或PC观看人数。观察输入/处理帧、丢帧、模型错误、alert_error与存储/投递状态。
 
-HTTP 错误响应统一预留为：
+`/healthz` 包括已配置数据库健康，不检查已退役媒体端口；预览可用不证明YOLO或告警已可用。`video-protocol.schema.json` 保留基础请求子集，完整请求字段以本服务OpenAPI为准。
 
-```json
-{"error":{"code":"stream_not_found","message":"stream not found","request_id":"optional-id","retryable":false}}
-```
+旧流、模型绑定/版本/revision、告警和证据无损保留；配置退役无需数据库迁移。升级/回退须遵守 [手册](media-retirement-upgrade.md)，先本地验收，再容器部署，不恢复移动分发。
 
-当前 FastAPI MVP 仍使用 `detail` 兼容响应，生产错误体在 `M03` 统一。
+## 8. 验证矩阵
 
-| 错误码 | HTTP/WS | 是否重试 | 说明 |
-|---|---:|---|---|
-| `stream_not_found` | 404/4404 | 否 | 先创建会话或检查 ID |
-| `stream_already_exists` | 409 | 否 | 使用已有会话或换 ID |
-| `invalid_frame` | 400/4400 | 否 | 丢弃当前帧，检查编码 |
-| `frame_too_large` | 413/4400 | 否 | 降低分辨率或 JPEG 质量 |
-| `input_rate_limited` | 429/4429 | 是 | 降低推送帧率 |
-| `model_unavailable` | 503 | 是 | 关闭 YOLO 或等待模型恢复 |
-| `encoder_unavailable` | 503 | 是 | H.264 编码器初始化失败，检查编码器与参数 |
-| `publish_failed` | 503 | 是 | 到媒体服务器推流失败，等待重连或检查媒体服务器 |
-| `playback_unavailable` | 503 | 是 | 该流暂无可用播放路径，按 §6.3 重试或回退 |
-| `internal_error` | 500 | 视情况 | 查看服务日志和状态 |
+独立告警的REST/WS路径、项目鉴权、断线补取和提示去重规则见[独立告警通知契约](independent-alert-notifications.md)。告警WS不是检测帧订阅，移动端不得从来源streamId跳转到退役播放出口。
 
-## 8. 联调最低要求
-
-1. 移动端可以创建唯一会话并拿到 `stream_id`；
-2. 推送端可持续发送 1280×720 JPEG，目标 15–30 FPS；
-3. 播放端可通过 WHEP 播放 H.264，并能在 WHEP 不可用时回退 LL-HLS；
-4. 播放端可订阅检测结果 WebSocket 并拿到类别、置信度和坐标框；
-5. 调用 YOLO 开关后，不重连即可看到原始/叠加模式变化；
-6. 移动端处理 `404/409/413/429/503` 并向用户显示可理解状态；
-7. App 退出或网络断开后，客户端按策略删除会话或重新连接；
-8. 真实联调必须记录输入 FPS、编码 FPS、输出 FPS、端到端延迟（P50/P95）、回退发生次数和重连次数。
-
-## 9. 后续兼容规则
-
-- 新增字段只能向后兼容，不能改变既有字段语义；
-- 升级协议时使用 `/aiyoloapi/v2` 或显式 `protocol_version`，不静默改变既有行为；
-- 控制面语义（`stream_id`、会话状态、YOLO 开关）与传输协议解耦：更换分发协议不得改变控制面；
-- 检测结果通道与视频通道必须保持可独立消费，不得为了同步把二者重新耦合；
-- 增加新的分发协议（如 SRT 服务端间链路）只能作为额外出口，不得改变 WHEP 为生产主链路的定位；除 ADR-002 声明的 LL-HLS 回退外，不得引入第二条隐式回退路径。
+至少覆盖RTSP接入/断流重连、raw/yolo预览、无人观看分析告警、同ID跨项目隔离、撤权/关流/切模型竞态、旧接口拒绝、旧配置忽略、持久流恢复与历史证据可读。单元桩与真实模型/摄像机/PostgreSQL/API27/长稳结果分开留证据，不能相互替代。

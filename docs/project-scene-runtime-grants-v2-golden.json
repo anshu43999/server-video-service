@@ -1,0 +1,36 @@
+{
+  "contract": "scene-runtime-grant-v2-parameter-digest",
+  "parameterSnapshot": {
+    "中文": "帽\n",
+    "z": 1e-7,
+    "a": [
+      -0.0,
+      true,
+      null,
+      123456789012345678901234567890.001
+    ]
+  },
+  "canonicalUtf8Text": "{\"a\":[0,true,null,123456789012345678901234567890.001],\"z\":0.0000001,\"中文\":\"帽\\n\"}",
+  "sha256": "cc532c549f77caf93f53b604b951fdaacbea8ae6609995452f96d846d224568c",
+  "apiVector": {
+    "request": {
+      "planId": "combined",
+      "expectedRevision": 2,
+      "target": "mobile",
+      "inputType": "image",
+      "clientContractVersion": 3,
+      "supportedExecutionModes": ["sync"]
+    },
+    "expectedResponseProjection": {
+      "operation": "start",
+      "runtimeAuthorization": true,
+      "runtimeGrantContractVersion": 2,
+      "execution": "sync",
+      "members": [
+        {"memberId": "helmet-b", "modelId": "helmet", "modelVersion": "2.0.0", "artifactId": "android", "target": "mobile"},
+        {"memberId": "helmet-a", "modelId": "helmet", "modelVersion": "1.0.0", "artifactId": "android", "target": "mobile"}
+      ]
+    },
+    "note": "Executed against the isolated API fixture; generated credentials, expiry and account/project identities are deliberately excluded from the projection."
+  }
+}

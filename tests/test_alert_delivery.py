@@ -12,6 +12,18 @@ from app.alerts.delivery import (
 
 
 class AlertDeliveryTests(unittest.IsolatedAsyncioTestCase):
+    async def test_capture_identity_and_request_history_never_reach_subscribers(self):
+        channel = ManagementPageChannel()
+        service = AlertDeliveryService(channels={"management": channel})
+        queue = await channel.subscribe()
+        service.dispatch({"eventId": "private", "mobileProducer": {"accountId": "private"},
+                          "_originalOperations": {"secret": {}}, "_originalRequests": {}}, ["management"])
+        await service.drain()
+        public = await queue.get()
+        self.assertNotIn("mobileProducer", public)
+        self.assertNotIn("_originalOperations", public)
+        self.assertNotIn("_originalRequests", public)
+
     async def test_management_and_app_channels_are_independent(self):
         management = ManagementPageChannel()
         app = AppNotificationChannel()

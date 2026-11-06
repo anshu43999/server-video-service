@@ -103,7 +103,7 @@ class Detection:
             raise ValueError(f"track_id must match {SOURCE_ID_PATTERN.pattern}, got {self.track_id!r}")
 
     def to_wire(self) -> dict:
-        """docs/video-protocol.md §6.2 的 detections 元素。"""
+        """docs/video-protocol.md §5.1 的内部兼容元素；不再对外直播分发。"""
         payload: dict = {
             "class_id": self.class_id,
             "class_name": self.label,
@@ -162,7 +162,7 @@ class FrameDetections:
     result: InferenceResult
 
     def to_wire(self) -> dict:
-        """docs/video-protocol.md §6.2 的整条检测消息。"""
+        """docs/video-protocol.md §5.1 内部兼容形状；旧检测订阅已退役。"""
         return {
             "stream_id": self.stream_id,
             "frame_seq": self.frame_seq,

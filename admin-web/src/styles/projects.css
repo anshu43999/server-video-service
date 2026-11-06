@@ -1,0 +1,21 @@
+.project-context-bar { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:14px 30px; border-bottom:1px solid var(--color-border); background:var(--color-primary-soft); position:sticky; top:var(--topbar-height); z-index:19; }
+.project-context-bar > div { display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 16px; min-width:0; }
+.project-context-bar .eyebrow { flex-basis:100%; margin:0; font-size:10px; letter-spacing:.14em; }
+.project-context-bar strong { overflow-wrap:anywhere; font-size:16px; }
+.project-context-bar small { color:var(--color-ink-muted); }
+.project-context-bar button { flex-shrink:0; }
+.project-picker { max-width:1120px; margin:20px auto; }
+.project-picker h2 { font-size:28px; margin:8px 0; letter-spacing:-.03em; }
+.project-intro { color:var(--color-ink-muted); margin-bottom:28px; }
+.project-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr)); gap:20px; margin:24px 0; }
+.project-card { background:var(--color-surface); border:1px solid var(--color-border); border-top:3px solid var(--color-primary); border-radius:var(--radius-md); padding:24px; display:flex; flex-direction:column; align-items:flex-start; gap:12px; overflow-wrap:anywhere; }
+.project-card h3 { font-size:22px; margin:0; }
+.project-card p { margin:0; }
+.project-card button { margin-top:auto; max-width:100%; white-space:normal; }
+.project-state { background:var(--color-primary-soft); color:var(--color-primary); padding:3px 9px; border-radius:3px; font-size:12px; }
+.project-state.frozen { background:var(--color-warning-soft); color:var(--color-warning); }
+.project-entry-note { color:var(--color-ink-muted); font-size:12px; padding-bottom:8px; }
+.fullscreen-project { width:100%; color:var(--color-primary); padding-bottom:8px; border-bottom:1px solid var(--color-border); }
+.operations-board.is-focused .board-heading { flex-wrap:wrap; }
+@media (max-width:620px) { .project-context-bar { top:68px; } }
+@media (max-width:640px) { .project-context-bar { padding:12px 16px; gap:8px; } .project-context-bar > div { gap:2px 8px; } .project-context-bar strong { font-size:14px; } .project-context-bar small { font-size:11px; } .project-picker h2 { font-size:24px; } }

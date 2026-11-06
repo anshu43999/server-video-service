@@ -17,6 +17,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    json_document = sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql")
     op.create_table(
         "calibration_datasets",
         sa.Column("dataset_id", sa.String(64), primary_key=True),
@@ -27,7 +28,7 @@ def upgrade() -> None:
         sa.Column("size_bytes", sa.BigInteger(), nullable=False),
         sa.Column("content_sha256", sa.String(64), nullable=False),
         sa.Column("yaml_path", sa.String(512), nullable=False),
-        sa.Column("payload", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
+        sa.Column("payload", json_document, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.UniqueConstraint("name", "version", name="uq_calibration_dataset_name_version"),
     )

@@ -1,21 +1,13 @@
-# 按流绑定服务端模型（M08-T09）
+# 运行任务显式选择项目场景与方案
 
-每个 `StreamSession` 持有自己的 `YoloDetector`。模型注册表中的全局
-`activeServerModel` 保存唯一的注册表 `modelId`，仅作为创建新流时的默认值；
-服务仍兼容旧注册表中的文件名值，并按注册顺序解析为唯一模型。它不会在运行中覆盖已有流。
+视频流不再直接绑定项目模型。项目模型清单不是运行配置；不得从项目模型列表、平台模型 `scenario` 标签或旧流模型字段推断本次应使用的模型。
 
-## 接口
+## 当前运行选择
 
-- 创建流时可传 `model_id`：`POST /aiyoloapi/streams`。
-- 切换已存在流：`PUT /aiyoloapi/streams/{stream_id}/model`，请求体
-  `{ "model_id": "<registered-id>" }`。
-- 查询当前绑定：`GET /aiyoloapi/streams/{stream_id}/model`。
-- 也可在 `PATCH /aiyoloapi/streams/{stream_id}/config` 中传 `model_id`。
+视频流配置必须明确提交并保存当前项目的 `sceneId`、`planId` 与 `sceneRevision`。服务端按 PC 目标和 video 输入解析方案，启动、恢复及开启 YOLO 前复核场景批准/启用状态、精确修订、单成员方案、项目模型授权、模型发布状态与批准参数快照。当前流运行时没有多成员推理调度契约，因此只接受单成员方案，不会静默挑选方案中的第一个模型。缺少选择或任一身份/修订不匹配时拒绝启动。
 
-服务端只接受注册表中存在且校验通过的 `pt`/`onnx` 产物；移动端专用
-`tflite` 返回 409。不存在的模型返回 404，文件缺失、大小或 SHA-256
-不匹配返回 409。切换时创建新的惰性检测器，不影响其他流的检测器和
-运行状态。
+`POST /aiyoloapi/projects/{projectId}/streams` 创建请求带 `sceneId`、`planId`、`sceneRevision`；`PUT .../streams/{streamId}/model` 现用于显式更换场景方案，不再接受 `model_id`/`model_version`。停用流允许保存配置，但启用、恢复、YOLO 开启及每帧分析授权都重新解析当前场景方案；旧配置缺少场景选择时不能恢复运行。
 
-流列表及切换响应的 `model` 字段包含 `catalog_model_id`、`scenario`、
-`purpose`、输入尺寸和类别标签，便于管理页按场景展示当前绑定关系。
+更改项目模型清单只改变项目可用模型；更改场景成员/方案只改变业务配置；只有用户显式选择并启动 scene/plan 才进入运行。分配、编辑、批准和安装准备都不能自动启动检测。
+
+管理后台只列出当前项目内已批准、启用、PC 可用且包含 video 输入的单成员方案。项目模型分配、场景编辑/审批和流配置保存都不自动启动推理。项目成员或模型撤权、场景修订变化后，后续启动/恢复/检测校验失败并停止提供授权分析。

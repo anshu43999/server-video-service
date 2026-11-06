@@ -7,6 +7,7 @@ import time
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -96,10 +97,12 @@ class ConversionApiTests(unittest.TestCase):
         settings.admin_token = self.old_token
         self.tmp.cleanup()
 
-    def upload(self, payload=b"custom-weights", filename="best.pt", model_id=None, version="2.0"):
+    def upload(self, payload=b"custom-weights", filename="best.pt", model_id=None, version="2.0", targets=None):
         params = {"filename": filename, "name": "安全帽", "version": version}
         if model_id is not None:
             params["modelId"] = model_id
+        if targets is not None:
+            params["supportedTargets"] = targets
         return self.client.post("/aiyoloapi/conversion/uploads", params=params,
                                 content=payload, headers=self.headers)
 
@@ -176,6 +179,110 @@ class ConversionApiTests(unittest.TestCase):
         )
         self.assertEqual(hashlib.sha256(payload).hexdigest(), manifest["signature"]["signedPayloadSha256"])
         self.assertEqual(self.client.post(f'/aiyoloapi/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers).status_code, 409)
+
+    def test_business_mobile_release_signs_immutable_manifest_and_retries_preserve_bytes(self):
+        upload = self.upload(targets=["mobile"]).json()
+        self.assertEqual("succeeded", self.wait(upload["job"])["status"])
+        response = self.client.post(f'/aiyoloapi/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers)
+        self.assertEqual("succeeded", self.wait(response.json())["status"])
+        model_id = upload["model_id"]
+        _, original_path = self.catalog.get_artifact(model_id, "android-manifest")
+        original_bytes = original_path.read_bytes()
+        before = self.catalog.registry_path.read_bytes()
+        args = dict(license_approved=True, reason="approved internal distribution", actor="admin", signer=self.signer)
+        with patch.object(self.signer, "sign", side_effect=ValueError("signing failed")):
+            with self.assertRaisesRegex(ValueError, "signing failed"):
+                self.catalog.publish_release(model_id, "2.0", ["mobile"], **args)
+        self.assertEqual(before, self.catalog.registry_path.read_bytes())
+        self.assertEqual(original_bytes, original_path.read_bytes())
+        result = self.catalog.publish_release(model_id, "2.0", ["mobile"], **args)
+        self.assertTrue(result["targetReleaseEligible"]["mobile"])
+        self.assertFalse(result["targetReleaseEligible"]["pc"])
+        _, release_path = self.catalog.get_artifact(model_id, "android-manifest")
+        release_bytes = release_path.read_bytes()
+        manifest = json.loads(release_bytes)
+        self.assertNotIn("purpose", manifest)
+        legacy_manifest = {**manifest, "purpose": "development"}
+        self.assertIn(b"purpose=development", canonical_manifest_payload(legacy_manifest))
+        self.assertNotEqual(original_path, release_path)
+        self.assertTrue(manifest["releaseEligible"])
+        self.assertEqual("approved", manifest["license"]["distribution"])
+        self.private_key.public_key().verify(__import__("base64").b64decode(manifest["signature"]["signatureBase64"]),
+                                             canonical_manifest_payload(manifest))
+        _, tflite = self.catalog.get_artifact(model_id, "android-int8")
+        self.assertEqual(hashlib.sha256(tflite.read_bytes()).hexdigest(), manifest["modelFile"]["sha256"])
+        with patch.object(self.signer, "sign", side_effect=ValueError("must not resign")):
+            self.catalog.publish_release(model_id, "2.0", ["mobile"], **args)
+        self.assertEqual(release_bytes, release_path.read_bytes())
+        self.assertEqual(original_bytes, original_path.read_bytes())
+        self.catalog.validate_startup()
+
+    def test_dual_release_can_convert_and_publish_mobile_after_pc_publication(self):
+        upload = self.upload(targets=["pc", "mobile"]).json()
+        self.assertEqual("succeeded", self.wait(upload["job"])["status"])
+        args = dict(license_approved=True, reason="reviewed", actor="admin", signer=self.signer)
+        self.catalog.publish_release(upload["model_id"], "2.0", ["pc"], **args)
+        response = self.client.post(f'/aiyoloapi/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers)
+        self.assertEqual("succeeded", self.wait(response.json())["status"])
+        pc = self.catalog.get(upload["model_id"])
+        self.assertTrue(pc["targetReleaseEligible"]["pc"])
+        self.assertFalse(pc["targetReleaseEligible"]["mobile"])
+        result = self.catalog.publish_release(upload["model_id"], "2.0", ["mobile"], **args)
+        self.assertEqual({"pc": True, "mobile": True}, result["targetReleaseEligible"])
+
+    def test_mobile_release_refuses_missing_signer_and_mismatched_verified_contract(self):
+        upload = self.upload(targets=["mobile"]).json()
+        self.assertEqual("succeeded", self.wait(upload["job"])["status"])
+        response = self.client.post(f'/aiyoloapi/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers)
+        self.assertEqual("succeeded", self.wait(response.json())["status"])
+        args = dict(license_approved=True, reason="reviewed", actor="admin")
+        with self.assertRaisesRegex(ValueError, "signer is required"):
+            self.catalog.publish_release(upload["model_id"], "2.0", ["mobile"], **args)
+        registry = self.catalog._load()
+        registry["models"][0]["androidContract"]["input_size"] = 999
+        self.catalog._save(registry)
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            self.catalog.publish_release(upload["model_id"], "2.0", ["mobile"], signer=self.signer, **args)
+        self.assertEqual("READY", self.catalog.get(upload["model_id"])["status"])
+
+    def test_explicit_pc_only_upload_skips_auto_conversion_and_rejects_mobile(self):
+        self.service.configure(ConversionConfig(mode="local", python_path=sys.executable, auto_convert=True))
+        upload = self.upload(targets=["pc"]).json()
+        self.assertEqual("succeeded", self.wait(upload["job"])["status"])
+        model = self.catalog.get(upload["model_id"])
+        self.assertEqual(["pc"], model["supportedTargets"])
+        self.assertTrue(model["serverReady"])
+        self.assertFalse(any(job["action"] == "mobile" for job in self.service.jobs()))
+        response = self.client.post(f'/aiyoloapi/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers)
+        self.assertEqual(409, response.status_code)
+        self.assertEqual("model_target_not_supported", response.json()["detail"]["code"])
+
+    def test_mobile_only_upload_keeps_source_pt_separate_from_pc_capability(self):
+        upload = self.upload(targets=["mobile"]).json()
+        self.assertEqual("succeeded", self.wait(upload["job"])["status"])
+        model = self.catalog.get(upload["model_id"])
+        self.assertFalse(model["serverReady"])
+        self.assertFalse(model["androidReady"])
+        job = self.client.post(f'/aiyoloapi/conversion/uploads/{upload["upload_id"]}/mobile', headers=self.headers)
+        self.assertEqual(202, job.status_code, job.text)
+        self.assertEqual("succeeded", self.wait(job.json())["status"])
+        model = self.catalog.get(upload["model_id"])
+        self.assertEqual(["mobile"], model["supportedTargets"])
+        self.assertTrue(model["androidReady"])
+        self.assertFalse(model["serverBindable"])
+        with self.assertRaisesRegex(ValueError, "support pc"):
+            self.catalog.resolve_server_model(upload["model_id"])
+
+    def test_mobile_conversion_uses_upload_version_instead_of_latest_family(self):
+        first = self.upload(model_id="family", version="1.0.0").json()
+        self.assertEqual("succeeded", self.wait(first["job"])["status"])
+        second = self.upload(model_id="family", version="2.0.0").json()
+        self.assertEqual("succeeded", self.wait(second["job"])["status"])
+        job = self.client.post(f'/aiyoloapi/conversion/uploads/{first["upload_id"]}/mobile', headers=self.headers)
+        self.assertEqual(202, job.status_code, job.text)
+        self.assertEqual("succeeded", self.wait(job.json())["status"])
+        self.assertTrue(self.catalog.get("family", "1.0.0")["androidReady"])
+        self.assertFalse(self.catalog.get("family", "2.0.0")["androidReady"])
 
     def test_calibration_asset_is_versioned_selected_and_reference_protected(self):
         datasets = self.client.get("/aiyoloapi/conversion/calibration-datasets", headers=self.headers).json()["datasets"]
@@ -266,6 +373,43 @@ class ConversionApiTests(unittest.TestCase):
         self.assertEqual(self.wait(good["job"])["status"], "succeeded")
         self.assertEqual(self.client.post(f'/aiyoloapi/conversion/uploads/{good["upload_id"]}/mobile', headers=self.headers).status_code, 409)
 
+    def test_signing_status_exposes_rotation_state_without_secret_path(self):
+        signer = ModelManifestSigner(
+            "new-2026", self.private_key_path,
+            trusted_key_ids="old-2025,new-2026",
+            revoked_key_ids="old-2024",
+        )
+        app = FastAPI()
+        app.include_router(create_conversion_router(
+            self.service, self.catalog, calibration_catalog=self.calibration_catalog, signer=signer,
+        ))
+        with TestClient(app) as client:
+            response = client.get("/aiyoloapi/conversion/signing-status", headers=self.headers)
+        self.assertEqual(200, response.status_code)
+        status = response.json()
+        self.assertTrue(status["configured"])
+        self.assertTrue(status["rotationWindowActive"])
+        self.assertEqual(
+            "sha256:" + hashlib.sha256(self.private_key.public_key().public_bytes(
+                serialization.Encoding.Raw, serialization.PublicFormat.Raw,
+            )).hexdigest(),
+            status["publicKeyFingerprint"],
+        )
+        self.assertEqual(["new-2026", "old-2025"], status["trustedKeyIds"])
+        self.assertEqual(["old-2024"], status["revokedKeyIds"])
+        self.assertNotIn("privateKeyPath", status)
+        self.assertNotIn(str(self.private_key_path), str(status))
+
+    def test_revoked_active_key_cannot_sign(self):
+        signer = ModelManifestSigner(
+            "old-2025", self.private_key_path,
+            trusted_key_ids="old-2025,new-2026",
+            revoked_key_ids="old-2025",
+        )
+        self.assertFalse(signer.configured)
+        with self.assertRaisesRegex(ValueError, "未配置|撤销"):
+            signer.sign({"schemaVersion": 1})
+
     def test_config_and_environment_check_are_async_admin_operations(self):
         response = self.client.put("/aiyoloapi/conversion/config", json={"mode": "local", "python_path": sys.executable, "auto_convert": True}, headers=self.headers)
         self.assertEqual(response.status_code, 200)
@@ -328,6 +472,8 @@ class ConversionApiTests(unittest.TestCase):
         model = self.catalog.get(upload["model_id"])
         self.assertTrue(model["androidConverted"])
         self.assertFalse(model["androidReady"])
+        self.assertFalse(model["releaseEligible"])
+        self.assertEqual("READY", model["status"])
         self.assertEqual(model["signatureStatus"], "unsigned")
 
 

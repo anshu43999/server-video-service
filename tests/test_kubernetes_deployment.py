@@ -67,6 +67,11 @@ class KubernetesDeploymentTests(unittest.TestCase):
         self.assertIn("CHANGE_ME_MINIO_HOST", self.secret)
         self.assertNotIn("113.44.", self.secret + self.config)
 
+    def test_schema_upgrade_is_never_automatic_in_production_example(self) -> None:
+        self.assertIn("RUN_DATABASE_MIGRATIONS=false", self.config)
+        self.assertNotIn("RUN_DATABASE_MIGRATIONS=true", self.config)
+        self.assertIn("YOLO_DEVICE=cpu", self.config)
+
 
 if __name__ == "__main__":
     unittest.main()

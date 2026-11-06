@@ -1,0 +1,84 @@
+{
+  "contractVersion": "1.0.0",
+  "projectId": "project-golden-a",
+  "eventId": "local:camera-golden:1790000000000000",
+  "operationIds": {
+    "fact": "00000000-0000-4000-8000-000000000001",
+    "disposition": "00000000-0000-4000-8000-000000000002",
+    "thumbnail": "00000000-0000-4000-8000-000000000003",
+    "original": "00000000-0000-4000-8000-000000000004"
+  },
+  "requests": [
+    {
+      "name": "fact-first",
+      "method": "POST",
+      "path": "/aiyoloapi/projects/project-golden-a/alerts/mobile-ingest",
+      "headers": { "X-Mobile-Alert-Contract": "1.0", "Content-Type": "application/json" },
+      "body": {
+        "eventId": "local:camera-golden:1790000000000000",
+        "origin": "MOBILE_CAMERA",
+        "ruleId": "PPE_NO_HELMET",
+        "sourceId": "camera-golden",
+        "subjectKey": "track:17",
+        "label": "person",
+        "state": "CONFIRMED",
+        "severity": "MAJOR",
+        "notifySeverity": "MAJOR",
+        "startedAtUs": 1790000000000000,
+        "confirmedAtUs": 1790000000100000,
+        "lastSeenAtUs": 1790000000200000,
+        "effectiveThresholds": { "minimumConfidence": 0.8, "minimumConsecutiveFrames": 3 },
+        "detectionResults": [{ "label": "person", "confidence": 0.93, "timestampUs": 1790000000100000 }],
+        "evidence": {}
+      },
+      "expected": { "httpStatus": 202, "dispositionStatus": "OPEN", "created": true }
+    },
+    {
+      "name": "fact-exact-replay",
+      "method": "POST",
+      "path": "/aiyoloapi/projects/project-golden-a/alerts/mobile-ingest",
+      "headers": { "X-Mobile-Alert-Contract": "1.0", "Content-Type": "application/json" },
+      "bodyRef": "requests.fact-first.body",
+      "expected": { "httpStatus": 202, "created": false, "dispositionUnchanged": true }
+    },
+    {
+      "name": "disposition-false-positive",
+      "method": "PUT",
+      "path": "/aiyoloapi/projects/project-golden-a/alerts/local%3Acamera-golden%3A1790000000000000/disposition",
+      "headers": { "X-Mobile-Alert-Contract": "1.0", "Idempotency-Key": "00000000-0000-4000-8000-000000000002", "Content-Type": "application/json" },
+      "body": { "operationId": "00000000-0000-4000-8000-000000000002", "status": "FALSE_POSITIVE", "actedAtUs": 1790000000300000, "evidenceUnavailableReason": null },
+      "expected": { "httpStatus": 200, "dispositionStatus": "FALSE_POSITIVE", "actorSource": "authenticated-session" }
+    },
+    {
+      "name": "disposition-before-fact",
+      "method": "PUT",
+      "path": "/aiyoloapi/projects/project-golden-a/alerts/local%3Acamera-late%3A1790000000400000/disposition",
+      "headers": { "X-Mobile-Alert-Contract": "1.0", "Idempotency-Key": "00000000-0000-4000-8000-000000000002", "Content-Type": "application/json" },
+      "body": { "operationId": "00000000-0000-4000-8000-000000000002", "status": "ACKNOWLEDGED", "actedAtUs": 1790000000500000 },
+      "expected": { "httpStatus": 409, "errorCode": "event_not_ingested", "orphanCreated": false }
+    },
+    {
+      "name": "thumbnail-upload",
+      "method": "POST",
+      "path": "/aiyoloapi/projects/project-golden-a/alerts/local%3Acamera-golden%3A1790000000000000/evidence",
+      "headers": { "X-Mobile-Alert-Contract": "1.0", "Idempotency-Key": "00000000-0000-4000-8000-000000000003", "Content-Type": "multipart/form-data" },
+      "multipart": { "evidenceType": "thumbnail", "contentVersion": 1, "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "fileContentType": "image/jpeg", "fileByteLength": 48210, "fileFixture": "deterministic-thumbnail-jpeg-fixture-v1" },
+      "expected": { "httpStatus": 201, "uriSuffix": "/evidence/thumbnail/1", "maxDecodedBytes": 131072 }
+    },
+    {
+      "name": "original-upload-same-event",
+      "method": "POST",
+      "path": "/aiyoloapi/projects/project-golden-a/alerts/local%3Acamera-golden%3A1790000000000000/evidence",
+      "headers": { "X-Mobile-Alert-Contract": "1.0", "Idempotency-Key": "00000000-0000-4000-8000-000000000004", "Content-Type": "multipart/form-data" },
+      "multipart": { "evidenceType": "original", "contentVersion": 1, "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "fileContentType": "image/jpeg", "fileByteLength": 1048576, "fileFixture": "deterministic-original-jpeg-fixture-v1" },
+      "expected": { "httpStatus": 201, "uriSuffix": "/evidence/original/1", "thumbnailStillExists": true, "maxDecodedBytes": 5242880 }
+    }
+  ],
+  "errorVectors": [
+    { "case": "unauthorized-project", "httpStatus": 403, "errorCode": "project_access_denied", "retryable": false },
+    { "case": "bad-image-signature", "httpStatus": 415, "errorCode": "unsupported_media_type", "retryable": false },
+    { "case": "oversize-original", "httpStatus": 413, "errorCode": "evidence_too_large", "retryable": false },
+    { "case": "transient-storage-timeout", "httpStatus": 503, "errorCode": "storage_unavailable", "retryable": true, "retryUsesSameIdempotencyKey": true },
+    { "case": "committed-response-timeout", "resolution": "replay-same-operation-id", "duplicateDispositionOrObject": false }
+  ]
+}

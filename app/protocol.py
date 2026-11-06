@@ -6,6 +6,7 @@ from enum import StrEnum
 class StreamState(StrEnum):
     CREATED = "created"
     INGESTING = "ingesting"
+    ANALYZING = "analyzing"
     OUTPUTTING = "outputting"
     ERROR = "error"
     CLOSED = "closed"
