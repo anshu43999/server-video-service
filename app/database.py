@@ -165,9 +165,9 @@ class AlertDispositionActionRecord(Base):
             "project_id", "event_id", "status", "actor", "acted_at_us",
             name="uq_alert_disposition_action",
         ),
-        UniqueConstraint(
-            "project_id", "event_id", "operation_id",
-            name="uq_alert_disposition_operation",
+        Index(
+            "uq_alert_disposition_operation", "project_id", "event_id", "operation_id",
+            unique=True,
         ),
         Index("ix_alert_disposition_actions_project_event", "project_id", "event_id"),
     )
@@ -406,13 +406,13 @@ class SystemKnowledgeCatalogRecord(Base):
     __tablename__ = "system_knowledge_catalog"
     catalog_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     revision: Mapped[int] = mapped_column(Integer, nullable=False)
-    payload: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
 
 class SystemKnowledgeReleaseRecord(Base):
     __tablename__ = "system_knowledge_releases"
     version: Mapped[int] = mapped_column(Integer, primary_key=True)
-    snapshot: Mapped[dict[str, Any]] = mapped_column(JsonDocument, nullable=False)
+    snapshot: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
 
 class ProjectKnowledgeBaseRecord(Base):
@@ -646,7 +646,7 @@ class ProjectScenePlanRecord(Base):
     execution: Mapped[str] = mapped_column(String(16), nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     parameter_sources: Mapped[list | None] = mapped_column(JsonDocument, nullable=True)
-    camera_policy: Mapped[dict | None] = mapped_column(JsonDocument, nullable=True)
+    camera_policy: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     __table_args__ = (
         ForeignKeyConstraint(["project_id", "scene_id"], ["project_scenes.project_id", "project_scenes.scene_id"], ondelete="CASCADE", name="fk_scene_plans_project_scene"),
         CheckConstraint("execution IN ('single', 'sync', 'async')", name="ck_scene_plan_execution"),

@@ -27,6 +27,8 @@ docs
 tools/*
 !tools/conversion_worker.py
 !tools/check_cpu_runtime.py
+!tools/install_android_verifier.py
+!tools/check_app_update_runtime.py
 tmp*
 .test-*
 models
