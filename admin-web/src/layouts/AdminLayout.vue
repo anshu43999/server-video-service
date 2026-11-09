@@ -12,6 +12,7 @@ import { projectRoleLabel } from '../api/projects'
 import { platformRoleLabel } from '../api/auth'
 import ProjectsView from '../features/projects/ProjectsView.vue'
 import AlertNotifications from '../features/alerts/AlertNotifications.vue'
+import { stableAdminHref } from '../app/deploymentPaths'
 
 const route = useRoute()
 const router = useRouter()
@@ -45,6 +46,7 @@ async function chooseProject() { await projects.enter(undefined, true); await ro
 const pageTitle = computed(() => route.meta.title ?? '管理后台')
 const pageDescription = computed(() => route.meta.description ?? '查看当前管理范围内的业务数据与操作状态。')
 const isPreview = import.meta.env.BASE_URL === '/admin-next/'
+const stableHref = stableAdminHref()
 
 async function setDrawer(open: boolean, restoreFocus = false) {
   drawerOpen.value = open
@@ -121,7 +123,7 @@ onBeforeUnmount(() => {
       <div class="sidebar-foot">
         <span class="environment-badge"><i aria-hidden="true"></i>{{ isPreview ? '预览构建' : '管理控制台' }}</span>
         <p>数据与操作结果以服务器返回为准。</p>
-        <a v-if="isPreview" class="stable-link" href="/admin/">打开正式后台 ↗</a>
+        <a v-if="isPreview" class="stable-link" :href="stableHref">打开正式后台 ↗</a>
       </div>
     </aside>
 

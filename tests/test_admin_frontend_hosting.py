@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import urljoin
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -60,6 +61,21 @@ class AdminHostingTests(unittest.TestCase):
         response = client.head("/admin/models", headers={"Accept": "text/html"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content, b"")
+
+    def test_slash_redirect_retains_public_prefix_https_and_query(self):
+        client = self.client()
+        for base in ["admin", "admin-next"]:
+            for method in ["GET", "HEAD"]:
+                response = client.request(method, f"/{base}?pane=upload&next=%2Frules",
+                                          follow_redirects=False)
+                self.assertEqual(response.status_code, 307)
+                location = response.headers["location"]
+                self.assertEqual(location, f"{base}/?pane=upload&next=%2Frules")
+                for prefix in ["", "/video"]:
+                    self.assertEqual(
+                        urljoin(f"https://public.example{prefix}/{base}", location),
+                        f"https://public.example{prefix}/{base}/?pane=upload&next=%2Frules",
+                    )
 
     def test_missing_assets_and_non_navigation_never_receive_html(self):
         client = self.client()

@@ -4,7 +4,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import RedirectResponse
 from starlette.exceptions import HTTPException
 from starlette.staticfiles import StaticFiles
 
@@ -46,6 +47,19 @@ def mount_admin_frontend(
         raise ValueError("ADMIN_FRONTEND_MODE must be vue; retired frontend requires restoring its local archive")
     if not (build_dir / "index.html").is_file():
         raise RuntimeError("ADMIN_FRONTEND_MODE=vue requires admin-web/dist/index.html; run npm run build")
-    app.mount("/admin", AdminSPA(directory=build_dir, html=True), name="admin")
+    def mount(base: str, directory: Path, name: str) -> None:
+        async def trailing_slash(request: Request):
+            # A relative Location preserves the browser's HTTPS origin and any
+            # prefix stripped by a proxy; do not trust forwarded headers here.
+            target = base.lstrip("/") + "/"
+            if request.url.query:
+                target += "?" + request.url.query
+            return RedirectResponse(target, status_code=307)
+
+        app.add_api_route(base, trailing_slash, methods=["GET", "HEAD"],
+                          include_in_schema=False, name=f"{name}-slash")
+        app.mount(base, AdminSPA(directory=directory, html=True), name=name)
+
+    mount("/admin", build_dir, "admin")
     if (preview_dir / "index.html").is_file():
-        app.mount("/admin-next", AdminSPA(directory=preview_dir, html=True), name="admin-preview")
+        mount("/admin-next", preview_dir, "admin-preview")

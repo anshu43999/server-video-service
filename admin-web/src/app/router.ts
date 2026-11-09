@@ -25,6 +25,7 @@ import ScenesView from '../features/scenes/ScenesView.vue'
 import ProjectDiagnosticsView from '../features/operations/ProjectDiagnosticsView.vue'
 import KnowledgeView from '../features/advice/KnowledgeView.vue'
 import AppUpdatesView from '../features/appUpdates/AppUpdatesView.vue'
+import { adminHistoryBase } from './deploymentPaths'
 
 type SessionStore = ReturnType<typeof useSessionStore>
 
@@ -90,7 +91,7 @@ export function visibleNavigationItems(role?: UserRole) {
 
 export function createAdminRouter() {
   return createRouter({
-    history: createWebHistory(import.meta.env.BASE_URL),
+    history: createWebHistory(adminHistoryBase()),
     routes: [
       { path: '/login', name: 'login', component: LoginView, meta: { public: true } },
       { path: '/restricted', name: 'restricted', component: RestrictedView },
