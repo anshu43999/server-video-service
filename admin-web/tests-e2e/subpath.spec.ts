@@ -15,6 +15,83 @@ test('slash redirect stays relative and root admin remains another project', asy
 })
 
 for (const mount of ['admin', 'admin-next']) {
+  test(`diagnostics health, errors and cancelled menu requests under ${mount}`, async ({ page }, info) => {
+    const prefix = info.project.name === 'subpath-chromium' ? '/video' : ''
+    test.skip(Boolean(prefix) && mount === 'admin-next', 'Preview is not exposed by the supplied production proxy')
+    const base = `${prefix}/${mount}`, healthPath = `${prefix}/healthz`
+    const errors: string[] = [], healthRequests: string[] = [], metricsRequests: string[] = []
+    const cancellations: string[] = []
+    page.on('pageerror', error => errors.push(error.message))
+    page.on('request', request => {
+      const path = new URL(request.url()).pathname
+      if (path.endsWith('/healthz')) healthRequests.push(path)
+      if (path.endsWith('/metrics')) metricsRequests.push(path)
+    })
+    page.on('requestfailed', request => {
+      if (new URL(request.url()).pathname === healthPath) cancellations.push(request.failure()?.errorText ?? '')
+    })
+    let healthMode: 'live' | 'held' | 'failure' = 'live', failureResponses = 0
+    let releaseRead!: () => void, readStarted!: () => void
+    const held = new Promise<void>(resolve => { releaseRead = resolve })
+    const started = new Promise<void>(resolve => { readStarted = resolve })
+    // Keep a single interceptor installed; live mode still reaches the real local proxy.
+    await page.route('**/healthz', async route => {
+      if (healthMode === 'live') return route.continue()
+      if (healthMode === 'failure') {
+        failureResponses++
+        return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ status: 'degraded' }) })
+      }
+      readStarted()
+      await held
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok', streams: 0, database: { configured: false, status: 'fallback' } }) })
+    })
+    await page.goto(`${base}/login`)
+    await page.getByLabel('账号', { exact: true }).fill('cutover-admin')
+    await page.getByLabel('密码', { exact: true }).fill('cutover-test-password')
+    await page.getByRole('button', { name: '登录', exact: true }).click()
+    await expect(page.getByRole('button', { name: '进入 验收项目' })).toBeVisible()
+
+    // Real HTTP through the local prefix-stripping proxy, not a mocked health response.
+    for (let round = 0; round < 2; round++) {
+      await page.getByRole('link', { name: '系统诊断', exact: true }).click()
+      await expect(page).toHaveURL(`${base}/diagnostics`)
+      await expect(page.getByText('健康检查通过', { exact: true })).toBeVisible()
+      await page.getByRole('link', { name: '平台账号', exact: true }).click()
+      await expect(page.getByRole('heading', { name: '平台账号', exact: true })).toBeVisible()
+    }
+
+    // Hold one read until after navigating away: cancellation must not become a page error.
+    healthMode = 'held'
+    try {
+      await page.getByRole('link', { name: '系统诊断', exact: true }).click()
+      await started
+      await page.getByRole('link', { name: '平台项目', exact: true }).click()
+      await expect(page.getByRole('heading', { name: '平台项目', exact: true })).toBeVisible()
+      await expect.poll(() => cancellations.length).toBeGreaterThan(0)
+      expect(cancellations.every(error => error.includes('ERR_ABORTED'))).toBe(true)
+    } finally {
+      releaseRead()
+    }
+
+    // Real HTTP failures stay visible; no success fallback or retry on another project's URL.
+    healthMode = 'failure'
+    await page.getByRole('link', { name: '系统诊断', exact: true }).click()
+    await expect.poll(() => failureResponses).toBeGreaterThan(0)
+    await expect(page.getByText('健康状态不可用', { exact: true })).toBeVisible()
+    await expect(page.locator('.operation-feedback.is-error')).toContainText('服务暂时不可用')
+    healthMode = 'live'
+    await page.getByRole('button', { name: '刷新诊断', exact: true }).click()
+    await expect(page.getByText('健康检查通过', { exact: true })).toBeVisible()
+    await page.reload()
+    await expect(page).toHaveURL(`${base}/diagnostics`)
+    await expect(page.getByText('健康检查通过', { exact: true })).toBeVisible()
+    expect(healthRequests.length).toBeGreaterThanOrEqual(6)
+    expect(healthRequests.every(path => path === healthPath)).toBe(true)
+    expect(metricsRequests.length).toBeGreaterThan(0)
+    expect(metricsRequests.every(path => path === '/aiyoloapi/metrics')).toBe(true)
+    expect(errors).toEqual([])
+  })
+
   test(`real cookie login, navigation, refresh and logout under ${mount}`, async ({ context, page }, info) => {
     const prefix = info.project.name === 'subpath-chromium' ? '/video' : ''
     // Production currently rewrites only stable asset URLs, not preview assets.

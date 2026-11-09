@@ -1,5 +1,6 @@
 import { ApiError, errorFromResponse } from './errors'
 import { projectScope } from './projectScope'
+import { adminHealthPath } from '../app/deploymentPaths'
 
 export type QueryValue = string | number | boolean | null | undefined | Array<string | number | boolean>
 export type ResponseKind = 'json' | 'text' | 'blob' | 'void'
@@ -34,7 +35,8 @@ function endpointPath(endpoint: string): string {
   if (!endpoint.startsWith('/') || endpoint.startsWith('//') || endpoint.includes('://')) {
     throw new TypeError('API endpoint must be a same-origin absolute path')
   }
-  return endpoint.startsWith('/aiyoloapi/') || endpoint === '/healthz'
+  if (endpoint === '/healthz') return adminHealthPath()
+  return endpoint.startsWith('/aiyoloapi/')
     ? endpoint
     : `/aiyoloapi${endpoint}`
 }

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "server-video-service",
-  "updatedAt": "2026-11-09T12:06:56+08:00",
+  "updatedAt": "2026-11-09T15:04:55+08:00",
   "executionPolicy": {
     "deploymentTaskIds": [
       "M00-T06",
@@ -2897,6 +2897,19 @@
           "owner": "codex",
           "startedAt": "2026-11-09T11:41:27+08:00",
           "completedAt": "2026-11-09T12:06:56+08:00"
+        },
+        {
+          "id": "M32-T21",
+          "title": "修复子路径部署下后台健康请求地址并回归菜单切换",
+          "status": "completed",
+          "dependsOn": [
+            "M32-T18"
+          ],
+          "acceptance": "仅本地修复后台健康请求在/video/admin及/video/admin-next下使用/video/healthz，根部署保留/healthz，/aiyoloapi及项目隔离不变；覆盖路径、错误和取消语义，执行前端测试、构建和隔离浏览器菜单切换回归；不提交推送、不远程构建、不修改生产或Nginx/探针/数据库",
+          "record": "harness/records/M32/M32-T21.md",
+          "owner": "codex",
+          "startedAt": "2026-11-09T14:57:07+08:00",
+          "completedAt": "2026-11-09T15:04:55+08:00"
         }
       ],
       "startedAt": "2026-10-08T17:33:16+08:00"

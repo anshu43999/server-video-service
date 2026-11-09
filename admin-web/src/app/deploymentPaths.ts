@@ -10,3 +10,8 @@ export function adminHistoryBase(
 export function stableAdminHref(pathname = globalThis.location?.pathname ?? '') {
   return adminHistoryBase(pathname).replace(new RegExp('/admin-next/$'), '/admin/')
 }
+
+/** Only health follows the page mount; /aiyoloapi remains a separate public route. */
+export function adminHealthPath(pathname = globalThis.location?.pathname ?? '') {
+  return adminHistoryBase(pathname, '/admin/').startsWith('/video/') ? '/video/healthz' : '/healthz'
+}

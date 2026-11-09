@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from starlette.responses import JSONResponse
 
 from app import auth, config
@@ -36,6 +36,18 @@ def create_app():
     app = FastAPI()
     app.include_router(auth.create_auth_router())
     app.include_router(create_project_management_router())
+
+    # Synthetic diagnostics only: never inspect the host or an external database.
+    @app.get('/healthz')
+    def fixture_health():
+        return {'status': 'ok', 'streams': 0,
+                'database': {'configured': False, 'status': 'fallback'}}
+
+    @app.get('/aiyoloapi/metrics', dependencies=[Depends(auth.require_admin)])
+    def fixture_metrics():
+        return {'scope': 'platform', 'system': {'cpu_percent': 0, 'memory_percent': 10},
+                'streams': {'total': 0, 'framesReceived': 0, 'framesProcessed': 0, 'framesDropped': 0}}
+
     mount_admin_frontend(app, mode="vue", build_dir=ROOT / "admin-web/dist",
                          preview_dir=ROOT / "admin-web/dist-preview")
     return app
@@ -51,6 +63,8 @@ class SubpathProxy:
         path = scope["path"]
         if path.startswith("/aiyoloapi/"):
             return await self.app(scope, receive, send)
+        if path == '/healthz':
+            return await JSONResponse({'other_project': True}, status_code=404)(scope, receive, send)
         if not path.startswith("/video/"):
             return await JSONResponse({"other_project": True}, status_code=401)(scope, receive, send)
         upstream = dict(scope, path=path[len("/video"):], root_path="")
