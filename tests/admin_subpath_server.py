@@ -21,7 +21,7 @@ from app.config import Settings
 from app.database import DatabaseManager
 
 
-def create_app():
+def create_app(build_dir=None, preview_dir=None):
     # Only real auth/project handlers are needed for routing: no model catalog,
     # app.main, lifespan workers, disk data or external database is loaded.
     auth.database = DatabaseManager(None)
@@ -48,8 +48,8 @@ def create_app():
         return {'scope': 'platform', 'system': {'cpu_percent': 0, 'memory_percent': 10},
                 'streams': {'total': 0, 'framesReceived': 0, 'framesProcessed': 0, 'framesDropped': 0}}
 
-    mount_admin_frontend(app, mode="vue", build_dir=ROOT / "admin-web/dist",
-                         preview_dir=ROOT / "admin-web/dist-preview")
+    mount_admin_frontend(app, mode="vue", build_dir=build_dir or ROOT / "admin-web/dist",
+                         preview_dir=preview_dir or ROOT / "admin-web/dist-preview")
     return app
 
 
@@ -90,6 +90,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=4175)
     parser.add_argument("--direct", action="store_true")
+    parser.add_argument("--build-dir", type=Path)
+    parser.add_argument("--preview-dir", type=Path)
     args = parser.parse_args()
-    app = create_app()
+    app = create_app(args.build_dir, args.preview_dir)
     uvicorn.run(app if args.direct else SubpathProxy(app), host="127.0.0.1", port=args.port, log_level="warning")

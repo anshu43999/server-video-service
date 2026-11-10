@@ -5,12 +5,14 @@ class ProjectScope {
   enabled = false
   projectId: string | null = null
   generation = 0
+  verifying = false
   private resources = new Set<() => void>()
   private listeners = new Set<() => void>()
   onDenied?: () => void
 
   enable() { this.enabled = true; this.clear() }
   clear() {
+    this.verifying = false
     this.projectId = null
     this.generation++
     const resources = [...this.resources]
@@ -25,6 +27,9 @@ class ProjectScope {
     if (this.enabled && generation !== this.generation) throw this.cancelled()
   }
   cancelled() { return new ApiError({ kind: 'cancelled', code: 'project_context_changed', message: '项目上下文已变化，旧请求已取消' }) }
+  assertWritable() {
+    if (this.enabled && this.verifying) throw new ApiError({ code: 'permission_verification_pending', message: '正在复核权限，请验证完成后再操作' })
+  }
   path(path: string) {
     if (!this.enabled) return path
     const explicit = new RegExp('^/aiyoloapi/projects/([^/?]+)(?:/|$)').exec(path)

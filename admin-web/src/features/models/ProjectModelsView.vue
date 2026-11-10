@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import UiDialog from '../../components/ui/UiDialog.vue'
 import UiConfirmDialog from '../../components/ui/UiConfirmDialog.vue'
 import UiStatePanel from '../../components/ui/UiStatePanel.vue'
 import { useManagement } from '../management/useManagement'
+import { useCandidates } from '../management/useCandidates'
 import { useProjectCapabilities } from '../projects/capabilities'
 import { modelsApi, formatBytes } from './api'
 import { targetStatus } from './capabilities'
@@ -19,11 +20,14 @@ const route = useRoute()
 const state = useManagement<{models:AssignedModel[];assignments:Assignment[];available:AvailableModel[]}>(
   {models:[],assignments:[],available:[]},
   async signal => {
-    const [models, assignments, available] = await Promise.all([
+    const [models, assignments] = await Promise.all([
       projectModelsApi.models(signal),
       projectModelsApi.assignments(signal),
-      canAssign.value ? projectModelsApi.available(signal) : Promise.resolve([]),
     ])
+    // Disabled assignments may be absent from /models. Preserve their status,
+    // name and integrity metadata instead of dropping the available fallback.
+    const needsMetadata = assignments.some(a => !models.some(m => m.modelId === a.modelId && m.version === a.modelVersion))
+    const available = canAssign.value && needsMetadata ? await projectModelsApi.available(signal) : []
     return {models, assignments, available}
   },
 )
@@ -33,6 +37,7 @@ const selectedKey = ref('')
 const selectedTarget = ref<ModelTarget>('pc')
 const activeTarget = ref<ModelTarget>('pc')
 const open = ref(false)
+const {data:candidates,loading:candidatesLoading,error:candidatesError,refresh:reloadCandidates}=useCandidates(computed(()=>open.value&&canAssign.value),projectModelsApi.available)
 const confirm = ref(false)
 const editing = ref<Assignment|null>(null)
 const parameters = ref<AssignedModel|null>(null)
@@ -40,7 +45,7 @@ const disabling = ref<Assignment|null>(null)
 const removing = ref<Assignment|null>(null)
 
 const key = (model:Pick<ModelAsset,'modelId'|'version'>) => JSON.stringify([model.modelId, model.version])
-const selected = computed(() => data.value.available.find(model => key(model) === selectedKey.value))
+const selected = computed(() => candidates.value.find(model => key(model) === selectedKey.value))
 const platformFor = (target:ModelTarget):Platform => target === 'pc' ? 'server' : 'android'
 const targetLabel = (target:ModelTarget) => target === 'pc' ? 'PC 端' : '移动端'
 const targetDetail = (target:ModelTarget) => target === 'pc'
@@ -79,6 +84,7 @@ function selectRelease(value:string|number) {
   selectedKey.value = String(value)
   if (!availableTargets.value.includes(selectedTarget.value)) selectedTarget.value = availableTargets.value[0] ?? 'pc'
 }
+watch(candidates,()=>{if(selectedKey.value)selectRelease(selectedKey.value)})
 function begin(assignment?:Assignment, preferredTarget?:ModelTarget, initialModelKey?:string) {
   if (!canAssign.value || needsReload.value) return
   resetMutation()
@@ -87,7 +93,6 @@ function begin(assignment?:Assignment, preferredTarget?:ModelTarget, initialMode
   activeTarget.value = assignment?.target ?? preferredTarget ?? activeTarget.value
   selectedTarget.value = assignment?.target ?? preferredTarget ?? 'pc'
   selectedKey.value = assignment ? key({modelId:assignment.modelId,version:assignment.modelVersion}) : initialModelKey ?? ''
-  if (selectedKey.value) selectRelease(selectedKey.value)
   open.value = true
 }
 function changeTarget(target:ModelTarget) { activeTarget.value = target }
@@ -102,7 +107,7 @@ function onTargetKeydown(event:KeyboardEvent) {
 async function save() {
   const model = selected.value
   const profile = selectedProfile.value
-  if (!canAssign.value || !model || !profile || !canSave.value) return
+  if (!canAssign.value || candidatesLoading.value || candidatesError.value || !model || !profile || !canSave.value) return
   await run(signal => projectModelsApi.save({
     modelId:model.modelId, modelVersion:model.version, target:selectedTarget.value,
     parameterRevision:profile.revision, enabled:true, expectedRevision:current.value?.revision ?? 0,
@@ -135,8 +140,7 @@ onMounted(async () => {
   await refresh()
   const modelId = typeof route.query.modelId === 'string' ? route.query.modelId : ''
   const version = typeof route.query.version === 'string' ? route.query.version : ''
-  const match = data.value.available.find(model => model.modelId === modelId && model.version === version)
-  if (match && canAssign.value) begin(undefined, availableTargets.value[0], key(match))
+  if (modelId && version && canAssign.value) begin(undefined, undefined, key({modelId,version}))
 })
 </script>
 
@@ -207,11 +211,12 @@ onMounted(async () => {
     </div>
 
     <UiDialog v-model:open="open" title="分配项目模型" :busy="busy">
+      <p v-if="candidatesLoading" role="status">正在读取可分配模型…</p><p v-if="candidatesError" role="alert">{{candidatesError}} <UiButton @click="reloadCandidates">重试模型候选</UiButton></p>
       <form class="model-form assignment-form" @submit.prevent="confirm=true">
         <label>模型版本
           <UiSelect :model-value="selectedKey" :disabled="busy||needsReload" @update:model-value="selectRelease">
             <UiOption value="">请选择模型版本</UiOption>
-            <UiOption v-for="model in data.available" :key="key(model)" :value="key(model)">{{modelDisplayName(model)}} / {{model.version}}</UiOption>
+            <UiOption v-for="model in candidates" :key="key(model)" :value="key(model)">{{modelDisplayName(model)}} / {{model.version}}</UiOption>
           </UiSelect>
         </label>
         <label>启用目标端
@@ -227,7 +232,7 @@ onMounted(async () => {
           <p>作为独立条目加入模型池；不会创建场景，也不会启动运行任务。</p>
         </section>
         <p v-if="selected&&!selectedProfile" class="operation-feedback is-warning">该模型版本的{{targetLabel(selectedTarget)}}产物或参数尚未就绪，请选择其他目标端。</p>
-        <p v-if="!data.available.length" class="model-muted">当前没有满足项目授权条件的可分配版本，请联系平台管理员检查模型发布与目标端就绪状态。</p>
+        <p v-if="!candidatesLoading&&!candidatesError&&!candidates.length" class="model-muted">当前没有满足项目授权条件的可分配版本，请联系平台管理员检查模型发布与目标端就绪状态。</p>
         <p v-if="mutationError" class="operation-feedback is-error" role="alert">{{mutationError}}</p>
         <footer><UiButton type="button" class="secondary-button" :disabled="busy" @click="open=false">取消</UiButton><UiButton class="primary-button" :disabled="busy||needsReload||!canSave||!canAssign">确认分配</UiButton></footer>
       </form>

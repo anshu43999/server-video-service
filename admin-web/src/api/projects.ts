@@ -15,7 +15,7 @@ export interface AccessibleProject {
 }
 
 export async function accessibleProjects(signal?: AbortSignal): Promise<AccessibleProject[]> {
-  const value = await apiClient.request<{ contractVersion: string; projects: AccessibleProject[] }>('/auth/projects', { signal })
+  const value = await apiClient.request<{ contractVersion: string; projects: AccessibleProject[] }>('/auth/projects', { signal, skipSessionCheck: true })
   if (!value || value.contractVersion !== 'm33-v1' || !Array.isArray(value.projects) || value.projects.some(p =>
     !p || typeof p.projectId !== 'string' || !p.projectId || typeof p.displayName !== 'string' ||
     typeof p.projectCode !== 'string' || !['ACTIVE', 'SUSPENDED', 'ARCHIVED'].includes(p.lifecycleState) ||

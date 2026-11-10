@@ -16,6 +16,15 @@ function setup(load: (signal: AbortSignal) => Promise<string[]>) {
   return { store, wrapper }
 }
 describe('management mutation recovery and scope', () => {
+  it('keeps default write reloads but permits explicit status-only actions', async () => {
+    const load = vi.fn().mockResolvedValue(['latest']), { store, wrapper } = setup(load)
+    const action = vi.fn().mockResolvedValue({}), success = vi.fn()
+    await store.run(action, success, false)
+    expect(action).toHaveBeenCalledOnce(); expect(success).toHaveBeenCalledOnce(); expect(load).not.toHaveBeenCalled()
+    await store.run(action, success)
+    expect(load).toHaveBeenCalledOnce(); expect(store.data.value).toEqual(['latest'])
+    wrapper.unmount()
+  })
   it('explains scene input mismatches in Chinese while preserving conflict refresh protection',async()=>{
     const {store,wrapper}=setup(vi.fn().mockResolvedValue([]))
     const action=vi.fn().mockRejectedValue(new ApiError({status:409,code:'scene_input_not_supported',message:'member input is outside the scene input declaration'}))

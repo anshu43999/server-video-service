@@ -53,18 +53,31 @@ def environment() -> dict:
     import ultralytics
     import torch
     packages = {name: importlib.metadata.version(name) for name in ("ultralytics", "torch")}
+    verifier = False
+    verifier_reason = "本地 LiteRT 复验依赖不可用"
+    try:
+        import numpy
+        from ai_edge_litert.interpreter import Interpreter
+        packages["ai-edge-litert"] = importlib.metadata.version("ai-edge-litert")
+        verifier = callable(Interpreter)
+        if verifier:
+            verifier_reason = "本地 LiteRT 复验依赖已就绪；实际产物仍需张量与预热校验"
+    except (ImportError, OSError):
+        pass
     mobile = False
     reason = "Windows 原生环境不支持本项目 LiteRT 导出，请使用 WSL"
     if platform.system() != "Windows":
-        try:
-            import ai_edge_litert.interpreter
-            for name in ("litert-torch", "ai-edge-litert", "ai-edge-quantizer", "litert-converter"):
-                packages[name] = importlib.metadata.version(name)
-            mobile, reason = True, "依赖已就绪；实际模型导出结果仍需独立验证"
-        except ImportError as exc:
-            reason = f"缺少移动端转换依赖：{exc}"
+        reason = "本地导出依赖不可用；不代表远程转换服务不可用"
+        if verifier:
+            try:
+                for name in ("litert-torch", "ai-edge-quantizer", "litert-converter"):
+                    packages[name] = importlib.metadata.version(name)
+                mobile, reason = True, "依赖已就绪；实际模型导出结果仍需独立验证"
+            except ImportError:
+                pass
     return {"ok": True, "device": "cpu", "python": platform.python_version(), "platform": platform.system(),
-            "packages": packages, "server_available": True, "mobile_available": mobile, "message": reason}
+            "packages": packages, "server_available": True, "mobile_available": mobile, "message": reason,
+            "verifier_available": verifier, "verifier_message": verifier_reason}
 
 
 def configure_cpu_environment() -> None:

@@ -9,10 +9,12 @@ from app.model_catalog import ModelCatalog, ModelCatalogValidationError
 
 class ModelCatalogSourceTests(unittest.TestCase):
     def _catalog(self, *, content: bytes = b"model-bytes", sha256: str | None = None):
-        # Reuse the checked-in small development artifact to avoid Windows
-        # sandbox restrictions on creating nested temporary directories.
-        root = Path(__file__).resolve().parents[1]
+        temporary = tempfile.TemporaryDirectory(prefix='model-catalog-source-')
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / 'models').mkdir()
         artifact = root / "models" / "yolo11n.pt"
+        artifact.write_bytes(content)
         digest = sha256 or hashlib.sha256(artifact.read_bytes()).hexdigest().upper()
         registry = {
             "schemaVersion": 1,

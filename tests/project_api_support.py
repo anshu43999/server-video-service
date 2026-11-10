@@ -47,8 +47,12 @@ class ProjectApiSupport:
         settings.mobile_token = None
         reset_memory_project_authorization_for_tests()
         reset_memory_project_management_for_tests()
-        self.client = TestClient(main_module.app)
-        self.client.__enter__()
+        # TestClient closes its own partial context when startup fails. Do not
+        # call __exit__ on a client that never finished __enter__.
+        self.client = None
+        client = TestClient(main_module.app)
+        client.__enter__()
+        self.client = client
         setup = self.client.post(
             "/aiyoloapi/auth/setup",
             json={"username": f"{code}-admin", "password": "temporary-test-password"},

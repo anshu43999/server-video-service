@@ -3,17 +3,17 @@ import { useProjectCapabilities } from '../projects/capabilities'
 const { dispose: canDispose, exports: canExport, active } = useProjectCapabilities()
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { ArrowLeft, ArrowRight, BellRing, Download, Image, ImageOff, LoaderCircle, RefreshCw, Search } from '@lucide/vue'
+import { ArrowLeft, ArrowRight, BellRing, Download, RefreshCw, Search } from '@lucide/vue'
 import { isApiError } from '../../api/errors'
 import UiConfirmDialog from '../../components/ui/UiConfirmDialog.vue'
 import UiNoticeStack, { type NoticeItem } from '../../components/ui/UiNoticeStack.vue'
 import UiStatePanel from '../../components/ui/UiStatePanel.vue'
 import { alertsApi } from './api'
 import AlertDetailDialog from './AlertDetailDialog.vue'
-import EvidenceImage from './EvidenceImage.vue'
+import EvidenceThumbnail from './EvidenceThumbnail.vue'
 import {
   alertSubject, alertTitle, dispositionPresentation, eventPriority, eventTimestampUs,
-  formatTimestampUs, hasEvidence, matchesOriginFilter, originLabel, alertSceneLabel, alertModelLabel,
+  formatTimestampUs, matchesOriginFilter, originLabel, alertSceneLabel, alertModelLabel,
   type AlertOriginFilter,
 } from './presenters'
 import { useAlertsStore } from './store'
@@ -38,10 +38,6 @@ const confirmOpen = ref(false)
 const pendingAction = ref<{ action: DispositionAction; note: string } | null>(null)
 const notices = ref<NoticeItem[]>([])
 let noticeSequence = 0
-type ThumbnailPhase = 'loading' | 'ready' | 'empty' | 'error'
-type ThumbnailState = { phase: ThumbnailPhase; url?: string }
-const thumbnailStates = ref<Record<string, ThumbnailState>>({})
-const thumbnailControllers = new Map<string, AbortController>()
 
 const counts = computed(() => {
   const value = { all: store.events.length, critical: 0, important: 0, normal: 0 }
@@ -78,7 +74,6 @@ const pendingDescription = computed(() => {
 
 watch([severityFilter, statusFilter, originFilter, query, pageSize], () => { page.value = 1 })
 watch(pageCount, (count) => { if (page.value > count) page.value = count })
-watch(visibleEvents, (events) => { events.forEach((event) => { void loadThumbnail(event) }) }, { immediate: true })
 
 function pushNotice(title: string, message: string, tone: NoticeItem['tone']) {
   const id = `alert-notice-${++noticeSequence}`
@@ -87,41 +82,6 @@ function pushNotice(title: string, message: string, tone: NoticeItem['tone']) {
 
 function dismissNotice(id: string) {
   notices.value = notices.value.filter((notice) => notice.id !== id)
-}
-
-function thumbnailState(event: AlertEvent): ThumbnailState {
-  return thumbnailStates.value[event.eventId] ?? { phase: hasEvidence(event) ? 'loading' : 'empty' }
-}
-
-function setThumbnailState(eventId: string, state: ThumbnailState) {
-  thumbnailStates.value = { ...thumbnailStates.value, [eventId]: state }
-}
-
-async function loadThumbnail(event: AlertEvent) {
-  if (!hasEvidence(event) || thumbnailStates.value[event.eventId]) return
-  const controller = new AbortController()
-  thumbnailControllers.set(event.eventId, controller)
-  setThumbnailState(event.eventId, { phase: 'loading' })
-  try {
-    const blob = await alertsApi.evidence(event.eventId, controller.signal)
-    if (controller.signal.aborted) return
-    if (!blob.size) {
-      setThumbnailState(event.eventId, { phase: 'empty' })
-      return
-    }
-    setThumbnailState(event.eventId, { phase: 'ready', url: URL.createObjectURL(blob) })
-  } catch (error) {
-    if (controller.signal.aborted || (isApiError(error) && error.kind === 'cancelled')) return
-    setThumbnailState(event.eventId, { phase: isApiError(error) && error.status === 404 ? 'empty' : 'error' })
-  } finally {
-    thumbnailControllers.delete(event.eventId)
-  }
-}
-
-function failThumbnail(eventId: string) {
-  const current = thumbnailStates.value[eventId]
-  if (current?.url) URL.revokeObjectURL(current.url)
-  setThumbnailState(eventId, { phase: 'error' })
 }
 
 async function openEvent(event: AlertEvent) {
@@ -187,8 +147,6 @@ onMounted(() => {
   if (typeof route.query.event === 'string' && route.query.event) void store.openDetail(route.query.event)
 })
 onBeforeUnmount(() => {
-  thumbnailControllers.forEach((controller) => controller.abort())
-  Object.values(thumbnailStates.value).forEach((state) => { if (state.url) URL.revokeObjectURL(state.url) })
   store.closeDetail()
 })
 </script>
@@ -230,14 +188,7 @@ onBeforeUnmount(() => {
         <div class="alert-event-list">
           <UiButton v-for="event in visibleEvents" :key="event.eventId" class="alert-event-row" :class="`severity-${eventPriority(event).key}`" type="button" @click="openEvent(event)">
             <span class="alert-event-grid">
-              <span class="evidence-indicator" :class="{ available: thumbnailState(event).phase === 'ready' }">
-                <EvidenceImage v-if="thumbnailState(event).phase === 'ready'" :src="thumbnailState(event).url!"
-                  :event="event" :alt="`${alertTitle(event)}证据缩略图`" @error="failThumbnail(event.eventId)" />
-                <LoaderCircle v-else-if="thumbnailState(event).phase === 'loading'" class="spinning" :size="18" aria-hidden="true" />
-                <ImageOff v-else-if="thumbnailState(event).phase === 'empty'" :size="18" aria-hidden="true" />
-                <Image v-else :size="18" aria-hidden="true" />
-                <small>{{ thumbnailState(event).phase === 'ready' ? '有证据' : thumbnailState(event).phase === 'loading' ? '读取中' : thumbnailState(event).phase === 'empty' ? '无证据' : '读取失败' }}</small>
-              </span>
+              <EvidenceThumbnail :event="event" />
               <span class="alert-event-title"><b>{{ alertTitle(event) }}</b><small><i :class="`is-${eventPriority(event).key}`"></i>通知{{ eventPriority(event).label }} · {{ event.ruleId || '未记录规则' }}</small></span>
               <span class="alert-event-source"><span class="alert-origin-label" :class="matchesOriginFilter(event.origin, 'SERVER_STREAM') ? 'is-stream' : matchesOriginFilter(event.origin, 'MOBILE') ? 'is-mobile' : 'is-unknown'">{{ originLabel(event.origin) }}</span><b :title="alertSceneLabel(event)">{{ alertSceneLabel(event) }}</b><small :title="alertModelLabel(event)">{{ alertModelLabel(event) }}</small></span>
               <span class="alert-event-time">{{ formatTimestampUs(eventTimestampUs(event)) }}</span>

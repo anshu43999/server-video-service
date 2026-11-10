@@ -8,8 +8,16 @@ import UiButton from '../src/components/ui/UiButton.vue'
 import UiInput from '../src/components/ui/UiInput.vue'
 
 vi.mock('../src/features/projects/capabilities', () => ({ useProjectCapabilities: () => ({ dispose: true }) }))
-afterEach(() => vi.restoreAllMocks())
-beforeEach(() => { vi.spyOn(alertsApi, 'latestAdvice').mockRejectedValue(new ApiError({ status: 404, code: 'ADVICE_GENERATION_NOT_FOUND' })) })
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
+beforeEach(() => {
+  // happy-dom has no layout intersection delivery; these dialogs are visible.
+  vi.stubGlobal('IntersectionObserver', class {
+    constructor(private callback: IntersectionObserverCallback) {}
+    observe(target: Element) { this.callback([{ target, isIntersecting: true } as IntersectionObserverEntry], this as unknown as IntersectionObserver) }
+    disconnect() {}
+  })
+  vi.spyOn(alertsApi, 'latestAdvice').mockRejectedValue(new ApiError({ status: 404, code: 'ADVICE_GENERATION_NOT_FOUND' }))
+})
 const event = { eventId: 'event-1', projectId: 'project-a', ruleId: 'PPE_NO_HELMET', label: 'HEAD', disposition: { status: 'OPEN' } }
 const generated = { contractVersion: '1.0', generationId: 'g-1', projectId: 'project-a', eventId: 'event-1', requestedBy: 'operator', idempotencyKey: crypto.randomUUID(), status: 'GENERATED', matchKey: { alertTypeId: 'PPE_NO_HELMET', recognitionCategoryId: 'HEAD' }, advice: { title: '安全帽处置建议', steps: [{ stepId: 'stop', order: 1, title: '暂停作业', instruction: '先撤离风险区' }], cautions: [] }, references: [{ referenceId: 'r', documentTitle: '安全制度', documentVersion: 'v1', clauseId: 'PPE-1', excerpt: '应佩戴安全帽', sourceName: '模拟库', sourceType: 'MOCK_KNOWLEDGE_BASE' }], knowledgeRevision: 1, retrievalProvider: 'SIMULATED_KNOWLEDGE_BASE', generationProvider: 'SIMULATED_LLM', sourceNotice: '模拟结果', error: null, createdAt: '2026-01-01T00:00:00Z', completedAt: '2026-01-01T00:00:01Z' }
 describe('alert advice detail interaction', () => {

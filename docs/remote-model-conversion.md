@@ -28,6 +28,8 @@
 
 返回 `200`：`{"status":"ok","protocolVersion":1,"capabilities":["yolo-detect-to-tflite-int8"]}`。
 
+后台 remote 环境检测将远程服务声明的导出能力与视频服务的本地 LiteRT 复验能力分开检查：顶层 `mobile_available` 只有在远端声明上述能力、且本地 `verifier_available=true` 时为 true。嵌套 `verifier.mobile_available` 仍表示本地完整导出能力；视频服务只安装 `requirements-verifier.txt`，不应因未安装 `litert-torch` 等导出依赖而把远程流程判定为不可用。环境检查不是实际模型导出或产物验收。
+
 ### 幂等提交
 
 `POST /v1/conversions?inputSize=640&calibrationData=coco8.yaml`
@@ -62,7 +64,10 @@
 ## 错误与重试
 
 - `401/403`: 鉴权错误，不自动重试。
-- `408/429/5xx`、连接中断：在总截止时间内有限重试，遵守 `Retry-After` 上限。
+- 已受理任务的状态 GET 遇到 `408/429/5xx`、连接中断或套接字超时：单次轮询最多 3 次请求（2 次重试），退避 1、2 秒；整数秒 `Retry-After` 最多接受 5 秒，等待不超过剩余任务期限。UI 阶段为 `remote_retrying`，继续查询同一个 jobId，不重新提交转换。
+- 请求前后检查轮询期限，套接字超时取 60 秒与剩余期限较小值；这不是对同步 DNS/套接字分段读取的硬实时总时限承诺。期限从提交前开始计时，不在每次重试时重置。
+- JSON 格式/任务标识/状态异常、TLS 错误和 `401/403/404/409/422` 不重试；远端终态失败原样失败，不自动重启重任务。提交 POST、健康 GET、产物下载和取消请求本次均不新增自动重试；管理员手工重试与幂等提交规则保持既有语义。
+- 对外区分 `remote_timeout`、`remote_connection_error`、`remote_invalid_response`、`remote_tls_error`，不回显原始异常、响应正文或令牌，不把断连直接标记为 OOM。
 - `409 idempotency_conflict`、`422 unsupported_model|invalid_request`: 不重试。
 - 本地服务停止：请求远端取消；本地任务记为 interrupted，可由管理员重试且复用同一幂等键语义。
 - 大小、SHA-256 或本地张量复验失败：删除隔离产物，不登记 Android artifact，不影响已通过验证的服务端 PT。

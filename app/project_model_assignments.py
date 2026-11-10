@@ -80,7 +80,9 @@ class ProjectModelAssignments:
     def _memory_key(project_id, model_id, version, platform):
         return (project_id, model_id, version, ProjectModelAssignments._platform(platform))
 
-    def list(self, project_id, target=None):
+    def list(self, project_id, target=None, *, include_display=True):
+        # Internal revision guards need assignment metadata, not model files.
+        project = self._display if include_display else self._public
         platform = self._platform(target) if target is not None else None
         if self.database is not None and self.database.enabled:
             with self.database.session() as session:
@@ -92,9 +94,9 @@ class ProjectModelAssignments:
                     ProjectModelAssignmentRecord.model_id,
                     ProjectModelAssignmentRecord.model_version,
                     ProjectModelAssignmentRecord.parameter_platform)).all()
-                return [self._display(row) for row in rows]
+                return [project(row) for row in rows]
         with self._lock:
-            rows = [self._display(row) for key, row in sorted(_memory_model_assignments.items())
+            rows = [project(row) for key, row in sorted(_memory_model_assignments.items())
                     if key[0] == project_id and (platform is None or self._platform(row.get("parameterPlatform", "server")) == platform)]
         return rows
 

@@ -12,6 +12,7 @@ from typing import Any
 
 from .conversion import atomic_json
 from .model_signing import ModelManifestSigner
+from .catalog_hashes import CatalogFileHashes
 
 _mutation_lock = threading.RLock()
 _mutation_local = threading.local()
@@ -43,6 +44,24 @@ class ModelCatalogValidationError(ValueError):
 class ModelCatalog:
     def __init__(self, registry_path: Path | None = None):
         self.registry_path = registry_path or Path(__file__).resolve().parents[1] / "models" / "registry.json"
+        self._list_hashes = threading.local()
+
+    @contextmanager
+    def list_read_hashes(self):
+        """Opt-in, worker-local reuse; never enabled by write/download gates."""
+        previous = getattr(self._list_hashes, 'current', None)
+        hashes = CatalogFileHashes(self.sha256)
+        self._list_hashes.current = hashes
+        try:
+            yield hashes
+            hashes.verify()
+        finally:
+            self._list_hashes.current = previous
+            hashes.clear()
+
+    def _inspection_hash(self, path):
+        hashes = getattr(self._list_hashes, 'current', None)
+        return self.sha256(path) if hashes is None else hashes.digest(path)
 
     @contextmanager
     def mutation_guard(self, operation_id=None):
@@ -417,7 +436,7 @@ class ModelCatalog:
         if not path.is_absolute():
             path = self.registry_path.parents[1] / path
         exists = path.is_file()
-        actual_hash = self.sha256(path) if exists else None
+        actual_hash = self._inspection_hash(path) if exists else None
         inspected_artifacts = []
         for artifact in item.get("artifacts", []):
             if not isinstance(artifact, dict):
@@ -436,7 +455,7 @@ class ModelCatalog:
             artifact_copy["hashValid"] = (
                 artifact_copy["exists"]
                 and (artifact.get("sizeBytes") is None or artifact_path.stat().st_size == int(artifact["sizeBytes"]))
-                and self.sha256(artifact_path).lower() == str(artifact.get("sha256", "")).lower()
+                and self._inspection_hash(artifact_path).lower() == str(artifact.get("sha256", "")).lower()
             )
             artifact_copy.pop("path", None)
             inspected_artifacts.append(artifact_copy)

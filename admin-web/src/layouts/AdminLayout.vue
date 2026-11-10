@@ -73,10 +73,12 @@ async function logout() {
 
 watch(() => route.fullPath, () => { drawerOpen.value = false })
 watch(drawerOpen, (open) => document.body.classList.toggle('nav-open', open))
+watch(() => projects.permissionBlocking, value => document.body.classList.toggle('permission-verifying', value), { immediate: true, flush: 'sync' })
 onMounted(() => window.addEventListener('keydown', handleEscape))
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleEscape)
   document.body.classList.remove('nav-open')
+  document.body.classList.remove('permission-verifying')
 })
 </script>
 
@@ -146,20 +148,21 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="account-area">
-          <span class="service-state"><i aria-hidden="true"></i>会话已验证</span>
+          <span class="service-state"><i aria-hidden="true"></i>{{ projects.verifying ? '正在复核权限' : '会话已验证' }}</span>
           <span class="account-identity"><UserRound :size="17" aria-hidden="true" /><span><strong>{{ session.user?.username }}</strong><small>{{ platformRoleLabel(session.user?.platformRole) }}</small></span></span>
           <UiButton class="icon-button" type="button" :disabled="loggingOut" :title="loggingOut ? '正在退出' : '退出登录'" aria-label="退出登录" @click="logout"><LogOut :size="18" /></UiButton>
         </div>
       </header>
       <section class="project-context-bar" aria-label="当前项目上下文" aria-live="polite">
         <div><span class="eyebrow">{{ route.meta.platformOnly ? 'PLATFORM / 平台管理区' : 'CURRENT PROJECT / 当前项目' }}</span><strong>{{ projects.current?.displayName ?? (route.meta.platformOnly ? '全局平台资源' : '尚未进入项目') }}</strong><small v-if="projects.current">{{ projectRoleLabel(projects.current) }} · {{ projects.current.projectCode }}</small></div>
-        <UiButton class="secondary-button" :disabled="projects.busy" @click="chooseProject">{{ projects.busy ? '正在验证…' : '切换项目' }}</UiButton>
+        <UiButton class="secondary-button" :disabled="projects.busy" @click="chooseProject">切换项目</UiButton>
       </section>
       <p v-if="projects.current && projects.current.lifecycleState !== 'ACTIVE'" class="shell-alert" role="status">{{ projects.current.lifecycleState === 'SUSPENDED' ? '项目已停用：可查询历史与维护获准配置，实时播放和业务写入已停止。' : '项目已归档：仅显示获准历史数据，所有维护操作均已关闭。' }}</p>
 
       <p v-if="session.logoutUnconfirmed" class="shell-alert" role="alert">{{ session.message }}</p>
       <AlertNotifications />
-      <main id="main-content" class="page-content" tabindex="-1">
+      <p v-if="projects.permissionBlocking" class="shell-alert permission-status" role="status">正在验证账号与项目…</p>
+      <main id="main-content" class="page-content" tabindex="-1" :inert="projects.permissionBlocking" :aria-busy="projects.verifying">
         <RouterView v-if="showPage" v-slot="{ Component }"><component :is="Component" :key="`${projects.epoch}:${route.path}`" /></RouterView>
         <section v-else-if="projects.current && projects.current.lifecycleState !== 'ACTIVE'" class="project-picker" role="status"><h2>项目业务已暂停</h2><p>已停止该项目的实时连接、媒体预览和业务操作。可切换到其他项目，或联系平台超级管理员处理项目状态。</p><UiButton class="secondary-button" @click="chooseProject">返回项目空间</UiButton></section>
         <ProjectsView v-else />
@@ -167,3 +170,15 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style>
+/* High-risk checks still mask sensitive content and teleported UI. Routine
+   checks preserve visual continuity; API write protection remains unchanged. */
+.account-area .service-state { min-inline-size: 8em; }
+.permission-status { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 4000; margin: 0; pointer-events: none; }
+body.permission-verifying .page-content,
+body.permission-verifying .project-context-bar,
+body.permission-verifying .project-alert-notices,
+body.permission-verifying .el-overlay,
+body.permission-verifying .el-popper { visibility: hidden !important; pointer-events: none !important; }
+</style>

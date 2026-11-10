@@ -52,6 +52,22 @@ describe('session store', () => {
     expect(store.setupRequired).toBe(false)
   })
 
+  it('clears the prior identity after a failed login instead of staying restoring', async () => {
+    const store = useSessionStore()
+    store.user = { username: 'old-admin', role: 'admin', accountId: 'old', platformRole: 'PLATFORM_ADMIN', contractVersion: 'm33-v1' }
+    store.phase = 'authenticated'
+    let rejectLogin!: (reason: Error) => void
+    vi.spyOn(authApi, 'login').mockReturnValue(new Promise((_, reject) => { rejectLogin = reject }))
+    const pending = store.submit('new-user', 'not-a-real-password')
+    const rejected = expect(pending).rejects.toThrow('login unavailable')
+    expect(store.phase).toBe('restoring')
+    rejectLogin(new Error('login unavailable'))
+    await rejected
+    expect(store.user).toBeNull()
+    expect(store.phase).toBe('anonymous')
+    expect(store.isAdmin).toBe(false)
+  })
+
   it('deduplicates identity checks for simultaneous business 401 responses', async () => {
     let meCount = 0
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {

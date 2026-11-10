@@ -4,8 +4,10 @@ import { streamsApi } from '../streams/api'
 import { AdminPreview, type PreviewStatus } from '../streams/preview'
 import type { StreamItem } from '../streams/types'
 import { canPreview, streamStatus } from './presenters'
+import { useVisibleElement } from '../../api/useVisibleElement'
 const props = defineProps<{ stream: StreamItem }>()
 const frame = ref(''), status = ref<PreviewStatus>('idle'), failedImage = ref(false)
+const element = ref<HTMLElement>(), visible = useVisibleElement(element)
 const runtime = computed(() => streamStatus(props.stream))
 const preview = new AdminPreview({ waitForFrameLoad: true, onFrame: url => { frame.value = url }, onStatus: value => { status.value = value } })
 let connection = 0
@@ -14,12 +16,13 @@ function reconnect() {
   if (canPreview(props.stream)) preview.start(streamsApi.previewUrl(props.stream.stream_id, ++connection))
   else preview.stop()
 }
-function imageError() { preview.stop(); failedImage.value = true }
+function imageError() { preview.frameFailed() }
+watch(visible, value => preview.setVisible(value), { immediate: true })
 watch([() => props.stream.stream_id, () => canPreview(props.stream)], reconnect, { immediate: true })
 onBeforeUnmount(() => preview.stop())
 </script>
 <template>
-  <article class="board-tile">
+  <article ref="element" class="board-tile">
     <header><strong>{{ stream.display_name || stream.stream_id }}</strong><span :class="`stream-tone-${runtime.key}`">{{ runtime.label }}</span></header>
     <div class="board-picture">
       <img v-if="frame && !failedImage" :src="frame" :alt="`${stream.display_name || stream.stream_id} 现场画面`" @load="preview.frameLoaded()" @error="imageError" />

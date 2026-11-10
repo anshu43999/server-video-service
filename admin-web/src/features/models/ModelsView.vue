@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Box, RefreshCw } from '@lucide/vue'
 import UiDialog from '../../components/ui/UiDialog.vue'
@@ -12,10 +12,13 @@ import { targetLabel, targetStatus, targetReady, supportedTargets } from './capa
 import ParametersDialog from './ParametersDialog.vue'
 import CalibrationPane from './CalibrationPane.vue'
 import ConversionPane from './ConversionPane.vue'
+import { createCatalogChangeTracker } from './catalogChanges'
 import './models.css'
 const route = useRoute(), router = useRouter()
 const pane = computed(() => ['upload', 'calibration'].includes(String(route.query.pane)) ? String(route.query.pane) : 'catalog')
 const models = ref<ModelAsset[]>([])
+const trackCatalogChanges = createCatalogChangeTracker()
+const pendingCatalogChanges = ref(false)
 const phase = ref<'loading' | 'ready' | 'error'>('loading'), error = ref(''), message = ref(''), tone = ref('success')
 const query = ref(''), scenario = ref(''), busy = ref(false), registerOpen = ref(false), manifest = ref('')
 const detailOpen = ref(false), detail = ref<ModelAsset | null>(null), detailTarget = ref<ModelAsset | null>(null), detailError = ref(''), detailBusy = ref(false)
@@ -88,7 +91,10 @@ function testInProject(model: ModelAsset) {
   void router.push({ name: 'projects', query: { redirect: target.fullPath } })
 }
 function download(artifactId: string) { const model = detail.value; if (model) void operate(() => modelsApi.download(model, artifactId), '产物下载已开始。') }
-onMounted(refresh)
+let catalogRequested = false
+watch(pane, (value, previous) => {
+  if (value !== 'calibration' && (!catalogRequested || (value === 'catalog' && previous && pendingCatalogChanges.value))) { catalogRequested = true; void refresh() }
+}, { immediate: true })
 onBeforeUnmount(() => { disposed = true; controller?.abort(); detailController?.abort() })
 </script>
 <template>
@@ -116,8 +122,8 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); detailController?.
       </div>
       <section class="model-panel"><header><h3>项目模型使用</h3></header><p class="model-muted">此处维护全局模型资产，不读取任何项目的视频流。请显式进入项目后，在项目视频流中查看和维护绑定。</p><UiButton class="secondary-button" @click="router.push({ name: 'projects' })">进入项目空间</UiButton></section>
     </template>
-    <ConversionPane v-else-if="pane === 'upload'" :families="families" @changed="refresh" />
-    <CalibrationPane v-else @changed="refresh" />
+    <ConversionPane v-else-if="pane === 'upload'" :families="families" :track-catalog-changes="trackCatalogChanges" @pending="value => pendingCatalogChanges = value" @changed="refresh" />
+    <CalibrationPane v-else />
     <UiDialog v-model:open="registerOpen" title="登记模型 Manifest" :busy="busy"><form class="model-form" @submit.prevent="register"><p class="model-muted">填写服务器 models 目录内已有 Manifest 的受控路径，登记时会校验产物与哈希。</p><label>Manifest 路径<UiInput v-model="manifest" required maxlength="512" /></label><footer><UiButton type="button" class="secondary-button" :disabled="busy" @click="registerOpen=false">取消</UiButton><UiButton class="primary-button" :disabled="busy">{{ busy ? '校验中…' : '校验并登记' }}</UiButton></footer><p v-if="tone === 'error'" class="operation-feedback is-error">{{ message }}</p></form></UiDialog>
     <UiDialog v-model:open="detailOpen" title="模型版本详情" :busy="busy"><div class="model-detail"><UiStatePanel v-if="detailBusy" state="loading" /><UiStatePanel v-else-if="detailError" state="error" :message="detailError" @retry="detailTarget && openDetail(detailTarget)" /><template v-else-if="detail"><h3>{{ detail.name }}</h3><code>{{ detail.modelId }} / {{ detail.version }}</code><label>查看版本<UiSelect :value="detail.version" @change="value => detail && openDetail(detail, String(value))"><UiOption v-for="v in detail.availableVersions || [detail.version]" :key="v" :value="v">{{ v }}</UiOption></UiSelect></label><p>版本状态：{{ detail.status }} · 签名：{{ detail.signatureStatus }} · 输入：{{ detail.inputSize ?? '未知' }}</p><p>商业发布：{{ detail.releaseEligible ? '符合发布门禁' : '尚未满足发布门禁' }}</p><p v-if="detail.revokeReason">撤回原因：{{ detail.revokeReason }}</p><p class="model-muted">原始类别：{{ (detail.labels ?? []).join(' · ') || '暂无' }}</p><pre v-if="detail.license">{{ JSON.stringify(detail.license, null, 2) }}</pre><article v-for="artifact in detail.artifacts" :key="artifact.artifactId" class="artifact-row"><strong>{{ artifact.artifactId }} · {{ artifact.platform }} / {{ artifact.format }}</strong><p>{{ formatBytes(artifact.sizeBytes) }} · {{ artifact.exists && artifact.hashValid ? '文件校验通过' : '文件缺失或校验失败' }}</p><code>{{ artifact.sha256 }}</code><UiButton class="secondary-button" :disabled="busy || !artifact.exists || !artifact.hashValid" @click="download(artifact.artifactId)">下载产物</UiButton></article></template><p v-if="tone === 'error'" class="operation-feedback is-error">{{ message }}</p></div></UiDialog>
     <ParametersDialog v-if="parameterModel" :model="parameterModel" @close="parameterModel=null" />

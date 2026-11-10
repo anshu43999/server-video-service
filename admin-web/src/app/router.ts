@@ -18,8 +18,6 @@ import AccountsView from '../features/management/AccountsView.vue'
 import MembersView from '../features/management/MembersView.vue'
 import AuditView from '../features/management/AuditView.vue'
 import { useProjectsStore } from '../stores/projects'
-import { projectScope } from '../api/projectScope'
-import { nextTick } from 'vue'
 import ProjectModelsView from '../features/models/ProjectModelsView.vue'
 import ScenesView from '../features/scenes/ScenesView.vue'
 import ProjectDiagnosticsView from '../features/operations/ProjectDiagnosticsView.vue'
@@ -128,9 +126,7 @@ export function installSessionGuard(target: Router, session: SessionStore) {
     const projects = useProjectsStore()
     if (to.meta.platformOnly) {
       if (!session.isAdmin) return { name: 'projects' }
-      await projects.revalidate(true)
-      if (!session.isAdmin || !projects.contractReady() || ['error', 'unavailable'].includes(projects.phase)) return { name: 'projects' }
-      projectScope.clear(); await nextTick(); projects.platformReady = true
+      if (!await projects.leaveForPlatform() || !session.isAdmin || !projects.contractReady()) return { name: 'projects' }
       return true
     }
     if (to.name === 'projects') {

@@ -38,6 +38,18 @@ describe('durable project alert synchronization', () => {
     expect(store.notifications.map((item) => item.eventId)).toEqual(['missed'])
   })
 
+  it('REST recovers end and human disposition updates that are not broadcast', async () => {
+    const list = vi.spyOn(alertsApi, 'list').mockResolvedValue({ events: [event('updated')] })
+    const store = useAlertsStore(); await store.refresh()
+    list.mockResolvedValue({ events: [{ ...event('updated'), state: 'ENDED', endedAtUs: 456,
+      dispositionRevision: 1, disposition: { status: 'ACKNOWLEDGED' } }] })
+    await store.refresh({ background: true })
+    expect(store.events[0].state).toBe('ENDED')
+    expect(store.events[0].disposition?.status).toBe('ACKNOWLEDGED')
+    expect(store.events[0].dispositionRevision).toBe(1)
+    expect(store.notifications).toHaveLength(0)
+  })
+
   it('still announces a new formal websocket event if the initial list read fails', async () => {
     vi.spyOn(alertsApi, 'list').mockRejectedValue(new Error('temporarily unavailable'))
     const store = useAlertsStore(); await store.refresh()
@@ -110,5 +122,106 @@ describe('durable project alert synchronization', () => {
     expect(refresh).toHaveBeenCalledTimes(count)
     expect(store.events).toHaveLength(0)
     expect(socket.stop).toHaveBeenCalledOnce()
+  })
+
+  function setupSync() {
+    vi.useFakeTimers()
+    const store = { refresh: vi.fn<() => Promise<void>>().mockResolvedValue(), acceptRealtime: vi.fn(), socketStatus: 'idle' as const }
+    const options: ManagedSocketOptions<unknown>[] = []
+    const socket = { start: vi.fn(), stop: vi.fn() }
+    const sync = new AlertSync(store, (value) => { options.push(value); return socket })
+    return { store, options, socket, sync }
+  }
+
+  it('retains 5s compensation when WS is open because coverage is incomplete', async () => {
+    const { store, options, sync } = setupSync()
+    await sync.start(); options[0].onStatus?.('open')
+    await vi.advanceTimersByTimeAsync(0)
+    const before = store.refresh.mock.calls.length
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(store.refresh).toHaveBeenCalledTimes(before + 12)
+  })
+
+  it('reconciles on disconnect and recovery and resets the compensation deadline', async () => {
+    const { store, options, sync } = setupSync()
+    await sync.start(); options[0].onStatus?.('open'); await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(4900)
+    options[0].onStatus?.('backoff'); await vi.advanceTimersByTimeAsync(0)
+    expect(store.refresh).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(100)
+    expect(store.refresh).toHaveBeenCalledTimes(3) // no redundant old 5s timer
+    options[0].onStatus?.('connecting'); options[0].onStatus?.('open')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(store.refresh).toHaveBeenCalledTimes(4)
+    options[0].onStatus?.('open'); await vi.advanceTimersByTimeAsync(0)
+    expect(store.refresh).toHaveBeenCalledTimes(4)
+  })
+
+  it('coalesces reconnect bursts into one fresh read after an old in-flight snapshot', async () => {
+    vi.useFakeTimers()
+    const list = vi.spyOn(alertsApi, 'list').mockResolvedValue({ events: [] })
+    const store = useAlertsStore()
+    let options!: ManagedSocketOptions<unknown>
+    const sync = new AlertSync(store, (value) => { options = value; return { start: vi.fn(), stop: vi.fn() } })
+    await sync.start(); options.onStatus?.('open'); await vi.advanceTimersByTimeAsync(0)
+    let release!: (value: { events: AlertEvent[] }) => void
+    list.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+    await vi.advanceTimersByTimeAsync(5000)
+    for (let i = 0; i < 3; i++) { options.onStatus?.('backoff'); options.onStatus?.('open') }
+    await vi.advanceTimersByTimeAsync(20_000)
+    expect(list).toHaveBeenCalledTimes(3)
+    list.mockResolvedValue({ events: [event('missed-during-flight')] })
+    release({ events: [] }); await vi.advanceTimersByTimeAsync(0)
+    expect(list).toHaveBeenCalledTimes(4)
+    expect(store.events.map(value => value.eventId)).toEqual(['missed-during-flight'])
+    expect(store.notifications).toHaveLength(1)
+  })
+
+  it('continues REST when reconnect attempts stop without terminal authorization failure', async () => {
+    const { store, options, sync } = setupSync()
+    await sync.start(); options[0].onStatus?.('open'); await vi.advanceTimersByTimeAsync(0)
+    options[0].onStatus?.('stopped'); await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(store.refresh).toHaveBeenCalledTimes(4)
+  })
+
+  it.each([4401, 4403, 4404, 4429])('terminal %s stops queued reconciliation and polling', async code => {
+    const { store, options, sync } = setupSync()
+    await sync.start()
+    options[0].onStatus?.('open')
+    options[0].onTerminal?.(code)
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(store.refresh).toHaveBeenCalledOnce()
+  })
+
+  it('ignores terminal callbacks from an earlier sync generation', async () => {
+    const { store, options, sync } = setupSync()
+    await sync.start(); await sync.start()
+    options[0].onTerminal?.(4403)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(store.refresh).toHaveBeenCalledTimes(3)
+  })
+
+  it('does not revive queued reads when a pending snapshot settles after revocation', async () => {
+    const { store, options, sync } = setupSync()
+    await sync.start()
+    let release!: () => void
+    store.refresh.mockImplementationOnce(() => new Promise(resolve => { release = resolve }))
+    options[0].onStatus?.('open'); await vi.advanceTimersByTimeAsync(0)
+    options[0].onStatus?.('backoff'); options[0].onStatus?.('open')
+    projectScope.clear(); release(); await vi.advanceTimersByTimeAsync(60_000)
+    expect(store.refresh).toHaveBeenCalledTimes(2)
+  })
+
+  it('recovers after rejected reads without unhandled promises or overlapping timers', async () => {
+    const { store, options, sync } = setupSync()
+    store.refresh.mockRejectedValueOnce(new Error('temporary'))
+    await sync.start()
+    store.refresh.mockRejectedValueOnce(new Error('temporary'))
+    options[0].onStatus?.('open'); options[0].onStatus?.('backoff')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(store.refresh).toHaveBeenCalledTimes(3)
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(store.refresh).toHaveBeenCalledTimes(4)
   })
 })

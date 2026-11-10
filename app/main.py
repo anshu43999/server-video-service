@@ -90,6 +90,9 @@ from .stream_config import (
 from .metrics import system_metrics
 from .dashboard import DashboardStatsService
 from .model_catalog import ModelCatalog
+from .catalog_reads import CatalogReads, CatalogReadBusy, CatalogReadTimeout
+from .catalog_hashes import CatalogFileChanged
+from .catalog_telemetry import CatalogTelemetry
 from .model_signing import ModelManifestSigner
 from .model_parameters import ModelParameterConflict, ModelParameterError, ModelParameterStore
 from .conversion import ConversionService
@@ -135,6 +138,8 @@ streams = ProjectStreamRegistry()
 stream_config_store = StreamConfigStore(database if database.enabled else None)
 stream_restore_errors: dict[tuple[str, str], str] = {}
 model_catalog = ModelCatalog()
+# Fixed process-local budget, independent of the default asyncio thread pool.
+catalog_reads = CatalogReads()
 model_parameter_store = ModelParameterStore(database_manager=database if database.enabled else None)
 project_model_assignments = ProjectModelAssignments(
     database, model_catalog, model_parameter_store, stream_config_store)
@@ -985,6 +990,83 @@ def _project_catalog_models(context, target=None):
     return list(grouped.values())
 
 
+async def _read_catalog(request: Request, context, operation):
+    telemetry = CatalogTelemetry(getattr(request.state, 'request_id', None),
+                                 getattr(request.scope.get('route'), 'path', 'unmatched'))
+    outcome = 'error'
+    try:
+        result = await _execute_catalog_read(request, context, operation, telemetry)
+        outcome = 'ok'
+        return result
+    except asyncio.CancelledError:
+        outcome = 'cancelled'
+        raise
+    except HTTPException as exc:
+        if exc.status_code in (401, 403, 404):
+            outcome = 'denied'
+        elif isinstance(exc.detail, dict):
+            outcome = {'catalog_busy': 'busy', 'catalog_timeout': 'timeout',
+                       'catalog_changed': 'changed'}.get(exc.detail.get('code'), 'error')
+        raise
+    finally:
+        telemetry.read_finished(outcome)
+
+
+async def _execute_catalog_read(request: Request, context, operation, telemetry):
+    """Inspect off-loop; discard results if access or projection changed."""
+    principal = context.principal if context is not None else authenticate(request)
+    if principal is None or principal.legacy:
+        raise authentication_error('catalog session')
+
+    def verify_access():
+        current = authenticate(request)
+        if current is None or current.legacy:
+            raise authentication_error('catalog session')
+        if current != principal:
+            raise HTTPException(403, detail={'code': 'capability_required', 'message': 'catalog access changed'})
+        if context is None:
+            if not current.is_admin:
+                raise HTTPException(403, detail={'code': 'capability_required', 'message': 'administrator capability required'})
+        elif current != context.principal or resolve_project_context(current, context.project_id) != context:
+            raise HTTPException(403, detail={'code': 'capability_required', 'message': 'project access changed'})
+
+    def inspect():
+        started, outcome, hashes = time.monotonic(), 'error', None
+        try:
+            verify_access()
+            # Invalidation guards, not mtime-based integrity caches. Every
+            # accepted read still performs complete SHA-256 inspections.
+            before = model_catalog.registry_path.stat()
+            assignments = project_model_assignments.list(context.project_id, include_display=False) if context else None
+            with model_catalog.list_read_hashes() as hashes:
+                result = operation()
+                after = model_catalog.registry_path.stat()
+                fingerprint = lambda stat: (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+                if fingerprint(before) != fingerprint(after) or (context and assignments != project_model_assignments.list(context.project_id, include_display=False)):
+                    raise HTTPException(409, detail={'code': 'catalog_changed', 'message': 'catalog changed; refresh the request'})
+            outcome = 'ok'
+            return result
+        except CatalogFileChanged:
+            outcome = 'changed'
+            raise
+        except HTTPException as exc:
+            outcome = 'denied' if exc.status_code in (401, 403, 404) else 'changed' if exc.status_code == 409 else 'error'
+            raise
+        finally:
+            telemetry.worker_finished(outcome, time.monotonic() - started, hashes)
+
+    try:
+        result = await catalog_reads.run(inspect)
+    except CatalogReadBusy:
+        raise HTTPException(503, detail={'code': 'catalog_busy', 'message': 'catalog read capacity reached'}, headers={'Retry-After': '1'}) from None
+    except CatalogReadTimeout:
+        raise HTTPException(503, detail={'code': 'catalog_timeout', 'message': 'catalog read timed out'}, headers={'Retry-After': '1'}) from None
+    except CatalogFileChanged:
+        raise HTTPException(409, detail={'code': 'catalog_changed', 'message': 'catalog changed; refresh the request'}) from None
+    verify_access()
+    return result
+
+
 def _project_catalog_release(context, model_id, version=None, target=None):
     candidates = [item for item in _project_catalog_models(context, target=target)
                   if item["modelId"] == model_id and (version is None or item["version"] == version)]
@@ -1038,8 +1120,12 @@ async def remove_project_assignment(project_id: str, project_model_id: str, expe
 
 
 @app.get("/aiyoloapi/projects/{project_id}/models/available")
-async def available_project_models(project_id: str,
+async def available_project_models(project_id: str, request: Request,
                                    context: ProjectContext = Depends(require_project_capability(PROJECT_MODELS_ASSIGN))):
+    return await _read_catalog(request, context, lambda: _available_project_models(context))
+
+
+def _available_project_models(context):
     # Owner-only selection preview; this does not grant artifact downloads.
     results = []
     for row in model_catalog.list_models():
@@ -1064,9 +1150,10 @@ async def available_project_models(project_id: str,
 
 
 @app.get("/aiyoloapi/projects/{project_id}/models")
-async def project_models(project_id: str, target: Literal["pc", "mobile"] | None = None,
+async def project_models(project_id: str, request: Request, target: Literal["pc", "mobile"] | None = None,
                          context: ProjectContext = Depends(require_project_capability(PROJECT_READ))):
-    return {"models": _project_catalog_models(context, target)}
+    models = await _read_catalog(request, context, lambda: _project_catalog_models(context, target))
+    return {"models": models}
 
 
 @app.get("/aiyoloapi/projects/{project_id}/models/{model_id}")
@@ -1089,7 +1176,8 @@ async def list_models(
     scenario: str | None = Query(default=None, min_length=1, max_length=128),
 ):
     context = _catalog_scope(request)
-    models = model_catalog.list_models() if context is None else _project_catalog_models(context)
+    models = await _read_catalog(request, context,
+        lambda: model_catalog.list_models() if context is None else _project_catalog_models(context))
     if scenario is not None:
         models = [model for model in models if model.get("scenario") == scenario]
     return {"models": models}

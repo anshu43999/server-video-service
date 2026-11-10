@@ -7,6 +7,7 @@ import http.client
 import inspect
 import os
 import re
+import ssl
 import sqlite3
 import subprocess
 import sys
@@ -42,6 +43,7 @@ STAGE_LABELS = {
     "remote_uploading": "正在上传至远程服务",
     "remote_queued": "等待远程转换服务",
     "remote_running": "远程服务正在转换",
+    "remote_retrying": "正在重试远程状态查询",
     "downloading": "正在下载转换产物",
     "local_verification": "正在本地复验产物",
     "finalizing": "正在整理处理结果",
@@ -300,6 +302,15 @@ class ProcessRunner:
             return previous
 
 
+class RemoteRequestError(RuntimeError):
+    """Only fixed diagnostic text is exposed; never echo raw network errors."""
+
+    def __init__(self, message: str, *, retryable: bool = False, retry_after: float = 0):
+        super().__init__(message)
+        self.retryable = retryable
+        self.retry_after = retry_after
+
+
 class RemoteConversionRunner:
     """Synchronous adapter used only on the conversion worker thread."""
 
@@ -330,7 +341,15 @@ class RemoteConversionRunner:
             verifier_config = config.model_copy(update={"mode": config.remote_verifier_mode})
             emit("local_verification", "远程服务可用，正在检测本地复验环境")
             verifier = self.local_runner.run_worker(verifier_config, "check", directory, stopping)
-            return {"ok": True, "remote_available": True, "mobile_available": verifier.get("mobile_available", False),
+            capabilities = health.get("capabilities")
+            remote_export = isinstance(capabilities, list) and "yolo-detect-to-tflite-int8" in capabilities
+            verifier_ready = verifier.get("verifier_available") is True
+            available = remote_export and verifier_ready
+            return {"ok": True, "remote_available": True, "mobile_available": available,
+                    "verifier_available": verifier_ready, "remote_export_available": remote_export,
+                    "message": ("远程转换与本地复验环境可用；实际模型仍需转换验证" if available else
+                                "本地 LiteRT 复验依赖不可用" if not verifier_ready else
+                                "远程服务未声明移动端导出能力"),
                     "protocolVersion": 1, "verifier": verifier}
         if action != "mobile":
             raise ValueError("远程转换只支持环境检测与移动端转换")
@@ -343,6 +362,7 @@ class RemoteConversionRunner:
             f"{local_job_id}:{source_hash}:{config.input_size}:{config.calibration_data}".encode("utf-8")
         ).hexdigest()
         query = urlencode({"inputSize": config.input_size, "calibrationData": config.calibration_data})
+        deadline = time.monotonic() + config.timeout_seconds
         emit("remote_uploading", "正在向远程转换服务上传 PT", 0)
         submitted = self._json_request(
             config, token, "POST", f"/v1/conversions?{query}", source=source,
@@ -352,21 +372,21 @@ class RemoteConversionRunner:
             ),
         )
         remote_job_id = self._remote_job_id(submitted)
-        deadline = time.monotonic() + config.timeout_seconds
         current = submitted
         self._emit_remote_progress(current, progress_callback)
         while current.get("status") in {"queued", "running"}:
-            if stopping.wait(config.remote_poll_interval_seconds):
+            if stopping.wait(min(config.remote_poll_interval_seconds, max(0, deadline - time.monotonic()))):
                 self._cancel(config, token, remote_job_id)
                 raise RuntimeError("服务停止，远程转换任务已请求取消，可重试")
             if time.monotonic() >= deadline:
                 self._cancel(config, token, remote_job_id)
                 raise RuntimeError("远程转换超时，任务已请求取消")
-            current = self._json_request(config, token, "GET", f"/v1/conversions/{remote_job_id}")
+            current = self._poll_status(config, token, remote_job_id, stopping, deadline, progress_callback)
             self._emit_remote_progress(current, progress_callback)
         if current.get("status") != "succeeded":
             code = str(current.get("error", {}).get("code", "remote_failed")) if isinstance(current.get("error"), dict) else "remote_failed"
-            raise RuntimeError(f"远程转换失败（{code[:100]}）")
+            code = code if re.fullmatch(r"[A-Za-z0-9._-]{1,100}", code) else "remote_failed"
+            raise RuntimeError(f"远程转换失败（{code}）")
         result = current.get("result")
         if not isinstance(result, dict):
             raise RuntimeError("远程转换成功响应缺少 result")
@@ -398,6 +418,50 @@ class RemoteConversionRunner:
         return {**verified, "sha256": expected_hash.lower(), "sizeBytes": expected_size,
                 "calibration": config.calibration_data, "remote_job_id": remote_job_id}
 
+    def _poll_status(self, config: ConversionConfig, token: str, job_id: str,
+                     stopping: threading.Event, deadline: float,
+                     callback: Callable[[dict], None] | None = None) -> dict:
+        # Retry only reads of the SAME accepted job, never restart an exporter.
+        for attempt in range(3):
+            if stopping.is_set():
+                self._cancel(config, token, job_id)
+                raise RuntimeError("服务停止，远程转换任务已请求取消，可重试")
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                self._cancel(config, token, job_id)
+                raise RuntimeError("远程转换超时，任务已请求取消")
+            try:
+                current = self._json_request(config, token, "GET", f"/v1/conversions/{job_id}",
+                                             request_timeout=min(60, remaining))
+            except RemoteRequestError as exc:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    self._cancel(config, token, job_id)
+                    raise RuntimeError("远程转换超时，任务已请求取消") from exc
+                if not exc.retryable or attempt == 2:
+                    raise
+                if callback is not None:
+                    callback({"stage": "remote_retrying", "stage_label": STAGE_LABELS["remote_retrying"],
+                              "message": f"远程状态查询暂不可用，准备第 {attempt + 1}/2 次重试；未重新提交转换",
+                              "progress": None})
+                delay = min(remaining, max(2 ** attempt, exc.retry_after))
+                if stopping.wait(delay):
+                    self._cancel(config, token, job_id)
+                    raise RuntimeError("服务停止，远程转换任务已请求取消，可重试") from exc
+                continue
+            if time.monotonic() >= deadline:
+                self._cancel(config, token, job_id)
+                raise RuntimeError("远程转换超时，任务已请求取消")
+            if stopping.is_set():
+                self._cancel(config, token, job_id)
+                raise RuntimeError("服务停止，远程转换任务已请求取消，可重试")
+            if (current.get("jobId") != job_id or
+                    not isinstance(current.get("status"), str) or
+                    current.get("status") not in {"queued", "running", "succeeded", "failed", "cancelled"}):
+                raise RemoteRequestError("远程任务响应的任务标识或状态无效（remote_invalid_response）")
+            return current
+        raise AssertionError("unreachable")
+
     def _connection(self, config: ConversionConfig) -> tuple[http.client.HTTPConnection, str]:
         endpoint = urlsplit(config.remote_endpoint)
         connection_class = http.client.HTTPSConnection if endpoint.scheme == "https" else http.client.HTTPConnection
@@ -407,9 +471,13 @@ class RemoteConversionRunner:
 
     def _json_request(self, config: ConversionConfig, token: str, method: str, path: str,
                       source: Path | None = None, extra_headers: dict[str, str] | None = None,
-                      transfer_callback: Callable[[int], None] | None = None) -> dict:
+                      transfer_callback: Callable[[int], None] | None = None,
+                      request_timeout: float | None = None) -> dict:
         connection, base = self._connection(config)
+        if request_timeout is not None:
+            connection.timeout = min(config.timeout_seconds, 60, request_timeout)
         headers = {"Authorization": f"Bearer {token}", "Accept": "application/json", **(extra_headers or {})}
+        retryable_response = True
         try:
             if source is None:
                 connection.request(method, base + path, headers=headers)
@@ -428,18 +496,33 @@ class RemoteConversionRunner:
                         if transfer_callback is not None:
                             transfer_callback(round(sent / total * 100))
             response = connection.getresponse()
+            retryable_response = response.status in {200, 202, 408, 429} or 500 <= response.status < 600
             payload = response.read(1024 * 1024 + 1)
             if len(payload) > 1024 * 1024:
-                raise RuntimeError("远程转换 JSON 响应过大")
+                raise RemoteRequestError("远程转换 JSON 响应过大（remote_invalid_response）")
+            declared = response.getheader("Content-Length")
+            if (response.status in {200, 202} and declared is not None and declared.isascii()
+                    and declared.isdigit() and len(declared) <= 16 and len(payload) < int(declared)):
+                raise RemoteRequestError("远程转换响应传输中断（remote_connection_error）", retryable=True)
             if response.status not in {200, 202}:
                 code = self._error_code(payload)
-                raise RuntimeError(f"远程转换请求失败：HTTP {response.status}（{code}）")
+                retry_after = response.getheader("Retry-After", "")
+                delay = min(int(retry_after), 5) if retry_after.isascii() and retry_after.isdigit() and len(retry_after) <= 8 else 0
+                raise RemoteRequestError(f"远程转换请求失败：HTTP {response.status}（{code}）",
+                                         retryable=response.status in {408, 429} or 500 <= response.status < 600,
+                                         retry_after=delay)
             parsed = json.loads(payload.decode("utf-8"))
             if not isinstance(parsed, dict):
-                raise RuntimeError("远程转换响应必须是 JSON 对象")
+                raise RemoteRequestError("远程转换响应必须是 JSON 对象（remote_invalid_response）")
             return parsed
-        except (OSError, http.client.HTTPException, json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise RuntimeError("无法连接远程转换服务或响应无效") from exc
+        except TimeoutError as exc:
+            raise RemoteRequestError("远程转换请求超时（remote_timeout）", retryable=retryable_response) from exc
+        except ssl.SSLError as exc:
+            raise RemoteRequestError("远程转换 TLS 校验或协议失败（remote_tls_error）") from exc
+        except (OSError, http.client.RemoteDisconnected, http.client.IncompleteRead) as exc:
+            raise RemoteRequestError("远程转换连接失败或传输中断（remote_connection_error）", retryable=retryable_response) from exc
+        except (http.client.HTTPException, json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise RemoteRequestError("远程转换响应格式无效（remote_invalid_response）") from exc
         finally:
             connection.close()
 
@@ -508,7 +591,7 @@ class RemoteConversionRunner:
 
     def _cancel(self, config: ConversionConfig, token: str, remote_job_id: str) -> None:
         try:
-            self._json_request(config, token, "DELETE", f"/v1/conversions/{remote_job_id}")
+            self._json_request(config, token, "DELETE", f"/v1/conversions/{remote_job_id}", request_timeout=5)
         except RuntimeError:
             pass
 

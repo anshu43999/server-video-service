@@ -4,12 +4,13 @@ import { useRouter } from 'vue-router'
 import UiDialog from '../../components/ui/UiDialog.vue'
 import { managementApi, type ProjectRecord } from './api'
 import { useManagement } from './useManagement'
+import { useCandidates } from './useCandidates'
+import { useManagementReadContext } from './readContext'
 import './management.css'
 const router = useRouter()
-const { data, loading, error, notice, busy, mutationError, needsReload, refresh, run, resetMutation } = useManagement({ projects: [] as ProjectRecord[], accounts: [] as Awaited<ReturnType<typeof managementApi.accounts>> }, async signal => {
-  const [projects, accounts] = await Promise.all([managementApi.projects(signal), managementApi.accounts(signal)]); return { projects, accounts }
-})
+const { data, loading, error, notice, busy, mutationError, needsReload, refresh, loadInitial, run, resetMutation } = useManagement({ projects: [] as ProjectRecord[] }, async signal => ({ projects: await managementApi.projects(signal) }), { context: useManagementReadContext('platform'), tag: 'platform-projects' })
 const query = ref(''), open = ref(false), target = ref<ProjectRecord>(), action = ref<'create' | 'edit' | 'suspend' | 'archive' | 'restore'>('create')
+const { data: accounts, loading: accountsLoading, error: accountsError, refresh: reloadAccounts } = useCandidates(computed(() => open.value && action.value === 'create'), managementApi.accounts)
 const draft = reactive({ projectCode: '', displayName: '', ownerAccountId: '' })
 const labels = { create: '创建项目', edit: '编辑项目', suspend: '停用项目', archive: '归档项目', restore: '恢复项目' }
 const stateLabels = { ACTIVE: '运行中', SUSPENDED: '已停用', ARCHIVED: '已归档' }
@@ -22,13 +23,14 @@ function begin(kind: typeof action.value, project?: ProjectRecord) {
   resetMutation(); open.value = true
 }
 async function save() {
+  if (action.value === 'create' && (accountsLoading.value || accountsError.value || !accounts.value.some(a => a.enabled && a.accountId === draft.ownerAccountId))) return
   await run(signal => {
     if (action.value === 'create') return managementApi.createProject({ ...draft, displayName: draft.displayName.trim() }, signal)
     const project = target.value!
     return action.value === 'edit' ? managementApi.editProject({ ...project, projectCode: draft.projectCode, displayName: draft.displayName.trim() }, signal) : managementApi.lifecycle(project, action.value, signal)
   }, () => { open.value = false })
 }
-onMounted(refresh)
+onMounted(loadInitial)
 </script>
 <template><section class="management-workspace">
   <div class="management-actions page-actions"><UiButton class="secondary-button" :disabled="loading || busy" @click="refresh">刷新项目列表</UiButton><UiButton class="primary-button" :disabled="loading || busy || needsReload || !!error" @click="begin('create')">创建项目</UiButton></div>
@@ -44,7 +46,7 @@ onMounted(refresh)
   <UiDialog v-model:open="open" :title="labels[action]" :busy="busy"><form class="management-form" @submit.prevent="save">
     <p class="management-note">{{ impact }}</p><p v-if="target"><strong>{{ target.displayName }}</strong> · {{ target.projectCode }} · 版本 {{ target.revision }}</p>
     <fieldset v-if="action === 'create' || action === 'edit'" :disabled="busy || needsReload"><label>项目名称<UiInput v-model="draft.displayName" required maxlength="255" pattern=".*[^ ].*" /></label><label>项目代码<UiInput v-model="draft.projectCode" required minlength="3" maxlength="64" pattern="[a-z][a-z0-9-]{1,62}[a-z0-9]" placeholder="例如 site-alpha" /></label>
-      <label v-if="action === 'create'">初始负责人<select v-model="draft.ownerAccountId" required><option value="" disabled>请选择已启用账号</option><option v-for="account in data.accounts.filter(a => a.enabled)" :key="account.accountId" :value="account.accountId">{{ account.username }} · {{ account.accountId }}</option></select></label>
-    </fieldset><p v-if="mutationError" role="alert" class="management-error">{{ mutationError }}</p><footer><UiButton type="button" class="secondary-button" :disabled="busy" @click="open = false">取消</UiButton><UiButton class="primary-button" :class="{ 'danger-text': ['suspend', 'archive'].includes(action) }" :disabled="busy || needsReload" :loading="busy">确认{{ labels[action] }}</UiButton></footer>
+      <template v-if="action === 'create'"><p v-if="accountsLoading" role="status">正在读取负责人候选…</p><p v-if="accountsError" role="alert">{{ accountsError }} <UiButton type="button" @click="reloadAccounts">重试账号候选</UiButton></p><label>初始负责人<select v-model="draft.ownerAccountId" required :disabled="accountsLoading || !!accountsError"><option value="" disabled>请选择已启用账号</option><option v-for="account in accounts.filter(a => a.enabled)" :key="account.accountId" :value="account.accountId">{{ account.username }} · {{ account.accountId }}</option></select></label></template>
+    </fieldset><p v-if="mutationError" role="alert" class="management-error">{{ mutationError }}</p><footer><UiButton type="button" class="secondary-button" :disabled="busy" @click="open = false">取消</UiButton><UiButton class="primary-button" :class="{ 'danger-text': ['suspend', 'archive'].includes(action) }" :disabled="busy || needsReload || accountsLoading || !!accountsError" :loading="busy">确认{{ labels[action] }}</UiButton></footer>
   </form></UiDialog>
 </section></template>

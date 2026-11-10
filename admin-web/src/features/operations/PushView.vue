@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import UiStatePanel from '../../components/ui/UiStatePanel.vue'
 import UiConfirmDialog from '../../components/ui/UiConfirmDialog.vue'
 import { operationsApi, type DeliveryPolicy, type DeliveryStatus } from './api'
@@ -7,21 +7,28 @@ import { useManagement } from '../management/useManagement'
 import { useProjectCapabilities } from '../projects/capabilities'
 import { errorText } from '../models/api'
 import { redactMessage } from '../../api/errors'
+import { VisiblePoller } from '../../api/visiblePoller'
 import '../models/models.css'
 const {settings:canManage,active} = useProjectCapabilities()
 const draft=ref<DeliveryPolicy|null>(null)
 const {data,loading,error,busy,mutationError,needsReload,notice,refresh,run}=useManagement<DeliveryPolicy|null>(null, operationsApi.policy)
 const status=ref<DeliveryStatus|null>(null),statusError=ref(''),target=ref(''),resetOpen=ref(false)
 const channelNames:Record<string,string>={management:'管理后台',app:'移动端通知',email:'邮件适配器',sms:'短信适配器',enterprise_im:'企业 IM 适配器'}
-let controller:AbortController|undefined,timer:ReturnType<typeof setTimeout>|undefined,disposed=false
+let disposed=false, testDeadline=0
+const pendingTests=ref<string[]>([])
+const statusPoller=new VisiblePoller({
+  read: operationsApi.delivery,
+  enabled: () => canManage.value && active.value,
+  delay: value => value.pending > 0 || (pendingTests.value.length > 0 && Date.now() < testDeadline) ? 5000 : 30000,
+  accept: value => {
+    status.value=value;statusError.value=''
+    const completed=new Set(value.recent.filter(receipt=>['delivered','failed','cancelled'].includes(receipt.status)).map(receipt=>receipt.deliveryId||receipt.delivery_id))
+    pendingTests.value=pendingTests.value.filter(id=>!completed.has(id))
+  },
+  error: e => {status.value=null;statusError.value=errorText(e)},
+})
 async function loadPolicy(){if(await refresh())draft.value=data.value?{...data.value,channels:[...data.value.channels]}:null}
-async function loadStatus(){
-  if(!canManage.value)return
-  controller?.abort();controller=new AbortController();const signal=controller.signal
-  try{const value=await operationsApi.delivery(signal);if(!disposed&&!signal.aborted){status.value=value;statusError.value=''}}
-  catch(e){if(!disposed&&!signal.aborted){status.value=null;statusError.value=errorText(e)}}
-  finally{if(timer)clearTimeout(timer);if(!disposed&&!signal.aborted&&status.value&&active.value)timer=setTimeout(loadStatus,5000)}
-}
+function loadStatus(){return statusPoller.refresh()}
 async function save(){
   if(!canManage.value||!draft.value)return
   const value={...draft.value,channels:[...draft.value.channels]}
@@ -35,11 +42,20 @@ async function reset(){
 }
 function toggleChannel(id:string,checked:boolean){if(!draft.value||!canManage.value)return;draft.value.channels=checked?[...new Set([...draft.value.channels,id])]:draft.value.channels.filter(c=>c!==id)}
 async function send(){
-  if(!canManage.value||!active.value||!target.value)return
-  await run(()=>operationsApi.testDelivery(target.value),async()=>{target.value='';await loadStatus()})
+  if(!canManage.value||!active.value||!target.value||busy.value||needsReload.value)return
+  statusPoller.pause()
+  let result:Awaited<ReturnType<typeof operationsApi.testDelivery>>|undefined
+  try {
+    await run(async()=>{result=await operationsApi.testDelivery(target.value)},()=>{
+      target.value=''
+      pendingTests.value=result?.accepted ? [...new Set([...pendingTests.value,...result.deliveryIds])] : pendingTests.value
+      testDeadline=Date.now()+60000
+    },false)
+  } finally {if(!disposed)await statusPoller.resume()}
 }
-onMounted(()=>{void loadPolicy();void loadStatus()})
-onBeforeUnmount(()=>{disposed=true;controller?.abort();if(timer)clearTimeout(timer)})
+watch(()=>canManage.value&&active.value,enabled=>{if(enabled)void statusPoller.resume();else{statusPoller.pause();status.value=null;pendingTests.value=[]}})
+onMounted(()=>{void loadPolicy();statusPoller.start()})
+onBeforeUnmount(()=>{disposed=true;statusPoller.stop();pendingTests.value=[]})
 </script>
 <template><section class="model-workspace">
 <div class="model-actions page-actions"><UiButton class="secondary-button" :disabled="busy||loading" @click="loadPolicy();loadStatus()">重新读取推送配置</UiButton></div>
@@ -53,6 +69,7 @@ onBeforeUnmount(()=>{disposed=true;controller?.abort();if(timer)clearTimeout(tim
 <label v-for="(name,id) in channelNames" :key="id" class="model-check"><UiInput :disabled="busy||needsReload||!canManage" type="checkbox" :checked="draft.channels.includes(id)" @change="value=>toggleChannel(id,Boolean(value))"/>{{name}}</label>
 </div></fieldset><div v-if="canManage" class="model-actions"><UiButton class="primary-button" :disabled="busy||needsReload">保存推送策略</UiButton><UiButton type="button" class="secondary-button" :disabled="busy||needsReload" @click="resetOpen=true">恢复默认策略</UiButton></div></form></section>
 <p v-if="statusError" class="operation-feedback is-error" role="alert">{{statusError}}<UiButton class="secondary-button" @click="loadStatus">重读投递回执</UiButton></p>
+<p v-if="pendingTests.length" class="operation-feedback" role="status">测试回执尚未确认，仍在核对；入队不代表投递成功，不会自动重发测试。</p>
 <template v-if="canManage&&status"><section class="model-panel"><header><h3>通道运行状态</h3><span>待处理 {{status.pending}}</span></header><div v-for="(channel,id) in status.channels" :key="id" class="dataset-row"><div><strong>{{channelNames[id]||id}}</strong><p>{{channel.enabled?'适配器可用':'适配器停用'}} · {{channel.subscribers}} 个订阅者</p></div><UiButton v-if="active" class="secondary-button" :disabled="busy||needsReload||!channel.enabled" @click="target=String(id)">测试 {{channelNames[id]||id}}</UiButton></div></section>
 <section class="model-panel"><header><h3>最近投递回执</h3><span>当前项目最近 50 条</span></header><p v-if="!status.recent.length" class="model-muted">暂无投递回执</p><div v-for="(receipt,index) in status.recent" :key="index" class="dataset-row"><div><strong>{{channelNames[receipt.channel]||receipt.channel}} · {{receipt.status}}</strong><code>{{receipt.deliveryId||receipt.delivery_id}}</code><p>尝试 {{receipt.attempts}} 次 · {{redactMessage(receipt.errorCode||receipt.error_code,'无错误')}}</p></div></div></section></template>
 <UiConfirmDialog :open="!!target" title="发送显式投递测试" :description="`将向 ${channelNames[target]||target} 入队一条测试告警，可能触达当前项目订阅者。入队不代表投递成功。`" confirm-label="确认发送测试" :busy="busy" @update:open="open=>{if(!open)target=''}" @confirm="send"/>

@@ -18,7 +18,7 @@ const authRequest = { skipSessionCheck: true } as const
 
 export const authApi = {
   status: () => apiClient.request<AuthStatus>('/auth/status', authRequest),
-  me: () => apiClient.request<SessionUser>('/auth/me', authRequest),
+  me: (signal?: AbortSignal) => apiClient.request<SessionUser>('/auth/me', { ...authRequest, signal }),
   login: async (username: string, password: string) => {
     const response = await apiClient.request<AuthResponse>('/auth/login', {
       ...authRequest, method: 'POST', json: { username, password },

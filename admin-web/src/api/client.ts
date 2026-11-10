@@ -1,6 +1,7 @@
 import { ApiError, errorFromResponse } from './errors'
 import { projectScope } from './projectScope'
 import { adminHealthPath } from '../app/deploymentPaths'
+import { invalidateDashboardWrite, invalidateManagementWrite } from './readCache'
 
 export type QueryValue = string | number | boolean | null | undefined | Array<string | number | boolean>
 export type ResponseKind = 'json' | 'text' | 'blob' | 'void'
@@ -87,6 +88,8 @@ export class ApiClient {
     const generation = projectScope.generation
     const path = projectScope.path(rawPath)
     const method = options.method ?? 'GET'
+    if (scoped && method !== 'GET') projectScope.assertWritable()
+    if (method !== 'GET') { invalidateDashboardWrite(path); invalidateManagementWrite(path) }
     const headers = new Headers(options.headers)
     let body = options.body
     if (options.json !== undefined) {
@@ -112,7 +115,8 @@ export class ApiClient {
         assertCurrent()
         const error = await this.responseError(response.status, payload, response.headers.get('retry-after'), options.skipSessionCheck)
         assertCurrent()
-        if (scoped && [401, 403, 404].includes(response.status)) projectScope.onDenied?.()
+        // A handled 401 already awaited the shared permission verification.
+        if (scoped && ([403, 404].includes(response.status) || (response.status === 401 && !this.unauthorized))) projectScope.onDenied?.()
         throw error
       }
       const kind = options.response ?? 'json'
@@ -139,6 +143,7 @@ export class ApiClient {
       }
       throw new ApiError({ kind: 'network', code: 'network_unavailable', message: '无法连接服务' })
     } finally {
+      if (method !== 'GET') { invalidateDashboardWrite(path); invalidateManagementWrite(path) }
       linked.cleanup()
       unregister()
     }
@@ -153,12 +158,14 @@ export class ApiClient {
   uploadWithProgress<T>(endpoint: string, file: Blob, options: {
     query?: Record<string, QueryValue>; signal?: AbortSignal; onProgress?: (percent: number | null) => void
   } = {}): Promise<T> {
+    try { projectScope.assertWritable() } catch (error) { return Promise.reject(error) }
     const path = projectScope.path(endpointPath(endpoint)) + queryString(options.query)
     const generation = projectScope.generation
+    invalidateDashboardWrite(path)
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest()
       const unregister = projectScope.enabled ? projectScope.register(() => xhr.abort()) : () => {}
-      const cleanup = () => { options.signal?.removeEventListener('abort', abort); unregister() }
+      const cleanup = () => { invalidateDashboardWrite(path); options.signal?.removeEventListener('abort', abort); unregister() }
       const fail = (kind: 'network' | 'timeout' | 'cancelled', message: string) => { cleanup(); reject(new ApiError({ kind, message })) }
       const abort = () => xhr.abort()
       if (options.signal?.aborted) { fail('cancelled', '上传已取消'); return }

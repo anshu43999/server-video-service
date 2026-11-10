@@ -11,6 +11,7 @@ import { scenesApi, type Scene } from '../scenes/api'
 import { useProjectCapabilities } from '../projects/capabilities'
 const { streams: canManage } = useProjectCapabilities()
 import { AdminPreview, type PreviewStatus } from './preview'
+import { useVisibleElement } from '../../api/useVisibleElement'
 import { modelDisplayName } from '../models/presentation'
 import type { StreamItem, StreamModel } from './types'
 
@@ -40,6 +41,7 @@ let pollTimer: ReturnType<typeof setTimeout> | undefined
 let listVersion = 0
 const previewFailed = ref(false)
 const previewFrame = ref('')
+const previewElement = ref<HTMLElement>(), previewVisible = useVisibleElement(previewElement)
 const previewStatus = ref<PreviewStatus>('idle')
 const previewMode = ref<'raw' | 'yolo'>('raw')
 const settingsForm = ref<HTMLFormElement>()
@@ -319,6 +321,7 @@ watch([() => selected.value?.stream_id, () => selected.value?.enabled, () => sel
   reconnectPreview()
 }, { immediate: true })
 
+watch(previewVisible, visible => preview.setVisible(visible), { immediate: true })
 watch(previewUrl, (url) => {
   releasePreview()
   if (url) preview.start(url)
@@ -395,11 +398,11 @@ onBeforeUnmount(() => {
         </header>
 
         <div class="stream-live-grid">
-          <section class="stream-preview-panel" aria-label="实时视频预览">
-            <div class="preview-heading"><span><Video :size="16" />现场预览</span><UiButton v-if="previewUrl" class="icon-button" type="button" aria-label="重连现场预览" @click="reconnectPreview"><RefreshCw :size="14" /></UiButton><span class="preview-state" :class="{ active: previewStatus === 'open' && !!previewFrame }"><i></i>{{ previewFailed ? '预览不可用' : previewStatus === 'connecting' ? '正在连接预览' : previewFrame ? '实时预览 · 同源' : selected.enabled === false ? '流已停用' : '等待视频帧' }}</span></div>
+          <section ref="previewElement" class="stream-preview-panel" aria-label="实时视频预览">
+            <div class="preview-heading"><span><Video :size="16" />现场预览</span><UiButton v-if="previewUrl" class="icon-button" type="button" aria-label="重连现场预览" @click="reconnectPreview"><RefreshCw :size="14" /></UiButton><span class="preview-state" :class="{ active: previewStatus === 'open' && !!previewFrame }"><i></i>{{ previewFailed ? '预览不可用' : previewStatus === 'paused' ? '预览已暂停' : previewStatus === 'connecting' ? '正在连接预览' : previewFrame ? '实时预览 · 同源' : selected.enabled === false ? '流已停用' : '等待视频帧' }}</span></div>
             <div class="stream-preview">
-              <img v-if="previewFrame && !previewFailed" :src="previewFrame" alt="选中视频流的实时画面" @load="preview.frameLoaded()" @error="releasePreview(); previewFailed = true" />
-              <div v-else class="preview-placeholder"><Camera :size="28" /><strong>{{ previewFailed ? '现场预览不可用' : selected.runtime_state === 'error' ? '流恢复异常' : '暂无实时画面' }}</strong><span>{{ previewFailed ? '检查源状态后使用上方按钮重新连接。' : '配置启用且收到视频帧后，预览会自动连接。' }}</span></div>
+              <img v-if="previewFrame && !previewFailed" :src="previewFrame" alt="选中视频流的实时画面" @load="preview.frameLoaded()" @error="preview.frameFailed()" />
+              <div v-else class="preview-placeholder"><Camera :size="28" /><strong>{{ previewFailed ? '现场预览不可用' : selected.runtime_state === 'error' ? '流恢复异常' : '暂无实时画面' }}</strong><span>{{ previewFailed ? '暂时性故障会限速重试；请检查源状态与权限后重连。' : '配置启用且收到视频帧后，预览会自动连接。' }}</span></div>
               <span v-if="previewFrame" class="preview-overlay-label">{{ previewMode === 'yolo' ? 'YOLO OVERLAY' : 'RAW STREAM' }}</span>
             </div>
           </section>

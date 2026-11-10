@@ -6,9 +6,10 @@ import { useSessionStore } from '../../stores/session'
 import { useProjectsStore } from '../../stores/projects'
 import { managementApi, type AccountRecord, type PlatformRole } from './api'
 import { useManagement } from './useManagement'
+import { useManagementReadContext } from './readContext'
 import './management.css'
 const session = useSessionStore(), projects = useProjectsStore()
-const { data, loading, error, notice, busy, mutationError, needsReload, refresh, run, resetMutation } = useManagement<AccountRecord[]>([], managementApi.accounts)
+const { data, loading, error, notice, busy, mutationError, needsReload, refresh, loadInitial, run, resetMutation } = useManagement<AccountRecord[]>([], managementApi.accounts, { context: useManagementReadContext('platform'), tag: 'platform-accounts' })
 const query = ref(''), open = ref(false), original = ref<AccountRecord>()
 const draft = reactive({ username: '', password: '', platformRole: 'NORMAL_USER' as PlatformRole, enabled: true })
 const filtered = computed(() => data.value.filter(a => `${a.username} ${a.accountId}`.toLowerCase().includes(query.value.toLowerCase())))
@@ -26,7 +27,7 @@ async function save() {
   // Do not retain a password after any attempted submission, including failures.
   draft.password = ''
 }
-watch(open, value => { if (!value) draft.password = '' }); onBeforeUnmount(() => { draft.password = '' }); onMounted(refresh)
+watch(open, value => { if (!value) draft.password = '' }); onBeforeUnmount(() => { draft.password = '' }); onMounted(loadInitial)
 </script>
   <template><section class="management-workspace"><div class="management-actions page-actions"><UiButton class="secondary-button" :disabled="busy || loading" @click="refresh">刷新账号列表</UiButton><UiButton class="primary-button" :disabled="busy || loading || needsReload || !!error" @click="begin()">创建账号</UiButton></div>
   <p class="management-note">停用账号会影响其所有项目和现有会话。服务器保护最后一位平台超级管理员和项目最后负责人；请先移交职责再停用。</p>

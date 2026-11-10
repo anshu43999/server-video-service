@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useVisibleElement } from '../../api/useVisibleElement'
+import { projectScope } from '../../api/projectScope'
+import { evidenceRequests } from './evidenceRequests'
 import { Bot, CheckCircle2, FileWarning, ImageOff, LoaderCircle, ShieldAlert, X } from '@lucide/vue'
 import { isApiError } from '../../api/errors'
 import { alertsApi } from './api'
@@ -32,12 +35,14 @@ const closeButton = ref<HTMLButtonElement>()
 const note = ref('')
 const evidencePhase = ref<'idle' | 'loading' | 'ready' | 'empty' | 'error'>('idle')
 const evidenceUrl = ref('')
+const evidenceElement = ref<HTMLElement>(), evidenceVisible = useVisibleElement(evidenceElement)
 const requestingOriginal = ref(false)
 const originalMessage = ref('')
 let originalOperation: { eventId: string; revision: number; id: string } | undefined
 let returnFocus: HTMLElement | null = null
 let evidenceController: AbortController | undefined
 let showingOriginalVersion: number | undefined
+let evidenceDisposed = false
 let viewGeneration = 0
 const advicePhase = ref<'idle' | 'reading' | 'read-error' | 'loading' | 'ready' | 'error'>('idle')
 const advice = ref<AdviceGeneration>()
@@ -66,13 +71,14 @@ function releaseEvidence() {
 async function loadEvidence(eventId: string, originalVersion?: number) {
   releaseEvidence()
   showingOriginalVersion = originalVersion
+  if (evidenceDisposed || !evidenceVisible.value || !props.open) { evidencePhase.value = 'idle'; return }
   const controller = new AbortController()
   evidenceController = controller
   evidencePhase.value = 'loading'
   try {
-    const blob = originalVersion
-      ? await alertsApi.originalEvidence(eventId, originalVersion, controller.signal)
-      : await alertsApi.evidence(eventId, controller.signal)
+    const blob = await evidenceRequests.run(signal => originalVersion
+      ? alertsApi.originalEvidence(eventId, originalVersion, signal)
+      : alertsApi.evidence(eventId, signal), controller.signal)
     if (controller.signal.aborted) return
     if (!blob.size) { evidencePhase.value = 'empty'; return }
     evidenceUrl.value = URL.createObjectURL(blob)
@@ -217,9 +223,14 @@ watch([() => props.open, () => props.event?.projectId, () => props.event?.eventI
   await nextTick()
   if (generation !== viewGeneration) return
   closeButton.value?.focus({ preventScroll: true })
-  void loadEvidence(eventId)
+  if (evidenceVisible.value && !evidenceController) void loadEvidence(eventId)
   void loadLatestAdvice()
 }, { immediate: true })
+watch(evidenceVisible, visible => {
+  if (visible && props.open && props.event) void loadEvidence(props.event.eventId, showingOriginalVersion)
+  else { releaseEvidence(); evidencePhase.value = 'idle' }
+})
+const releaseScope = projectScope.onClear(() => { evidenceDisposed = true; releaseEvidence(); evidencePhase.value = 'idle' })
 
 // A late thumbnail upload is a media update, not a reason to reset the dialog.
 watch([() => props.open, () => props.event?.projectId, () => props.event?.eventId,
@@ -246,7 +257,7 @@ function onKeydown(event: KeyboardEvent) {
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
 }
 
-onBeforeUnmount(() => { ++viewGeneration; releaseEvidence(); resetAdvice() })
+onBeforeUnmount(() => { evidenceDisposed = true; releaseScope(); ++viewGeneration; releaseEvidence(); resetAdvice() })
 </script>
 
 <template>
@@ -265,13 +276,13 @@ onBeforeUnmount(() => { ++viewGeneration; releaseEvidence(); resetAdvice() })
         <div v-if="detailPhase === 'error'" class="detail-error" role="alert"><FileWarning :size="20" /><span><strong>详情加载失败</strong>{{ detailError }}</span><UiButton class="secondary-button" type="button" @click="event && $emit('retry', event.eventId)">重新加载</UiButton></div>
 
         <div v-if="event" class="alert-detail-body" :aria-busy="detailPhase === 'loading'">
-          <section class="evidence-section" aria-label="事件证据图片">
+          <section ref="evidenceElement" class="evidence-section" aria-label="事件证据图片">
             <EvidenceImage v-if="evidencePhase === 'ready'" :key="`${event.projectId}:${event.eventId}:${evidenceUrl}`"
               :src="evidenceUrl" :event="event" :alt="`${title}事件证据`" @error="evidencePhase = 'error'" />
             <div v-else class="evidence-placeholder" :class="`is-${evidencePhase}`">
               <LoaderCircle v-if="evidencePhase === 'loading'" class="spinning" :size="26" aria-hidden="true" />
               <ImageOff v-else :size="27" aria-hidden="true" />
-              <strong>{{ evidencePhase === 'loading' ? '正在读取证据' : evidencePhase === 'error' ? '证据读取失败' : '没有可用证据' }}</strong>
+              <strong>{{ evidencePhase === 'idle' ? '待显示时读取证据' : evidencePhase === 'loading' ? '正在读取证据' : evidencePhase === 'error' ? '证据读取失败' : '没有可用证据' }}</strong>
               <span>{{ evidencePhase === 'error' ? '图片服务暂时不可用，事件事实仍可处置。' : evidencePhase === 'empty' ? '服务端未保存该事件的证据图片。' : '通过受鉴权的证据接口加载。' }}</span>
             </div>
           </section>

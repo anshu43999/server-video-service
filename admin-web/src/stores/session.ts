@@ -18,6 +18,11 @@ export const useSessionStore = defineStore('session', () => {
   let restoring: Promise<void> | undefined
   let verifying: Promise<SessionCheck> | undefined
   let identityGeneration = 0
+  let permissionVerifier: (() => Promise<SessionCheck>) | undefined
+  function setPermissionVerifier(verifier: () => Promise<SessionCheck>) {
+    permissionVerifier = verifier
+    return () => { if (permissionVerifier === verifier) permissionVerifier = undefined }
+  }
 
   const isAdmin = computed(() => user.value?.platformRole === 'PLATFORM_ADMIN')
 
@@ -65,18 +70,26 @@ export const useSessionStore = defineStore('session', () => {
   async function submit(username: string, password: string) {
     const generation = ++identityGeneration
     projectScope.clear()
-    setupRequired.value
-      ? await authApi.setup(username, password)
-      : await authApi.login(username, password)
-    setupRequired.value = false
-    notifySessionChange()
-    const account = await authApi.me()
-    if (generation === identityGeneration) applyUser(account)
+    phase.value = 'restoring'
+    try {
+      setupRequired.value
+        ? await authApi.setup(username, password)
+        : await authApi.login(username, password)
+      if (generation !== identityGeneration) return
+      setupRequired.value = false
+      notifySessionChange()
+      const account = await authApi.me()
+      if (generation === identityGeneration) applyUser(account)
+    } catch (error) {
+      if (generation === identityGeneration) { user.value = null; phase.value = 'anonymous' }
+      throw error
+    }
   }
 
   async function logout() {
     identityGeneration++
     projectScope.clear()
+    phase.value = 'restoring'
     subscriptionRegistry.closeAll()
     logoutUnconfirmed.value = false
     try {
@@ -85,12 +98,14 @@ export const useSessionStore = defineStore('session', () => {
       expire()
     } catch (error) {
       logoutUnconfirmed.value = true
+      phase.value = 'authenticated'
       message.value = '退出未确认，实时连接已停止'
       throw error
     }
   }
 
   async function verifyAfterUnauthorized(): Promise<SessionCheck> {
+    if (permissionVerifier && user.value?.accountId) return permissionVerifier()
     if (verifying) return verifying
     const generation = identityGeneration
     verifying = (async () => {
@@ -113,7 +128,7 @@ export const useSessionStore = defineStore('session', () => {
     return verifying
   }
 
-  return { phase, setupRequired, user, message, logoutUnconfirmed, isAdmin, restore, submit, logout, expire, verifyAfterUnauthorized }
+  return { phase, setupRequired, user, message, logoutUnconfirmed, isAdmin, restore, submit, logout, expire, verifyAfterUnauthorized, setPermissionVerifier }
 })
 
 export function connectSessionToApi(store: ReturnType<typeof useSessionStore>) {
