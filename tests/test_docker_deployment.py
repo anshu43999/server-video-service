@@ -70,8 +70,12 @@ class DockerDeploymentTests(unittest.TestCase):
         self.assertNotIn("COPY .env", self.dockerfile)
 
     def test_both_images_enforce_cpu_dependencies_and_audit_before_shipping(self) -> None:
+        self.assertIn("COPY requirements-cpu.txt constraints-cpu.txt ./", self.dockerfile)
+        self.assertIn("COPY requirements-cpu.txt ./", self.converter_dockerfile)
+        self.assertIn("COPY constraints-converter.txt ./constraints-cpu.txt", self.converter_dockerfile)
+        self.assertNotIn("COPY requirements-cpu.txt constraints-cpu.txt ./", self.converter_dockerfile)
+        self.assertIn("&& python tools/check_converter_runtime.py --constraints /app/constraints-cpu.txt", self.converter_dockerfile)
         for dockerfile in (self.dockerfile, self.converter_dockerfile):
-            self.assertIn("COPY requirements-cpu.txt constraints-cpu.txt ./", dockerfile)
             self.assertIn("PIP_CONSTRAINT=/app/constraints-cpu.txt", dockerfile)
             self.assertIn('PIP_FIND_LINKS="https://download.pytorch.org/whl/cpu/torch/ https://download.pytorch.org/whl/cpu/torchvision/"', dockerfile)
             self.assertIn('CUDA_VISIBLE_DEVICES=""', dockerfile)

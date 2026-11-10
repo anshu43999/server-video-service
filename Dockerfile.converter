@@ -22,11 +22,16 @@ RUN apt-get update \
     && useradd --uid 10002 --gid converter --home-dir /app --no-create-home converter
 
 COPY requirements.txt requirements-yolo.txt requirements-convert.txt requirements-converter-service.txt ./
-COPY requirements-cpu.txt constraints-cpu.txt ./
+COPY requirements-cpu.txt ./
+# Select the converter profile at the path used by nested -c and PIP_CONSTRAINT.
+# The video-service image continues to use the original constraints-cpu.txt.
+COPY constraints-converter.txt ./constraints-cpu.txt
 COPY tools/check_cpu_runtime.py ./tools/check_cpu_runtime.py
+COPY tools/check_converter_runtime.py ./tools/check_converter_runtime.py
 RUN pip install --no-cache-dir -r requirements-converter-service.txt \
     && pip check \
-    && python tools/check_cpu_runtime.py
+    && python tools/check_cpu_runtime.py \
+    && python tools/check_converter_runtime.py --constraints /app/constraints-cpu.txt
 
 COPY --chown=converter:converter converter_service ./converter_service
 COPY --chown=converter:converter tools/conversion_worker.py ./tools/conversion_worker.py

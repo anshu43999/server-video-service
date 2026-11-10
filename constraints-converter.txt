@@ -1,0 +1,13 @@
+# M27-T07: converter-only rollback for the M27-T06 weight-aliasing incident.
+# Dockerfile.converter installs this as /app/constraints-cpu.txt so nested
+# requirements-cpu.txt and PIP_CONSTRAINT enforce the SAME selected profile.
+# Keep constraints-cpu.txt unchanged for the video inference image.
+torch==2.12.0+cpu; platform_system != "Darwin"
+torchvision==0.27.0+cpu; platform_system != "Darwin"
+torch==2.12.0; platform_system == "Darwin"
+torchvision==0.27.0; platform_system == "Darwin"
+ultralytics==8.4.123
+litert-torch==0.9.3; platform_system != "Windows"
+ai-edge-litert==2.1.6; platform_system != "Windows"
+ai-edge-quantizer==0.8.0; platform_system != "Windows"
+litert-converter==0.3.1; platform_system != "Windows"
