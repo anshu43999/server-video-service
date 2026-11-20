@@ -31,7 +31,7 @@ def resolved_stream_plan(_project_id, scene_id, plan_id, revision):
             "members": [{"modelId": "model-a", "version": "1.0.0", "target": "pc",
                          "parameterSnapshot": {"modelId": "model-a", "modelVersion": "1.0.0", "platform": "server",
                                                "detection": {"confidenceThreshold": 0.42, "iouThreshold": 0.45,
-                                                             "maxDetections": 100}}}]}
+                                                             "maxDetections": 100}, "alertRules": []}}]}
 
 
 def configuration(stream_id: str = "camera-1") -> StreamConfiguration:
@@ -50,7 +50,7 @@ def configuration(stream_id: str = "camera-1") -> StreamConfiguration:
 
 class StreamConfigStoreTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(dir=ROOT / ".test-db")
+        self.temp = tempfile.TemporaryDirectory(prefix="stream-store-")
         self.path = Path(self.temp.name) / "streams.db"
         self.database = DatabaseManager(f"sqlite+pysqlite:///{self.path.as_posix()}")
         Base.metadata.create_all(self.database.engine)
@@ -158,7 +158,7 @@ class StreamConfigStoreTests(unittest.TestCase):
 class StreamConfigApiPersistenceTests(unittest.TestCase):
     def setUp(self):
         streams.clear()
-        self.temp = tempfile.TemporaryDirectory(dir=ROOT / ".test-db")
+        self.temp = tempfile.TemporaryDirectory(prefix="stream-api-")
         self.path = Path(self.temp.name) / "api-streams.db"
         self.database = DatabaseManager(f"sqlite+pysqlite:///{self.path.as_posix()}")
         Base.metadata.create_all(self.database.engine)

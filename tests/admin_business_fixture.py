@@ -59,6 +59,11 @@ def mount_business(app, admin):
     registry = models / "registry.json"
     registry.write_text(json.dumps({"models": rows}), encoding="utf-8")
     catalog, profiles = ModelCatalog(registry), ModelParameterStore(models / "profiles.json")
+    # Synthetic browser assets follow the same publication gate as product
+    # assets. This store lives only in this fixture's TemporaryDirectory.
+    for model in rows:
+        for platform in {artifact["platform"] for artifact in model["artifacts"]}:
+            profiles.publish(model, platform, "browser-fixture", 0, None)
     config.settings = auth.settings.model_copy(update={"calibration_root": str(root / "calibration")})
     # Construction only is redirected; no business handler or guard is mocked.
     with patch("app.model_catalog.ModelCatalog", return_value=catalog), patch("app.model_parameters.ModelParameterStore", return_value=profiles):

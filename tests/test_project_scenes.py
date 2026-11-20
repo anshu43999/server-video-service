@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 import app.main as main
-from app.database import (Base, DatabaseManager, ProjectRecord, ProjectSceneRecord, ProjectSceneMemberRecord,
+from app.database import (DEFAULT_PROJECT_ID, Base, DatabaseManager, ProjectRecord, ProjectSceneRecord, ProjectSceneMemberRecord,
                           ProjectModelAssignmentRecord)
 from app.project_scenes import ProjectScenes
 from app.project_management import memory_audits_for_tests
@@ -73,6 +73,29 @@ class SceneApiTests(ModelApiFixture, unittest.TestCase):
         self.assertEqual(5, len(main.project_model_assignments.list(self.project_id)))
         self.assertFalse(main.streams)
 
+    def test_quick_create_independent_plans_preserve_exact_targets_and_approval(self):
+        # Matches the UI quick-create payload; no new server defaults or privileges.
+        from uuid import uuid4
+        scene_id = 'scene-' + str(uuid4())
+        members = [{**self.member('helmet', position, target=target),
+                    'memberId': 'member-' + str(uuid4()), 'inputTypes': ['image', 'video']}
+                   for position, target in enumerate(('pc', 'mobile'))]
+        policy = dict(frameInterval=5, batchTimeoutMs=5000, resultMaxAgeMs=6000, overlayHoldMs=1500)
+        plans = [dict(planId='plan-' + member['memberId'], name='安全帽 · 单模型方案',
+                      inputTypes=['image', 'video'], memberIds=[member['memberId']],
+                      execution='single', enabled=True, cameraPolicy=policy) for member in members]
+        result = self.create({**self.scene, 'sceneId': scene_id, 'models': members, 'plans': plans})
+        self.assertEqual(201, result.status_code, result.text)
+        saved = result.json()
+        self.assertEqual(1, saved['revision'])
+        self.assertFalse(saved['approved'])
+        self.assertEqual({'pc', 'mobile'}, {member['target'] for member in saved['models']})
+        self.assertEqual({plan['planId'] for plan in plans}, {plan['planId'] for plan in saved['plans']})
+        self.assertTrue(all(len(plan['memberIds']) == 1 and plan['execution'] == 'single'
+                            and plan['cameraPolicy'] == policy for plan in saved['plans']))
+        self.assertEqual([], self.client.get(self.scenes, headers=self.user).json()['scenes'])
+        self.assertFalse(main.streams)
+
     def test_permissions_project_isolation_and_same_id(self):
         self.assertEqual(403, self.create(headers=self.user).status_code)
         self.assertEqual([], self.client.get(self.scenes, headers=self.user).json()["scenes"])
@@ -86,7 +109,7 @@ class SceneApiTests(ModelApiFixture, unittest.TestCase):
         self.assertEqual("现场安全", self.client.get(self.scenes + "/safety", headers=self.owner).json()["name"])
         self.assertEqual(404, self.client.get(self.scenes + "/missing", headers=self.owner).status_code)
 
-    def test_approved_mixed_target_catalog_preserves_frozen_parameter_metadata(self):
+    def test_approved_mixed_target_catalog_follows_platform_publication(self):
         body = {**self.scene, "inputTypes": ["image"], "models": [
             self.member("helmet", target="mobile"), self.member("helmet", 1, target="pc")], "plans": []}
         self.assertEqual(201, self.create(body).status_code)
@@ -99,8 +122,9 @@ class SceneApiTests(ModelApiFixture, unittest.TestCase):
         for member in first["models"]:
             self.assertTrue(member["executionReady"])
             snapshot = member["parameterSnapshot"]
-            self.assertEqual((2, "inherited", 0, None), tuple(
-                snapshot[key] for key in ("schemaVersion", "source", "inheritedRevision", "updatedAt")))
+            self.assertEqual((2, "platform", 0), tuple(
+                snapshot[key] for key in ("schemaVersion", "source", "revision")))
+            self.assertTrue(snapshot["updatedAt"])
             self.assertNotIn("audit", snapshot)
             self.assertNotIn("updatedBy", snapshot)
             profile = self.client.get(member["parameterUrl"], headers=self.user)
@@ -109,11 +133,14 @@ class SceneApiTests(ModelApiFixture, unittest.TestCase):
 
             platform = "android" if member["target"] == "mobile" else "server"
             model = main.model_catalog.get(member["modelId"], member["version"])
-            values = main.model_parameter_store.get(model, platform, self.project_id)
+            values = main.model_parameter_store.get(model, platform)
             values["detection"]["confidenceThreshold"] = .4
-            main.model_parameter_store.save(model, platform, values, "owner", 0, self.project_id)
+            main.model_parameter_store.save(model, platform, values, "admin", 0)
+            main.model_parameter_store.publish(model, platform, "admin", 1, 0)
         second = self.client.get(self.scenes, headers=self.user).json()["scenes"][0]
-        self.assertEqual(first, second)
+        self.assertEqual(first["revision"], second["revision"])
+        self.assertTrue(second["approved"])
+        self.assertTrue(all(m["parameterSnapshot"]["detection"]["confidenceThreshold"] == .4 for m in second["models"]))
         self.assertFalse(main.streams)
 
     def test_stale_revision_invalid_members_and_duplicate_creation_are_atomic(self):
@@ -231,26 +258,27 @@ class SceneApiTests(ModelApiFixture, unittest.TestCase):
         self.assertEqual([201, 201], [first.status_code, second.status_code])
         self.assertEqual(project_model_id, first.json()["models"][0]["projectModelId"])
 
-    def test_inventory_parameter_refresh_requires_explicit_scene_member_confirmation(self):
+    def test_platform_publication_requires_no_scene_reapproval(self):
         created = self.create()
         self.assertEqual(201, created.status_code, created.text)
-        model = main.model_catalog.get("helmet", "1.0.0")
-        profile = main.model_parameter_store.get(model, "server", self.project_id)
-        profile["detection"]["confidenceThreshold"] = 0.21
-        main.model_parameter_store.save(model, "server", profile, "test", 0, self.project_id)
-        refreshed = self._assign({**self.body, "parameterRevision": 1, "expectedRevision": 1})
-        self.assertEqual(200, refreshed.status_code, refreshed.text)
-        denied = self.client.post(self.scenes + "/safety/approval", headers=self.owner,
-            json={"approved": True, "expectedRevision": 1, "reason": "reviewed"})
-        self.assertEqual(409, denied.status_code)
-        self.assertEqual("project_model_revision_conflict", denied.json()["detail"]["code"])
-        confirmed = self.client.put(self.scenes + "/safety/models", headers=self.owner,
-            json={"expectedRevision": 1, "models": [self.member("helmet")]})
-        self.assertEqual(200, confirmed.status_code, confirmed.text)
         approved = self.client.post(self.scenes + "/safety/approval", headers=self.owner,
-            json={"approved": True, "expectedRevision": 2, "reason": "reviewed"})
+            json={"approved": True, "expectedRevision": 1, "reason": "reviewed"})
         self.assertEqual(200, approved.status_code, approved.text)
-        self.assertEqual(1, approved.json()["models"][0]["parameterSnapshot"]["revision"])
+        historic = self.scene_store.get(self.project_id, "safety")
+        model = main.model_catalog.get("helmet", "1.0.0")
+        profile = main.model_parameter_store.get(model, "server")
+        profile["detection"]["confidenceThreshold"] = 0.21
+        main.model_parameter_store.save(model, "server", profile, "admin", 0)
+        before = self.client.get(self.scenes, headers=self.user).json()["scenes"][0]
+        self.assertEqual(0, before["models"][0]["parameterSnapshot"]["revision"])
+        main.model_parameter_store.publish(model, "server", "admin", 1, 0)
+        after = self.client.get(self.scenes, headers=self.user).json()["scenes"][0]
+        self.assertEqual(2, after["revision"])
+        self.assertTrue(after["approved"])
+        self.assertEqual(.21, after["models"][0]["parameterSnapshot"]["detection"]["confidenceThreshold"])
+        self.assertEqual(historic, self.scene_store.get(self.project_id, "safety"))
+        self.assertEqual(1, main.project_model_assignments.get(self.project_id,
+            self.project_models[("helmet", "1.0.0", "pc")])["revision"])
 
 
 class SceneSqliteTests(unittest.TestCase):
@@ -270,6 +298,8 @@ class SceneSqliteTests(unittest.TestCase):
         self.addCleanup(self.db.close)
         Base.metadata.create_all(self.db.engine)
         with self.db.session() as session:
+            if session.get(ProjectRecord, DEFAULT_PROJECT_ID) is None:
+                session.add(ProjectRecord(project_id=DEFAULT_PROJECT_ID, project_code="default", display_name="Default"))
             session.add(ProjectRecord(project_id="p1", project_code="p1", display_name="P1", lifecycle_state="ACTIVE"))
             session.add(ProjectRecord(project_id="p2", project_code="p2", display_name="P2", lifecycle_state="ACTIVE"))
         from unittest.mock import Mock
@@ -281,6 +311,8 @@ class SceneSqliteTests(unittest.TestCase):
         from app.model_parameters import ModelParameterStore
         from app.project_model_assignments import ProjectModelAssignments
         parameters = ModelParameterStore(Path(self.temp.name) / "parameters.json", self.db)
+        for model_id in ("helmet", "person"):
+            parameters.publish(self.catalog.get(model_id, "1.0.0"), "server", "admin", 0, None)
         self.assignments = ProjectModelAssignments(self.db, self.catalog, parameters)
         with self.db.session() as session:
             for project_id in ("p1", "p2"):

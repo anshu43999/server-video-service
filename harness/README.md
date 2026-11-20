@@ -67,6 +67,12 @@ python harness/harness.py supersede M04-T02 `
 
 ## 规则
 
+### 测试证据留存（2026-11-12）
+
+遵循[工作区留存规则](../../AGENTS.md)：每个验收范围最终只保留一份自包含MD测试报告，复测写回同一报告；通过、失败、跳过、阻塞和未验证事实均保留，不把整份日志嵌入报告。完成记录链接报告，不再要求永久保存原始日志。状态源/完成/阻塞/退役记录仍是流程元数据，不删除、不篡改结论。
+
+`tools/accept_m111_updates.py`、`tools/accept_m112_lifecycle.py`将结果写入各自`harness/evidence/M111/T02/TEST_REPORT.md`、`harness/evidence/M112/T02/TEST_REPORT.md`，报告落盘并回读确认、隔离进程停止后清除本次临时目录；失败/零测试不改为通过，清理异常明确报告并返回非零。其他旧runner尚未改造，不代表已经全仓自动清理。历史材料须先汇总并迁移引用再按精确清单清理；不影响在用服务、业务数据库、源码或受保护发布产物。
+
 - 同一时间只启动一个小任务；
 - 未完成依赖不能启动；
 - `completed` 小任务必须有 `records/<major>/<task>.md`；

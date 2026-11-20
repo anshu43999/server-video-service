@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, event, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -18,6 +19,11 @@ from postgresql_support import isolated_postgresql_url
 ROOT = Path(__file__).resolve().parents[1]
 NOW = datetime.now(timezone.utc)
 PACKAGE = "com.aiyolo.inspection"
+APP_UPDATE_REVISION = "20261029_29"
+HISTORICAL_DOWNGRADE_TESTS = {
+    "test_references_restrict_delete_and_data_refuses_downgrade",
+    "test_empty_downgrade_then_upgrade",
+}
 
 
 def migration_config(url):
@@ -72,7 +78,8 @@ class StorageAssertions:
                 self.assertEqual({c.name for c in table.constraints if c.__class__.__name__ == "CheckConstraint"},
                                  {c["name"] for c in inspector.get_check_constraints(table.name)})
         with self.engine.connect() as connection:
-            self.assertEqual("20261029_29", connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one())
+            self.assertEqual(ScriptDirectory.from_config(self.config).get_current_head(),
+                             connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one())
 
     def test_dual_sources_roundtrip_and_restart(self):
         self.seed()
@@ -173,7 +180,11 @@ class AppUpdateSQLiteTest(StorageAssertions, unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="app-update-", dir=ROOT / ".test-db")
         self.url = "sqlite+pysqlite:///" + (Path(self.temp.name) / "test.db").as_posix()
         self.config = migration_config(self.url)
-        command.upgrade(self.config, "head")
+        # These rollback tests target the app-update migration boundary, not
+        # later irreversible inventory/system-knowledge migrations. Other tests
+        # still run at the current head and compare the live model DDL.
+        revision = APP_UPDATE_REVISION if self._testMethodName in HISTORICAL_DOWNGRADE_TESTS else "head"
+        command.upgrade(self.config, revision)
         self.engine = create_engine(self.url)
         @event.listens_for(self.engine, "connect")
         def sqlite_fk(connection, record):
@@ -185,7 +196,8 @@ class AppUpdateSQLiteTest(StorageAssertions, unittest.TestCase):
 @unittest.skipUnless(os.environ.get("RUN_POSTGRES_TESTS") == "1", "requires disposable PostgreSQL")
 class AppUpdatePostgreSQLTest(StorageAssertions, unittest.TestCase):
     def setUp(self):
-        self.cluster = isolated_postgresql_url("app_update")
+        revision = APP_UPDATE_REVISION if self._testMethodName in HISTORICAL_DOWNGRADE_TESTS else "head"
+        self.cluster = isolated_postgresql_url("app_update", revision=revision)
         self.url = self.cluster.__enter__()
         self.config = migration_config(self.url)
         self.engine = create_engine(self.url)

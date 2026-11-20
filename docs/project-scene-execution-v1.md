@@ -1,5 +1,7 @@
 # Project scene execution contract v1 (M36-T10 / M104-T06)
 
+> 2026-11-16参数所有权修订：以[平台统一模型参数](platform-model-parameters.md)为准。旧的项目/场景参数覆盖、按审批固定参数和参数重审批规则退役；新运行使用平台最新发布，已运行会话保持启动快照。以下既有场景、安装、权限和更新协议中不冲突的部分继续有效。
+
 This extends scene configuration, not multi-model scheduling. Global model
 `scenario` remains metadata; it is never substituted for the selected `sceneId`.
 

@@ -29,7 +29,7 @@ def resolved_stream_plan(project_id, scene_id, plan_id, revision):
             "execution": "single", "members": [{"modelId": "model-b", "version": "1.0.0", "target": "pc",
                 "parameterSnapshot": {"modelId": "model-b", "modelVersion": "1.0.0", "platform": "server",
                                       "detection": {"confidenceThreshold": 0.47, "iouThreshold": 0.45,
-                                                    "maxDetections": 100}}}]}
+                                                    "maxDetections": 100}, "alertRules": []}}]}
 
 
 def config(
@@ -61,7 +61,7 @@ class StreamRestartRecoveryTests(unittest.TestCase):
     def setUp(self):
         streams.clear()
         main_module.stream_restore_errors.clear()
-        self.temp = tempfile.TemporaryDirectory(dir=ROOT / ".test-db")
+        self.temp = tempfile.TemporaryDirectory(prefix="stream-restart-")
         self.path = Path(self.temp.name) / "restart.db"
         self.database = DatabaseManager(f"sqlite+pysqlite:///{self.path.as_posix()}")
         Base.metadata.create_all(self.database.engine)

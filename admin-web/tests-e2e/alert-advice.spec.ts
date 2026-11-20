@@ -50,19 +50,43 @@ async function mockIdentity(context: BrowserContext) {
 }
 
 async function mockKnowledge(context: BrowserContext) {
-  let entry = structuredClone(knowledge)
-  const revisions: any[] = [{ revision: 1, action: 'CREATE', actor: 'owner', createdAt: now, snapshot: structuredClone(entry) }]
-  await context.route('**/aiyoloapi/projects/' + fixtureProjectId + '/alert-advice/knowledge-entries**', async route => {
+  let draft = { ...structuredClone(knowledge), origin: 'SYSTEM', projectId: 'system', systemVersion: null }
+  let published = { ...structuredClone(knowledge), entryId: 'system:' + knowledge.entryId, origin: 'SYSTEM', systemVersion: 1 }
+  let revision = 1, version = 1, projectWrites = 0
+  const versions = [{ version, catalogRevision: revision, notes: 'Initial', publishedBy: 'admin', publishedAt: now, entryCount: 1 }]
+  const revisions: any[] = [{ revision: 1, action: 'CREATE', actor: 'admin', createdAt: now, snapshot: structuredClone(draft) }]
+  await context.route('**/aiyoloapi/projects/' + fixtureProjectId + '/alert-advice/**', async route => {
     const request = route.request(), path = new URL(request.url()).pathname
-    if (path.endsWith('/match-preview')) return route.fulfill({ json: { matched: entry.status === 'ACTIVE', matchKey: entry.matchKey, entry: entry.status === 'ACTIVE' ? entry : null } })
-    if (path.endsWith('/revisions')) return route.fulfill({ json: { revisions } })
-    if (path.endsWith('/status')) { const body = request.postDataJSON(); entry = { ...entry, status: body.status,
-      revision: entry.revision + 1, updatedAt: '2026-10-27T10:05:00Z' }; revisions.push({ revision: entry.revision,
-      action: entry.status === 'ACTIVE' ? 'ACTIVATE' : 'DEACTIVATE', actor: 'owner', createdAt: entry.updatedAt,
-      snapshot: structuredClone(entry) }); return route.fulfill({ json: entry }) }
-    if (request.method() === 'GET' && path.endsWith('/knowledge-entries')) return route.fulfill({ json: { entries: [entry] } })
-    return route.fulfill({ json: entry })
+    if (path.endsWith('/match-preview')) return route.fulfill({ json: { matched: published.status === 'ACTIVE', matchKey: published.matchKey, entry: published.status === 'ACTIVE' ? published : null } })
+    if (request.method() !== 'GET') { projectWrites++; return route.fulfill({ status: 410, json: { detail: { code: 'PROJECT_KNOWLEDGE_READ_ONLY' } } }) }
+    if (path.endsWith('/revisions')) return route.fulfill({ json: { revisions: [{ revision: published.revision, action: 'PUBLISHED', actor: 'admin', createdAt: now, snapshot: published }] } })
+    if (path.endsWith('/knowledge-entries')) return route.fulfill({ json: { entries: [published], systemVersion: version } })
+    return route.fulfill({ json: published })
   })
+  await context.route('**/aiyoloapi/platform/alert-advice/**', async route => {
+    const request = route.request(), path = new URL(request.url()).pathname
+    if (path.endsWith('/versions')) return route.fulfill({ json: { versions } })
+    if (path.endsWith('/publish')) {
+      expect(request.postDataJSON().expectedRevision).toBe(revision)
+      version++; revision++
+      published = { ...structuredClone(draft), entryId: 'system:' + draft.entryId, projectId: fixtureProjectId, systemVersion: version }
+      versions.push({ version, catalogRevision: revision - 1, notes: 'Published', publishedBy: 'admin', publishedAt: now, entryCount: 1 })
+      return route.fulfill({ json: { ...versions.at(-1), entries: [published] } })
+    }
+    if (path.endsWith('/status')) {
+      expect(request.postDataJSON().expectedRevision).toBe(draft.revision)
+      draft = { ...draft, status: request.postDataJSON().status, revision: draft.revision + 1 }; revision++
+      revisions.push({ revision: draft.revision, action: 'DEACTIVATE', actor: 'admin', createdAt: now, snapshot: structuredClone(draft) })
+      return route.fulfill({ json: draft })
+    }
+    if (request.method() === 'PUT') {
+      draft = { ...draft, ...request.postDataJSON(), revision: draft.revision + 1 }; revision++
+      return route.fulfill({ json: draft })
+    }
+    if (path.endsWith('/revisions')) return route.fulfill({ json: { revisions } })
+    return route.fulfill({ json: { entries: [draft], revision } })
+  })
+  return { projectWrites: () => projectWrites }
 }
 
 async function mockAlerts(context: BrowserContext) {
@@ -94,18 +118,43 @@ async function mockAlerts(context: BrowserContext) {
   return { posts, dispositionWrites: () => dispositionWrites }
 }
 
-for (const width of [1440, 390]) test('production knowledge management at ' + width + 'px', async ({ context, page }) => {
-  await page.setViewportSize({ width, height: width === 390 ? 844 : 960 }); await mockIdentity(context); await mockKnowledge(context)
-  await page.goto(adminPath('/alert-knowledge')); await expect(page.getByRole('heading', { name: 'AI 告警知识资料' })).toBeVisible()
+for (const width of [1440, 390]) test('production knowledge readonly at ' + width + 'px', async ({ context, page }, testInfo) => {
+  await page.setViewportSize({ width, height: width === 390 ? 844 : 960 }); await mockIdentity(context); const calls = await mockKnowledge(context)
+  await page.goto(adminPath('/alert-knowledge')); await expect(page.getByRole('heading', { name: 'AI 知识资料', exact: true })).toBeVisible()
   const card = page.locator('.knowledge-card').filter({ hasText: '未佩戴安全帽模拟处置资料' })
-  await expect(card).toContainText('PPE_NO_HELMET'); await expect(card).toContainText('MOCK KB')
-  await card.getByRole('button', { name: '停用' }).click(); await expect(card).toContainText('已停用')
-  await card.getByRole('button', { name: '版本' }).click(); await expect(page.getByRole('dialog')).toContainText('DEACTIVATE')
+  await expect(card).toContainText('PPE_NO_HELMET'); await expect(card).toContainText('系统统一 V1')
+  await expect(page.getByRole('button', { name: /编辑|停用|启用|新增|升级|覆盖|发布系统/ })).toHaveCount(0)
+  await card.getByRole('button', { name: '查看详情' }).click(); await expect(page.getByRole('dialog')).toContainText('作业现场安全管理制度')
+  await page.keyboard.press('Escape')
+  await card.getByRole('button', { name: '版本' }).click(); await expect(page.getByRole('dialog')).toContainText('PUBLISHED')
   await page.keyboard.press('Escape'); await page.getByLabel('告警类型 ID').fill('PPE_NO_HELMET')
   await page.getByLabel('识别分类 ID').fill('HEAD'); await page.getByRole('button', { name: '匹配预览' }).click()
-  await expect(page.getByRole('dialog')).toContainText('未找到精确匹配资料')
+  await expect(page.getByRole('dialog')).toContainText('找到精确匹配资料')
+  expect(calls.projectWrites()).toBe(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-  await page.screenshot({ path: '../evidence/M41/M41-T09-knowledge-' + width + '.png', fullPage: true, animations: 'disabled' })
+  await page.screenshot({ path: testInfo.outputPath('knowledge.png'), fullPage: true, animations: 'disabled' })
+})
+
+test('production knowledge system maintenance and global publication', async ({ context, page }) => {
+  await mockIdentity(context); const calls = await mockKnowledge(context)
+  await page.goto(adminPath('/platform/alert-knowledge'))
+  const card = page.locator('.knowledge-card')
+  await card.getByRole('button', { name: '编辑', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('资料标题', { exact: true }).fill('统一系统资料更新')
+  await dialog.getByRole('button', { name: '保存资料' }).click()
+  await expect(card).toContainText('统一系统资料更新')
+  await card.getByRole('button', { name: '停用', exact: true }).click(); await expect(card).toContainText('已停用')
+  await page.goto(adminPath('/alert-knowledge'))
+  await expect(card).toContainText('未佩戴安全帽模拟处置资料'); await expect(card).toContainText('参与匹配')
+  await page.goto(adminPath('/platform/alert-knowledge'))
+  await page.getByRole('button', { name: '发布系统版本' }).click()
+  await page.getByLabel('发布说明').fill('对所有项目生效')
+  await page.getByRole('button', { name: '确认发布' }).click()
+  await expect(page.getByRole('status')).toContainText('已发布系统版本')
+  await page.goto(adminPath('/alert-knowledge'))
+  await expect(card).toContainText('统一系统资料更新'); await expect(card).toContainText('已停用'); await expect(card).toContainText('系统统一 V2')
+  expect(calls.projectWrites()).toBe(0)
 })
 
 for (const width of [1440, 390]) test('production advice states at ' + width + 'px', async ({ context, page }) => {

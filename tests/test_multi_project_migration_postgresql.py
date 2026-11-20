@@ -48,6 +48,9 @@ class MultiProjectPostgreSqlMigrationTests(unittest.TestCase):
                     ))
             finally:
                 seed_engine.dispose()
+            command.upgrade(config, "20261019_13")
+            with self.assertRaisesRegex(RuntimeError, "permanently removed"):
+                command.downgrade(config, "20260920_05")
             command.upgrade(config, "head")
             command.upgrade(config, "head")
             command.check(config)
@@ -98,8 +101,9 @@ class MultiProjectPostgreSqlMigrationTests(unittest.TestCase):
             finally:
                 isolated_engine.dispose()
 
-            with self.assertRaisesRegex(RuntimeError, "permanently removed"):
+            with self.assertRaisesRegex(RuntimeError, "immutable releases and project bindings are durable"):
                 command.downgrade(config, "20260920_05")
+            command.check(config)
         finally:
             with admin_engine.begin() as connection:
                 connection.execute(text(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE'))

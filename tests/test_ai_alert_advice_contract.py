@@ -74,7 +74,7 @@ class AlertAdviceContractTest(unittest.TestCase):
     def test_permission_matrix_has_separate_capabilities(self):
         capabilities = (
             "project.alert_knowledge.read",
-            "project.alert_knowledge.manage",
+            "platform.alert_knowledge.manage",
             "project.alert_advice.generate",
             "project.alert_advice.read",
             "project.alert_advice.history.read",

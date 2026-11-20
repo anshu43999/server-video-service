@@ -36,13 +36,12 @@ async function setup(owner=true, initial:Assignment[]=[assignment('pc','helmet',
   const save=vi.spyOn(projectModelsApi,'save').mockImplementation(async(value:AssignmentWrite)=>{
     const previous=assignments.find(a=>a.modelId===value.modelId&&a.modelVersion===value.modelVersion&&a.target===value.target)
     const next=assignment(value.target,value.modelId,value.modelVersion,(previous?.revision??0)+1,value.enabled)
-    next.parameterRevision=value.parameterRevision
     assignments=previous?assignments.map(a=>a.projectModelId===previous.projectModelId?next:a):[...assignments,next]
     return next
   })
   const remove=vi.spyOn(projectModelsApi,'remove').mockImplementation(async(projectModelId:string)=>{assignments=assignments.filter(a=>a.projectModelId!==projectModelId);return {removed:true,projectModelId}})
   const router=createRouter({history:createMemoryHistory(),routes:[{path:'/',component:ProjectModelsView}]}); await router.push('/')
-  const wrapper=mount(ProjectModelsView,{global:{plugins:[installUiComponents,router],stubs:{UiDialog:{props:['open'],template:'<section v-if="open"><slot/></section>'}}}}); await flushPromises()
+  const wrapper=mount(ProjectModelsView,{global:{plugins:[installUiComponents,router],stubs:{UiDialog:{name:'UiDialog',props:['open','title'],template:'<section v-if="open"><slot/></section>'}}}}); await flushPromises()
   return {wrapper,availableSpy,save,remove}
 }
 
@@ -62,6 +61,18 @@ it('shows independent PC and mobile pools with multiple exact releases and Chine
   wrapper.unmount()
 })
 
+it.each(['pc','mobile'] as const)('distinguishes unpublished parameters from a valid published revision zero for %s',async target=>{
+  const {wrapper}=await setup(true,[
+    {...assignment(target,'helmet','1.0',3),parameterPublished:false,parameterRevision:0},
+    {...assignment(target,'vehicle','2.0',1),parameterPublished:true,parameterRevision:0},
+  ])
+  if(target==='mobile') await wrapper.get('#project-model-tab-mobile').trigger('click')
+  const rows=wrapper.findAll('.inventory-row')
+  expect(rows.find(row=>row.text().includes('Helmet'))!.find('.inventory-meta').text()).toContain('参数修订尚未发布')
+  expect(rows.find(row=>row.text().includes('车辆检测'))!.find('.inventory-meta').text()).toContain('参数修订r0')
+  wrapper.unmount()
+})
+
 it('creates one target-specific inventory item and refreshes the correct pool',async()=>{
   const {wrapper,save}=await setup(true,[])
   await wrapper.get('#project-model-tab-mobile').trigger('click')
@@ -69,9 +80,114 @@ it('creates one target-specific inventory item and refreshes the correct pool',a
   wrapper.findComponent({name:'UiSelect'}).vm.$emit('update:modelValue',JSON.stringify(['helmet','1.0'])); await flushPromises()
   const selects=wrapper.findAllComponents({name:'UiSelect'}); selects[1]!.vm.$emit('update:modelValue','mobile'); await flushPromises()
   await wrapper.find('form').trigger('submit'); wrapper.findComponent({name:'UiConfirmDialog'}).vm.$emit('confirm'); await flushPromises()
-  expect(save).toHaveBeenCalledWith({modelId:'helmet',modelVersion:'1.0',target:'mobile',parameterRevision:5,enabled:true,expectedRevision:0},expect.any(AbortSignal))
+  expect(save).toHaveBeenCalledWith({modelId:'helmet',modelVersion:'1.0',target:'mobile',enabled:true,expectedRevision:0},expect.any(AbortSignal))
   expect(wrapper.findAll('.target-pool .inventory-row')).toHaveLength(1)
   expect(wrapper.find('.target-pool').text()).toContain('Helmet')
+  wrapper.unmount()
+})
+
+it.each(['pc','mobile'] as const)('blocks an enabled exact release on %s even through programmatic submission',async target=>{
+  const {wrapper,save}=await setup(true,[assignment(target,'helmet','1.0',3)])
+  if(target==='mobile') await wrapper.get('#project-model-tab-mobile').trigger('click')
+  await wrapper.findAll('button').find(button=>button.text()===(target==='pc'?'添加 PC 模型':'添加移动端模型'))!.trigger('click')
+  await flushPromises()
+  const modelSelect=wrapper.findComponent({name:'UiSelect'})
+  expect(modelSelect.findAllComponents({name:'ElOption'}).map(option=>option.props('label')).join(' ')).toContain(`${target==='pc'?'PC 端':'移动端'}已添加`)
+  modelSelect.vm.$emit('update:modelValue',JSON.stringify(['helmet','1.0']));await flushPromises()
+  expect(wrapper.find('.assignment-preview').text()).toContain('已添加 · r3')
+  expect(wrapper.find('.assignment-preview [role="status"]').text()).toContain('无需重复添加')
+  expect(wrapper.find('form button.primary-button').text()).toBe('已添加')
+  expect(wrapper.find('form button.primary-button').attributes('disabled')).toBeDefined()
+  await wrapper.find('form').trigger('submit')
+  const confirmation=wrapper.findComponent({name:'UiConfirmDialog'})
+  expect(confirmation.props('open')).toBe(false)
+  confirmation.vm.$emit('confirm');await flushPromises()
+  expect(save).not.toHaveBeenCalled()
+  expect(wrapper.findAll('.inventory-row')).toHaveLength(1)
+  wrapper.unmount()
+})
+
+it('allows the same release on another target without changing the enabled entry',async()=>{
+  const {wrapper,save}=await setup(true,[assignment('pc','helmet','1.0',3)])
+  await wrapper.findAll('button').find(button=>button.text()==='添加 PC 模型')!.trigger('click');await flushPromises()
+  wrapper.findComponent({name:'UiSelect'}).vm.$emit('update:modelValue',JSON.stringify(['helmet','1.0']));await flushPromises()
+  expect(wrapper.find('form button.primary-button').attributes('disabled')).toBeDefined()
+  wrapper.findAllComponents({name:'UiSelect'})[1]!.vm.$emit('update:modelValue','mobile');await flushPromises()
+  expect(wrapper.find('.assignment-preview').text()).toContain('尚未添加')
+  expect(wrapper.find('form button.primary-button').attributes('disabled')).toBeUndefined()
+  await wrapper.find('form').trigger('submit');await flushPromises()
+  wrapper.findComponent({name:'UiConfirmDialog'}).vm.$emit('confirm');await flushPromises()
+  expect(save).toHaveBeenCalledExactlyOnceWith({modelId:'helmet',modelVersion:'1.0',target:'mobile',enabled:true,expectedRevision:0},expect.any(AbortSignal))
+  expect(wrapper.find('.target-switch').text()).toContain('PC 端1')
+  expect(wrapper.find('.target-switch').text()).toContain('移动端1')
+  await wrapper.get('#project-model-tab-pc').trigger('click')
+  expect(wrapper.find('.inventory-more').text()).toContain('清单 r3')
+  wrapper.unmount()
+})
+
+it('explicitly reenables a disabled release from the add dialog and keeps the same row',async()=>{
+  const existing=assignment('pc','helmet','1.0',8,false)
+  const {wrapper,save}=await setup(true,[existing,assignment('pc','vehicle','2.0',1)])
+  await wrapper.findAll('button').find(button=>button.text()==='添加 PC 模型')!.trigger('click');await flushPromises()
+  const modelSelect=wrapper.findComponent({name:'UiSelect'})
+  expect(modelSelect.findAllComponents({name:'ElOption'}).map(option=>option.props('label')).join(' ')).toContain('PC 端已停用，可重新启用')
+  modelSelect.vm.$emit('update:modelValue',JSON.stringify(['helmet','1.0']));await flushPromises()
+  expect(wrapper.findComponent({name:'UiDialog'}).props('title')).toBe('重新启用项目模型')
+  expect(wrapper.find('form button.primary-button').text()).toBe('重新启用')
+  expect(wrapper.find('.assignment-preview').text()).toContain('已停用 · r8')
+  expect(wrapper.find('.assignment-preview').text()).toContain('不新增重复条目')
+  await wrapper.find('form').trigger('submit');await flushPromises()
+  const confirmation=wrapper.findComponent({name:'UiConfirmDialog'})
+  expect(confirmation.props('title')).toBe('确认重新启用项目模型')
+  expect(confirmation.props('confirmLabel')).toBe('确认重新启用')
+  expect(confirmation.props('description')).toContain('保留原项目模型条目')
+  confirmation.vm.$emit('update:open',false);await flushPromises()
+  expect(save).not.toHaveBeenCalled()
+  await wrapper.find('form').trigger('submit');confirmation.vm.$emit('confirm');await flushPromises()
+  expect(save).toHaveBeenCalledExactlyOnceWith({modelId:'helmet',modelVersion:'1.0',target:'pc',enabled:true,expectedRevision:8},expect.any(AbortSignal))
+  expect(wrapper.findAll('.inventory-row')).toHaveLength(2)
+  const row=wrapper.findAll('.inventory-row').find(item=>item.text().includes('Helmet'))!
+  expect(row.text()).toContain(existing.projectModelId)
+  expect(row.text()).toContain('清单 r9')
+  expect(row.text()).toContain('已启用')
+  wrapper.unmount()
+})
+
+it.each([
+  {modelId:'helmet',version:'2.0'},
+  {modelId:'another-helmet',version:'1.0'},
+])('allows a distinct exact release with the same display name: $modelId/$version',async release=>{
+  const {wrapper,save,availableSpy}=await setup(true,[assignment('pc','helmet','1.0',3)])
+  availableSpy.mockResolvedValue([...available,{...available[0],...release,parameterProfiles:{server:{...profile(4,.3),modelId:release.modelId,modelVersion:release.version}}}])
+  await wrapper.findAll('button').find(button=>button.text()==='添加 PC 模型')!.trigger('click');await flushPromises()
+  wrapper.findComponent({name:'UiSelect'}).vm.$emit('update:modelValue',JSON.stringify([release.modelId,release.version]));await flushPromises()
+  expect(wrapper.find('.assignment-preview').text()).toContain('尚未添加')
+  await wrapper.find('form').trigger('submit');wrapper.findComponent({name:'UiConfirmDialog'}).vm.$emit('confirm');await flushPromises()
+  expect(save).toHaveBeenCalledExactlyOnceWith({modelId:release.modelId,modelVersion:release.version,target:'pc',enabled:true,expectedRevision:0},expect.any(AbortSignal))
+  expect(wrapper.findAll('.inventory-row')).toHaveLength(2)
+  wrapper.unmount()
+})
+
+it('blocks submission while candidates are loading or failed and allows an explicit reload',async()=>{
+  const {wrapper,save,availableSpy}=await setup(true,[])
+  let reject!:(reason:unknown)=>void
+  availableSpy.mockImplementationOnce(()=>new Promise((_,fail)=>{reject=fail}))
+  await wrapper.findAll('button').find(button=>button.text()==='添加 PC 模型')!.trigger('click');await flushPromises()
+  wrapper.findComponent({name:'UiSelect'}).vm.$emit('update:modelValue',JSON.stringify(['helmet','1.0']));await flushPromises()
+  expect(wrapper.text()).toContain('正在读取可分配模型')
+  expect(wrapper.find('form button.primary-button').attributes('disabled')).toBeDefined()
+  await wrapper.find('form').trigger('submit')
+  expect(wrapper.findComponent({name:'UiConfirmDialog'}).props('open')).toBe(false)
+  wrapper.findComponent({name:'UiConfirmDialog'}).vm.$emit('confirm');await flushPromises()
+  expect(save).not.toHaveBeenCalled()
+  reject(new Error('candidates unavailable'));await flushPromises()
+  expect(wrapper.find('form button.primary-button').attributes('disabled')).toBeDefined()
+  await wrapper.find('form').trigger('submit')
+  wrapper.findComponent({name:'UiConfirmDialog'}).vm.$emit('confirm');await flushPromises()
+  expect(save).not.toHaveBeenCalled()
+  await wrapper.findAll('button').find(button=>button.text()==='重试模型候选')!.trigger('click');await flushPromises()
+  expect(wrapper.find('form button.primary-button').attributes('disabled')).toBeUndefined()
+  expect(save).not.toHaveBeenCalled()
   wrapper.unmount()
 })
 
@@ -97,11 +213,11 @@ it('clears a new assignment draft on reopen while preserving the requested targe
   wrapper.unmount()
 })
 
-it('updates only the chosen target and preserves multiple models in the same pool',async()=>{
-  const existing=assignment('pc','helmet','1.0',3)
+it('reenables only the chosen target and preserves multiple models in the same pool',async()=>{
+  const existing=assignment('pc','helmet','1.0',3,false)
   const {wrapper,save}=await setup(true,[existing,assignment('pc','vehicle','2.0',1)])
   const helmet=wrapper.findAll('.inventory-row').find(card=>card.text().includes('Helmet'))!
-  await helmet.findAll('button').find(button=>button.text()==='重新批准')!.trigger('click'); await flushPromises()
+  await helmet.findAll('button').find(button=>button.text()==='重新启用')!.trigger('click'); await flushPromises()
   const selects=wrapper.findAllComponents({name:'UiSelect'})
   expect(selects[0]!.props('modelValue')).toBe(JSON.stringify(['helmet','1.0']))
   expect(selects[1]!.props('modelValue')).toBe('pc')
@@ -131,6 +247,10 @@ it('preserves the draft and does not retry a conflicting save',async()=>{
   await wrapper.find('form').trigger('submit'); wrapper.findComponent({name:'UiConfirmDialog'}).vm.$emit('confirm'); await flushPromises()
   expect(save).toHaveBeenCalledTimes(1); expect(wrapper.text()).toContain('不会自动重试')
   expect(wrapper.find('form').exists()).toBe(true)
+  await wrapper.find('form').trigger('submit')
+  expect(wrapper.findComponent({name:'UiConfirmDialog'}).props('open')).toBe(false)
+  wrapper.findComponent({name:'UiConfirmDialog'}).vm.$emit('confirm');await flushPromises()
+  expect(save).toHaveBeenCalledTimes(1)
   wrapper.unmount()
 })
 
@@ -145,12 +265,45 @@ it('shows one add entry whose label and target follow the selected tab',async()=
   wrapper.unmount()
 })
 
+for(const target of ['pc','mobile'] as const)it(`explains platform uninstall without reopening a dead assignment (${target})`,async()=>{
+  const old={...assignment(target,'helmet','1.0',4,false),modelName:'安全帽历史版',modelStatus:'UNINSTALLED',parameterPublished:false}
+  const {wrapper,save,remove,availableSpy}=await setup(true,[old])
+  vi.mocked(projectModelsApi.models).mockResolvedValue([])
+  availableSpy.mockResolvedValue([])
+  await wrapper.findAll('button').find(button=>button.text()==='刷新清单')!.trigger('click');await flushPromises()
+  if(target==='mobile')await wrapper.get('#project-model-tab-mobile').trigger('click')
+  const row=wrapper.find('.inventory-row')
+  expect(row.find('h4').text()).toBe('安全帽历史版')
+  expect(row.text()).toContain('已卸载')
+  expect(row.text()).toContain('不能重新启用')
+  expect(row.text()).toContain('重新上传不会自动恢复旧引用')
+  const enable=row.findAll('button').find(button=>button.text()==='重新启用')!
+  expect(enable.attributes('disabled')).toBeDefined()
+  expect(enable.attributes('aria-describedby')).toBe(row.find('.inventory-unavailable').attributes('id'))
+  await enable.trigger('click');await flushPromises()
+  expect(wrapper.find('form').exists()).toBe(false)
+  expect(save).not.toHaveBeenCalled()
+  await row.findAll('button').find(button=>button.text()==='移除')!.trigger('click')
+  wrapper.findAllComponents({name:'UiConfirmDialog'})[2]!.vm.$emit('confirm');await flushPromises()
+  expect(remove).toHaveBeenCalledWith(old.projectModelId,4,expect.any(AbortSignal))
+  wrapper.unmount()
+})
+for(const [status,label] of [['UNINSTALLED','已卸载模型（历史名称未留存）'],['MISSING','模型版本已不可用'],['UNKNOWN','未命名模型']])it(`does not guess a name or enable an unavailable assignment (${status})`,async()=>{
+  const old={...assignment('pc','helmet','1.0',4,false),modelName:'未命名模型',modelStatus:status}
+  const {wrapper,availableSpy}=await setup(true,[old])
+  vi.mocked(projectModelsApi.models).mockResolvedValue([]);availableSpy.mockResolvedValue([])
+  await wrapper.findAll('button').find(button=>button.text()==='刷新清单')!.trigger('click');await flushPromises()
+  expect(wrapper.find('.inventory-row h4').text()).toBe(label)
+  expect(wrapper.find('.inventory-unavailable').exists()).toBe(true)
+  expect(wrapper.findAll('button').find(button=>button.text()==='重新启用')!.attributes('disabled')).toBeDefined()
+  wrapper.unmount()
+})
 it('does not load selection data or expose writes to ordinary project users',async()=>{
   const {wrapper,availableSpy}=await setup(false,[assignment('pc','helmet','1.0',3)])
   expect(availableSpy).not.toHaveBeenCalled()
   expect(wrapper.findAll('button').some(button=>button.text()==='添加 PC 模型')).toBe(false)
   expect(wrapper.findAll('button').some(button=>button.text()==='停用')).toBe(false)
   expect(wrapper.findAll('button').some(button=>button.text()==='移除')).toBe(false)
-  expect(wrapper.text()).toContain('查看参数')
+  expect(wrapper.text()).toContain('查看平台参数')
   wrapper.unmount()
 })

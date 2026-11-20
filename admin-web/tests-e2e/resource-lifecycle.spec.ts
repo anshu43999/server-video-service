@@ -12,7 +12,7 @@ for (const width of [1440, 390]) {
     }
     await page.setViewportSize({ width, height: 960 })
     await page.goto(`/admin/scenes?project=${projectId}`)
-    await page.getByRole('button', { name: '删除场景', exact: true }).first().click()
+    await page.getByRole('region', { name: '项目识别场景列表' }).getByRole('button', { name: '删除场景 suite-a', exact: true }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog).toContainText('不级联删除模型资产')
     await expect(dialog).toContainText('离线设备数量未知')

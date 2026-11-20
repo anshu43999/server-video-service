@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
 from app.config import Settings
 from app.database import Base, DatabaseManager
@@ -42,6 +43,7 @@ class DatabaseConfigurationTests(unittest.TestCase):
                 "alert_verification_config", "alert_verifications", "alert_delivery_receipts",
                 "alert_advice_knowledge_entries", "alert_advice_knowledge_revisions",
                 "alert_advice_generations",
+                "system_knowledge_catalog", "system_knowledge_releases", "project_knowledge_bases",
                 "app_update_identities", "app_artifacts", "app_artifact_sources",
                 "app_update_policies", "app_releases", "app_update_policy_revisions",
                 "app_rollback_operations", "app_update_device_states", "app_update_receipts",
@@ -58,6 +60,21 @@ class DatabaseConfigurationTests(unittest.TestCase):
         self.assertEqual(state["error"], "RuntimeError")
         self.assertNotIn("url", state)
         database.close()
+
+    def test_legacy_knowledge_tables_are_optional_but_system_catalog_remains_required(self):
+        database = DatabaseManager("sqlite+pysqlite:///:memory:")
+        legacy = {"alert_advice_knowledge_entries", "alert_advice_knowledge_revisions", "project_knowledge_bases"}
+        try:
+            Base.metadata.create_all(database.engine, tables=[
+                table for name, table in Base.metadata.tables.items() if name not in legacy
+            ])
+            with database.engine.begin() as connection:
+                connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) PRIMARY KEY)"))
+            self.assertEqual("ready", database.verify_schema()["schema"])
+            Base.metadata.tables["system_knowledge_catalog"].drop(database.engine)
+            self.assertEqual("unavailable", database.health()["status"])
+        finally:
+            database.close()
 
     def test_unreachable_postgresql_is_unavailable_without_credentials(self):
         database = DatabaseManager(

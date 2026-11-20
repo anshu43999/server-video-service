@@ -1,4 +1,4 @@
-"""System drafts, immutable releases and explicitly pinned project bases."""
+"""One system catalog and immutable releases shared by all authorized projects."""
 from copy import deepcopy
 from datetime import datetime, timezone
 import json
@@ -7,36 +7,27 @@ from threading import RLock
 
 from sqlalchemy import select
 
-from .alert_advice_knowledge import AlertAdviceKnowledgeStore, KnowledgeConflict, KnowledgeNotFound, KnowledgeError, _text
-from .database import SystemKnowledgeCatalogRecord, SystemKnowledgeReleaseRecord, ProjectKnowledgeBaseRecord
-from .project_business import audit_change, lock_project
+from .alert_advice_knowledge import KnowledgeConflict, KnowledgeNotFound, KnowledgeError, _text
+from .system_knowledge_draft import SystemKnowledgeDraft
+from .database import SystemKnowledgeCatalogRecord, SystemKnowledgeReleaseRecord
+from .project_business import audit_change
 
 
 def initial_knowledge():
-    store = AlertAdviceKnowledgeStore()
+    store = SystemKnowledgeDraft()
     for raw in json.loads((Path(__file__).parent / "data/alert_knowledge_v1.json").read_text(encoding="utf-8")):
         raw = deepcopy(raw)
         entry_id = raw.pop("entryId")
         alert_type = raw.pop("alertTypeId")
         category = raw.pop("recognitionCategoryId")
         status = raw.pop("status", "ACTIVE")
-        store.create("system", entry_id, alert_type, category, raw, "system:initial-v1", status=status)
-    entries = store.list("system")
-    return {"entries": entries, "history": {entry["entryId"]: store.revisions("system", entry["entryId"]) for entry in entries}}
+        store.create(entry_id, alert_type, category, raw, "system:initial-v1", status=status)
+    return store.snapshot()
 
 
 def initial_release(payload):
     return {"version": 1, "catalogRevision": 1, "notes": "PPE 模型初始模拟资料", "publishedBy": "system:initial-v1",
             "publishedAt": datetime.now(timezone.utc).isoformat(), "entries": deepcopy(payload["entries"])}
-
-
-def pin_new_project(session, project_id):
-    # Called in the project creation transaction, serialized with publication.
-    catalog = session.scalar(select(SystemKnowledgeCatalogRecord).where(SystemKnowledgeCatalogRecord.catalog_id == 1).with_for_update())
-    if catalog is None:
-        raise RuntimeError("system knowledge schema must be migrated before creating projects")
-    version = session.scalar(select(SystemKnowledgeReleaseRecord.version).order_by(SystemKnowledgeReleaseRecord.version.desc()).limit(1))
-    session.add(ProjectKnowledgeBaseRecord(project_id=project_id, version=version, revision=1))
 
 
 class SystemKnowledgeStore:
@@ -46,7 +37,6 @@ class SystemKnowledgeStore:
         self._payload = initial_knowledge()
         self._revision = 1
         self._releases = {1: initial_release(self._payload)}
-        self._bindings = {}
 
     @property
     def persistent(self):
@@ -89,57 +79,25 @@ class SystemKnowledgeStore:
                 raise KnowledgeNotFound("system version was not found")
             return deepcopy(self._releases[version])
 
-    def binding(self, project_id, session=None):
+    def latest_release(self):
+        """Read one complete published snapshot; never expose unpublished drafts."""
         if self.persistent:
-            if session is None:
-                with self.database.session() as own:
-                    return self.binding(project_id, own)
-            row = session.get(ProjectKnowledgeBaseRecord, project_id)
-            if row is None:
-                raise KnowledgeNotFound("project knowledge base is not initialized")
-            return {"version": row.version, "revision": row.revision}
+            with self.database.session() as session:
+                row = session.scalar(select(SystemKnowledgeReleaseRecord).order_by(
+                    SystemKnowledgeReleaseRecord.version.desc()).limit(1))
+                if row is None:
+                    raise KnowledgeNotFound("no system knowledge version has been published")
+                return deepcopy(row.snapshot)
         with self._lock:
-            return deepcopy(self._bindings.get(project_id, {"version": 1, "revision": 1}))
+            return deepcopy(self._releases[max(self._releases)])
 
-    def pin_new_memory_project(self, project_id):
-        with self._lock:
-            self._bindings[project_id] = {"version": max(self._releases), "revision": 1}
-
-    def inherited(self, project_id, session=None):
-        binding = self.binding(project_id, session)
-        items = self.release(binding["version"], session)["entries"]
-        for item in items:
-            item.update({"sourceEntryId": item["entryId"], "entryId": "system:" + item["entryId"], "projectId": project_id,
-                         "origin": "SYSTEM", "systemVersion": binding["version"], "baseRevision": binding["revision"]})
-        return items
-
-    def adopt(self, project_id, version, expected_revision, actor, *, context=None, request_id=None):
-        with self._lock:
-            if self.persistent:
-                with self.database.session() as session:
-                    lock_project(session, project_id)
-                    self.release(version, session)
-                    before = self.binding(project_id, session)
-                    if before["revision"] != expected_revision:
-                        raise KnowledgeConflict("project base changed; refresh before upgrading")
-                    if version <= before["version"]:
-                        raise KnowledgeError("project base can only upgrade to a newer published version")
-                    row = session.get(ProjectKnowledgeBaseRecord, project_id)
-                    row.version = version
-                    row.revision += 1
-                    after = {"version": row.version, "revision": row.revision}
-                    audit_change(session, context, request_id, "alert_advice_base.upgrade", "alert_advice_base", project_id, before, after)
-                    return after
-            self.release(version)
-            before = self.binding(project_id)
-            if before["revision"] != expected_revision:
-                raise KnowledgeConflict("project base changed; refresh before upgrading")
-            if version <= before["version"]:
-                raise KnowledgeError("project base can only upgrade to a newer published version")
-            after = {"version": version, "revision": before["revision"] + 1}
-            audit_change(None, context, request_id, "alert_advice_base.upgrade", "alert_advice_base", project_id, before, after)
-            self._bindings[project_id] = after
-            return deepcopy(after)
+    def published(self, project_id):
+        release = self.latest_release()
+        for item in release["entries"]:
+            # projectId is authorization/response context, not ownership or a version pin.
+            item.update({"sourceEntryId": item["entryId"], "entryId": "system:" + item["entryId"],
+                         "projectId": project_id, "origin": "SYSTEM", "systemVersion": release["version"]})
+        return release
 
     def mutate(self, operation, actor, *, context=None, request_id=None, **kwargs):
         with self._lock:
@@ -164,12 +122,11 @@ class SystemKnowledgeStore:
 
     @staticmethod
     def _mutate(payload, operation, actor, kwargs):
-        # Reuse the exact validation and revision semantics of project materials.
-        store = AlertAdviceKnowledgeStore()
-        store._entries = {("system", entry["entryId"]): deepcopy(entry) for entry in payload["entries"]}
-        store._revisions = {("system", key): deepcopy(value) for key, value in payload["history"].items()}
-        result = getattr(store, operation)("system", actor=actor, **kwargs)
-        return {"entries": store.list("system"), "history": {key[1]: value for key, value in store._revisions.items()}}, result
+        if operation not in {"create", "replace", "set_status"}:
+            raise KnowledgeError("unsupported system draft operation")
+        draft = SystemKnowledgeDraft(payload)
+        result = getattr(draft, operation)(actor=actor, **kwargs)
+        return draft.snapshot(), result
 
     def publish(self, expected_revision, notes, actor, *, context=None, request_id=None):
         notes = _text(notes, "notes", 2000)

@@ -1,7 +1,9 @@
+from knowledge_support import helmet_mock_seed
 import copy
 import unittest
 
-from app.alert_advice_knowledge import AlertAdviceKnowledgeStore, helmet_mock_seed
+from app.alert_advice_knowledge import AlertAdviceKnowledgeStore
+from app.system_alert_knowledge import SystemKnowledgeStore
 from app.alert_advice_service import (
     AlertAdviceService,
     GenerationFailure,
@@ -43,8 +45,8 @@ class MediaTrap(dict):
 
 class AlertAdviceServiceTests(unittest.TestCase):
     def setUp(self):
-        self.store = AlertAdviceKnowledgeStore()
-        self.store.ensure_mock_seed("project-a")
+        self.system = SystemKnowledgeStore()
+        self.store = AlertAdviceKnowledgeStore(system=self.system)
         self.event = {
             "eventId": "event-1", "alertTypeId": " ppe_no_helmet ",
             "recognitionCategoryId": "head", "evidenceBytes": b"private",
@@ -61,7 +63,7 @@ class AlertAdviceServiceTests(unittest.TestCase):
         result = self.service().generate("project-a", MediaTrap(self.event))
         self.assertEqual("GENERATED", result["status"])
         self.assertEqual({"alertTypeId": "PPE_NO_HELMET", "recognitionCategoryId": "HEAD"}, result["matchKey"])
-        self.assertEqual("mock-ppe-no-helmet-head", result["knowledgeEntryId"])
+        self.assertEqual("system:mock-ppe-no-helmet-head", result["knowledgeEntryId"])
         self.assertEqual(1, result["knowledgeRevision"])
         self.assertEqual("SIMULATED_KNOWLEDGE_BASE", result["retrievalProvider"])
         self.assertEqual("SIMULATED_LLM", result["generationProvider"])
@@ -77,11 +79,12 @@ class AlertAdviceServiceTests(unittest.TestCase):
         self.assertEqual("NO_MATCH", missing["status"])
         self.assertEqual("EVENT_MATCH_KEY_UNAVAILABLE", missing["reasonCode"])
 
-    def test_no_match_does_not_fall_back_across_category_or_project(self):
+    def test_exact_category_match_is_shared_across_authorized_project_contexts(self):
         category = self.service().generate("project-a", {**self.event, "recognitionCategoryId": "HELMET"})
         other_project = self.service().generate("project-b", self.event)
         self.assertEqual("KNOWLEDGE_NOT_MATCHED", category["reasonCode"])
-        self.assertEqual("KNOWLEDGE_NOT_MATCHED", other_project["reasonCode"])
+        self.assertEqual("GENERATED", other_project["status"])
+        self.assertEqual("SYSTEM", other_project["knowledgeOrigin"])
 
     def test_retrieval_failure_and_key_mismatch_are_terminal_without_generation(self):
         failed = self.service(retrieval_failure=RetrievalFailure("SIMULATED_RETRIEVER_FAILURE")).generate("project-a", self.event)
@@ -102,7 +105,9 @@ class AlertAdviceServiceTests(unittest.TestCase):
     def test_knowledge_without_steps_is_partial_and_steps_are_not_invented(self):
         payload = copy.deepcopy(helmet_mock_seed()["payload"])
         payload["adviceTemplate"]["steps"] = []
-        self.store.create("project-a", "policy-only", "FIRE", "SMOKE", payload, "owner")
+        self.system.mutate("create", "admin", entry_id="policy-only", alert_type_id="FIRE",
+                           recognition_category_id="SMOKE", payload=payload)
+        self.system.publish(self.system.catalog()["revision"], "Policy only", "admin")
         result = self.service().generate("project-a", {"alertTypeId": "FIRE", "recognitionCategoryId": "SMOKE"})
         self.assertEqual("PARTIAL", result["status"])
         self.assertEqual("KNOWLEDGE_HAS_NO_ADVICE_STEPS", result["reasonCode"])

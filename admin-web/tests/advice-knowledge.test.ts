@@ -26,7 +26,7 @@ describe('alert advice knowledge management', () => {
     await systemKnowledgeApi.catalog()
     expect(fetcher.mock.calls[0]?.[0]).toBe('/aiyoloapi/platform/alert-advice/knowledge-entries')
   })
-  it('uses project-scoped real APIs and revision CAS without document upload fields', async () => {
+  it('keeps project reads scoped and confines revision CAS writes to the platform', async () => {
     projectScope.enable(); projectScope.enter('project-a')
     const fetcher = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : undefined
@@ -35,12 +35,17 @@ describe('alert advice knowledge management', () => {
       return new Response(JSON.stringify({ entries: [entry] }), { headers: { 'Content-Type': 'application/json' } })
     }); vi.stubGlobal('fetch', fetcher)
     expect(await alertAdviceApi.list()).toHaveLength(1)
-    await alertAdviceApi.update(entry, { title: entry.title, riskDescription: entry.riskDescription, adviceTemplate: entry.adviceTemplate, references: entry.references, applicability: entry.applicability, sourceType: 'MOCK_KNOWLEDGE_BASE' })
+    expect(alertAdviceApi).not.toHaveProperty('create')
+    expect(alertAdviceApi).not.toHaveProperty('update')
+    expect(alertAdviceApi).not.toHaveProperty('status')
+    expect(alertAdviceApi).not.toHaveProperty('override')
+    expect(alertAdviceApi).not.toHaveProperty('upgrade')
+    await systemKnowledgeApi.update(entry, { title: entry.title, riskDescription: entry.riskDescription, adviceTemplate: entry.adviceTemplate, references: entry.references, applicability: entry.applicability, sourceType: 'MOCK_KNOWLEDGE_BASE' })
     const update = fetcher.mock.calls[1] as unknown as [string, RequestInit]
-    expect(update[0]).toBe('/aiyoloapi/projects/project-a/alert-advice/knowledge-entries/helmet')
+    expect(update[0]).toBe('/aiyoloapi/platform/alert-advice/knowledge-entries/helmet')
     expect(JSON.parse(update[1].body as string).expectedRevision).toBe(2)
     expect(update[1].body).not.toContain('file')
-    await alertAdviceApi.status(entry, 'INACTIVE')
+    await systemKnowledgeApi.status(entry, 'INACTIVE')
     expect(JSON.parse((fetcher.mock.calls[2] as unknown as [string, RequestInit])[1].body as string)).toEqual({ status: 'INACTIVE', expectedRevision: 2 })
   })
   it('explains revision conflicts without implying an overwrite', () => {

@@ -21,7 +21,7 @@ from .database import (DEFAULT_PROJECT_ID, ProjectRecord, ProjectMembershipRecor
                        ProjectScenePlanMemberRecord, ProjectSceneInstallationRecord,
                        ProjectSceneRuntimeGrantRecord)
 from .project_auth import (PROJECT_READ, PROJECT_SCENES_MANAGE, PROJECT_SCENES_APPROVE,
-                           PROJECT_INSPECTION_USE, PROJECT_MODELS_ASSIGN, require_project_capability)
+                           PROJECT_INSPECTION_USE, require_project_capability)
 from .project_business import audit_change, lock_project
 from .project_model_policy import project_target_usable
 from .scene_parameter_digest import parameter_digest
@@ -370,7 +370,7 @@ class ProjectScenes:
 
     @staticmethod
     def _public(row, members, plans=None, plan_members=None):
-        member_payload = [{"memberId": m.member_id, "projectModelId": m.project_model_id,
+        member_payload = [{"memberId": m.member_id, "projectModelId": m.project_model_id or m.archived_project_model_id,
                            "modelId": m.model_id, "version": m.model_version,
                            "target": m.target, "position": m.position,
                            "inputTypes": deepcopy(m.input_types or row.input_types), "execution": m.execution,
@@ -476,10 +476,9 @@ class ProjectScenes:
                 reject("project_model_not_found", "project model is not assigned to this project", 404)
             if not assignment["enabled"]:
                 reject("project_model_disabled", "disabled project models cannot be scene members")
-            requested_revision = member.get("parameterRevision")
-            if requested_revision is not None and requested_revision != assignment["parameterRevision"]:
-                reject("project_model_revision_conflict", "project model parameter revision was changed")
             snapshot = assignment.get("parameterSnapshot")
+            if snapshot is None:
+                reject("platform_parameters_unpublished", "platform parameters must be published before use")
             expected_platform = assignment["parameterPlatform"]
             if not isinstance(snapshot, dict) or not (
                 snapshot.get("projectId") == project_id
@@ -546,60 +545,21 @@ class ProjectScenes:
             if any(kind not in supported_inputs for kind in member_inputs):
                 reject("scene_input_not_supported", "member does not support the scene input type")
 
-    @staticmethod
-    def reviewed_parameters(scene, member):
-        """Only server-frozen parameters for this exact approval grant execution."""
-        profile = member.get("parameterSnapshot")
-        platform = "android" if member["target"] == "mobile" else "server"
-        if not isinstance(profile, dict) or not (
-            profile.get("projectId") == scene["projectId"]
-            and profile.get("modelId") == member["modelId"]
-            and profile.get("modelVersion") == member["version"]
-            and profile.get("platform") == platform
-            and type(profile.get("revision")) is int and profile["revision"] >= 0
-            and isinstance(profile.get("detection"), dict)
-            and isinstance(profile.get("alertRules"), list)
-        ):
+    def reviewed_parameters(self, scene, member):
+        """Current platform release; stored historical project overrides are never executable."""
+        from .model_parameters import ModelParameterError
+        try:
+            assignment = self.assignments.resolve(scene["projectId"], member["projectModelId"])
+            if assignment is None or (assignment["modelId"], assignment["modelVersion"], assignment["target"]) != (
+                    member["modelId"], member["version"], member["target"]):
+                return None
+            return deepcopy(assignment["parameterSnapshot"])
+        except (KeyError, ModelParameterError):
             return None
-        return deepcopy(profile)
 
-    @staticmethod
-    def validate_approval_parameters(scene, member):
-        """Reject broken inventory snapshots before creating an approval revision.
-
-        Do not infer missing metadata or fetch current parameters: the assignment
-        snapshot is the sole input to the explicit scene approval.
-        """
-        profile = ProjectScenes.reviewed_parameters(scene, member)
-        invalid = []
-        if profile is None:
-            invalid.append("identityOrValues")
-        else:
-            if type(profile.get("schemaVersion")) is not int or profile["schemaVersion"] != 2:
-                invalid.append("schemaVersion")
-            source = profile.get("source")
-            if not isinstance(source, str) or source not in {"default", "custom", "inherited"}:
-                invalid.append("source")
-            if "updatedAt" not in profile or not (profile["updatedAt"] is None or
-                    isinstance(profile["updatedAt"], str) and profile["updatedAt"].strip()):
-                invalid.append("updatedAt")
-            revision = profile.get("revision")
-            if type(revision) is not int or revision != member["parameterRevision"]:
-                invalid.append("revision")
-            inherited = profile.get("inheritedRevision")
-            if ((source == "inherited" and (type(inherited) is not int or inherited < 0))
-                    or (source != "inherited" and inherited is not None)):
-                invalid.append("inheritedRevision")
-        if invalid:
-            target = "移动端" if member["target"] == "mobile" else "PC端"
-            raise HTTPException(409, detail={
-                "code": "project_model_snapshot_invalid",
-                "message": (f"项目模型 {member['modelId']} / {member['version']}（{target}）的参数快照不完整或格式错误，"
-                            "请在“项目模型”重新批准该条分配，再审批场景"),
-                "memberId": member["memberId"], "projectModelId": member["projectModelId"],
-                "modelId": member["modelId"], "modelVersion": member["version"],
-                "target": member["target"], "invalidFields": invalid,
-            })
+    def validate_approval_parameters(self, scene, member):
+        if self.reviewed_parameters(scene, member) is None:
+            reject("platform_parameters_unpublished", "publish platform parameters before approving the scene")
 
     def list_catalog(self, project_id, *, manage=False, target=None, input_type=None):
         active = self.assignments.project_active(project_id)
@@ -626,6 +586,7 @@ class ProjectScenes:
                     eligible = project_target_usable(model, member["target"])
                     assignment = self.assignments.resolve(project_id, member["projectModelId"], enabled_only=False)
                     eligible = eligible and assignment is not None and assignment["enabled"]
+                    eligible = eligible and assignment.get("parameterPublished", False)
                     eligible = eligible and assignment["modelId"] == member["modelId"]
                     eligible = eligible and assignment["modelVersion"] == member["version"]
                     eligible = eligible and assignment["target"] == member["target"]
@@ -636,8 +597,6 @@ class ProjectScenes:
                 available = available and eligible
                 projected.append({**member, "modelName": model_display_name(model),
                                   "targetReadiness": ready, "available": eligible})
-                if manage and assignment is not None:
-                    projected[-1]["pendingParameterSnapshot"] = deepcopy(assignment.get("parameterSnapshot"))
             if not manage and not available:
                 continue
             by_target = {key: [m for m in scene["models"] if m["target"] == key] for key in ("pc", "mobile")}
@@ -645,18 +604,24 @@ class ProjectScenes:
                                    for key, rows in by_target.items()}
             execution_supported = (execution_by_target[target] if target else
                                    all(execution_by_target[key] for key, rows in by_target.items() if rows))
-            plans = [plan for plan in scene.get("plans", [])
+            plans = [deepcopy(plan) for plan in scene.get("plans", [])
                      if target is None or any(member_id in {m["memberId"] for m in projected}
                                              for member_id in plan.get("memberIds", []))]
+            for plan in plans:
+                plan["parameterSources"] = [{"memberId": m["memberId"], "planId": plan["planId"],
+                    "parameterSnapshot": self.reviewed_parameters(scene, m)}
+                    for m in projected if m["memberId"] in plan["memberIds"]]
             results.append({**scene, "models": projected, "plans": plans, "available": available,
                 "executionContractVersion": 1,
                 "executionSupported": execution_supported, "executionSupportByTarget": execution_by_target})
             for member in projected:
                 member["artifacts"] = []
+                member.pop("parameterSnapshot", None)
                 profile = self.reviewed_parameters(scene, member)
                 member["executionReady"] = bool(available and profile)
                 if profile:
-                    member.update(parameterPlatform=profile["platform"], parameterRevision=profile["revision"])
+                    member.update(parameterPlatform=profile["platform"], parameterRevision=profile["revision"],
+                                  parameterSnapshot=deepcopy(profile))
                 if not available:
                     continue
                 model = self.catalog_model(member)
@@ -895,10 +860,7 @@ class ProjectScenes:
             if not member.get("executionReady"):
                 reject("scene_parameters_not_approved", "scene needs parameter review before execution")
             _model, artifacts = self._validated_artifacts(member)
-            source = next((item for item in plan.get("parameterSources", [])
-                           if item.get("planId", plan_id) == plan_id
-                           and item.get("memberId") == member["memberId"]), None)
-            profile = deepcopy(source.get("parameterSnapshot")) if source else self.reviewed_parameters(scene, member)
+            profile = self.reviewed_parameters(scene, member)
             if not isinstance(profile, dict) or not (
                     profile.get("projectId") == project_id
                     and profile.get("modelId") == member["modelId"]
@@ -1024,15 +986,21 @@ class ProjectScenes:
             # Revalidate their original exact fields once, then upgrade to the
             # complete snapshot. They can never become a multi-member lease.
             legacy = len(old_members) == 1 and "parameterSha256" not in old_members[0]
+            def structural(value):
+                return {key: item for key, item in value.items()
+                        if key not in {"parameterRevision", "parameterSha256"}}
             matched = (len(members) == 1 and all(members[0].get(key) == value
-                for key, value in old_members[0].items())) if legacy else old_members == members
+                for key, value in old_members[0].items())) if legacy else (
+                    [structural(m) for m in old_members] == [structural(m) for m in members])
             if previous.get("execution") != resolution["execution"] or not matched:
                 reject("runtime_grant_scope_mismatch", "resolved plan member snapshot changed", 403)
+            if not legacy:
+                members = deepcopy(old_members)
         member = resolution["members"][0]
         scope.update({"memberId": member["memberId"], "modelId": member["modelId"],
                       "modelVersion": member["version"], "artifactId": member["artifactId"],
                       "artifactSha256": member["artifactSha256"],
-                      "parameterRevision": member["parameterRevision"],
+                      "parameterRevision": members[0]["parameterRevision"],
                       "execution": resolution["execution"], "members": members, "authority": authority})
         replay_key = idempotency_key or request_id
         request_digest = sha256(json.dumps([account_id, project_id, scene_id, plan_id,
@@ -1094,7 +1062,7 @@ class ProjectScenes:
                     if not row.get("deletedAt") and (include_inactive or row["approved"] and row["enabled"]) and any(m["modelId"] == model_id
                     and (version is None or m["version"] == version) for m in row["models"])]
 
-    def _save(self, session, project_id, scene_id, changes, expected, context, request_id, creating, approval_reason=None, member_profile_update=None):
+    def _save(self, session, project_id, scene_id, changes, expected, context, request_id, creating, approval_reason=None):
         if session is not None:
             # Parameter writers lock these same rows; use their global-before-project order.
             lock_project(session, DEFAULT_PROJECT_ID, enforce_lifecycle=False)
@@ -1129,8 +1097,6 @@ class ProjectScenes:
             reject("scene_removed", "removed scene identity cannot be edited or restored")
         if expected != (before["revision"] if before else 0):
             reject("revision_conflict", "scene revision was changed")
-        if member_profile_update is not None:
-            self.guard_member_profile_write(session, context, scene_id, member_profile_update[0], expected)
         incoming = deepcopy(changes)
         base = before or {"projectId": project_id, "sceneId": scene_id, "approved": False}
         if before is not None and "inputTypes" in incoming and "models" not in incoming:
@@ -1161,24 +1127,10 @@ class ProjectScenes:
         approval = approval_reason is not None
         requires_member_authorization = ((approval and after["approved"]) or
             (not approval and (after["enabled"] or "models" in changes or "inputTypes" in changes)))
-        overrides = {}
-        for member in after["models"]:
-            old = next((m for m in (before or {}).get("models", [])
-                        if m["memberId"] == member["memberId"] and m["projectModelId"] == member["projectModelId"]), None)
-            profile = (old or {}).get("parameterSnapshot") or {}
-            if (profile.get("sceneId") == scene_id and profile.get("memberId") == member["memberId"]
-                    and "inventoryRevision" in profile):
-                overrides[member["memberId"]] = deepcopy(profile)
-                # Public member revisions describe the scene override. Inventory
-                # authorization still validates its original assignment revision.
-                if "models" not in changes and member.get("parameterRevision") == profile["revision"]:
-                    member["parameterRevision"] = profile["inventoryRevision"]
         if requires_member_authorization:
             after["models"] = self.resolve_inventory_members(
                 session, project_id, after["models"], after["inputTypes"]
             )
-        if member_profile_update is not None:
-            overrides[member_profile_update[0]] = deepcopy(member_profile_update[1])
         after["plans"] = self.normalize_plans(after.get("plans", []), after["models"], after["inputTypes"])
         if not after["plans"] and len(after["models"]) == 1:
             member = after["models"][0]
@@ -1200,12 +1152,6 @@ class ProjectScenes:
             after["approved"] = False  # Every config edit invalidates prior approval.
         for member in after["models"]:
             member.pop("parameterSnapshot", None)
-            override = overrides.get(member["memberId"])
-            if override and (override["inventoryRevision"] == member["parameterRevision"]
-                    and override["modelId"] == member["modelId"] and override["modelVersion"] == member["version"]
-                    and override["platform"] == ("android" if member["target"] == "mobile" else "server")):
-                member["parameterSnapshot"] = override
-                member["parameterRevision"] = override["revision"]
             if approval and after["approved"]:
                 if "parameterSnapshot" not in member:
                     member["parameterSnapshot"] = deepcopy(member["inventoryParameterSnapshot"])
@@ -1267,41 +1213,6 @@ class ProjectScenes:
             add_event(session, f"scene:{project_id}/{scene_id}", after["revision"],
                       {"enabled": after["enabled"], "approved": after["approved"], "action": action})
         return after
-
-    def guard_member_profile_write(self, session, context, scene_id, member_id, revision):
-        """Called by the parameter writer after acquiring the project row lock."""
-        project_id = context.project_id
-        if session is not None:
-            project = session.get(ProjectRecord, project_id)
-            account = session.get(AccountRecord, context.principal.account_id)
-            membership = session.get(ProjectMembershipRecord, (project_id, context.principal.account_id))
-            admin = account is not None and account.platform_role == "PLATFORM_ADMIN"
-            owner = membership is not None and membership.enabled and membership.project_role == "PROJECT_OWNER"
-            if project is None or project.lifecycle_state != "ACTIVE":
-                reject("project_inactive", "project is not active", 403)
-            if account is None or not account.enabled or not (admin or owner):
-                reject("capability_required", "parameter write authority was revoked", 403)
-        else:
-            from .project_auth import resolve_project_context
-            latest = resolve_project_context(context.principal, project_id)
-            if not {PROJECT_SCENES_MANAGE, PROJECT_MODELS_ASSIGN}.issubset(latest.capabilities):
-                reject("capability_required", "parameter write authority was revoked", 403)
-        scene = self._read(session, project_id, scene_id)
-        if scene is None:
-            reject("scene_not_found", "scene not found", 404)
-        if scene.get("deletedAt"):
-            reject("scene_removed", "removed scene identity cannot be edited")
-        if scene["revision"] != revision:
-            reject("revision_conflict", "scene revision was changed")
-        member = next((item for item in scene["models"] if item["memberId"] == member_id), None)
-        if member is None:
-            reject("scene_member_not_found", "scene member not found", 404)
-        inventory_member = deepcopy(member)
-        override = member.get("parameterSnapshot") or {}
-        if override.get("sceneId") == scene_id and override.get("memberId") == member_id:
-            inventory_member["parameterRevision"] = override["inventoryRevision"]
-        resolved = self.resolve_inventory_members(session, project_id, [inventory_member], scene["inputTypes"])
-        self.validate_models(resolved, scene["inputTypes"])
 
     def removal_impact(self, project_id, scene_id):
         scene = self.get(project_id, scene_id)
@@ -1371,53 +1282,15 @@ class ProjectScenes:
                     self._removal_operations[request_key] = {"digest": request_digest, "result": result}
                 return deepcopy(result)
 
-    def member_profile(self, project_id, scene_id, member_id, revision):
-        scene = self.visible(project_id, scene_id, manage=True)
-        if scene["revision"] != revision:
-            reject("revision_conflict", "scene revision was changed")
-        member = next((m for m in scene["models"] if m["memberId"] == member_id), None)
-        if member is None:
-            reject("scene_member_not_found", "scene member not found", 404)
-        profile = member.get("parameterSnapshot")
-        if not profile:
-            assignment = self.assignments.resolve(project_id, member["projectModelId"])
-            if assignment is None:
-                reject("project_model_not_found", "project model is not assigned", 404)
-            profile = assignment["parameterSnapshot"]
-        return {**deepcopy(profile), "sceneRevision": scene["revision"], "audit": []}
-
-    def save_member_profile(self, project_id, scene_id, member_id, scene_revision, values, *,
-                            expected_revision, actor, context, request_id=None):
-        with self._lock, self.assignments.parameters._lock:
-            current = self.member_profile(project_id, scene_id, member_id, scene_revision)
-            if expected_revision != current["revision"]:
-                reject("revision_conflict", "scene member parameters were changed")
-            scene = self.get(project_id, scene_id)
-            member = next(m for m in scene["models"] if m["memberId"] == member_id)
-            assignment = self.assignments.resolve(project_id, member["projectModelId"])
-            if assignment is None:
-                reject("project_model_not_found", "project model is not assigned", 404)
-            normalized = self.assignments.parameters._normalize_values(values)
-            profile = {**current, **normalized, "revision": current["revision"] + 1,
-                "source": "custom", "updatedAt": datetime.now(timezone.utc).isoformat(),
-                "updatedBy": actor, "sceneId": scene_id, "memberId": member_id,
-                "inventoryRevision": assignment["parameterRevision"]}
-            for key in ("audit", "sceneRevision", "inheritedRevision"):
-                profile.pop(key, None)
-            self.assignments.parameters._validate_profile(self.catalog_model(member), profile)
-            self.save(project_id, scene_id, {}, scene_revision, context=context, request_id=request_id,
-                      member_profile_update=(member_id, profile))
-            return self.member_profile(project_id, scene_id, member_id, scene_revision + 1)
-
-    def save(self, project_id, scene_id, changes, expected, *, context=None, request_id=None, creating=False, approval_reason=None, member_profile_update=None):
+    def save(self, project_id, scene_id, changes, expected, *, context=None, request_id=None, creating=False, approval_reason=None):
         with self._lock, self.assignments.parameters._lock:
             # Legacy import may write: finish it before holding project row locks.
             if self.persistent:
                 self.assignments.parameters._import_legacy_once()
             if self.persistent:
                 with self.database.session() as session:
-                    return self._save(session, project_id, scene_id, changes, expected, context, request_id, creating, approval_reason, member_profile_update)
-            return self._save(None, project_id, scene_id, changes, expected, context, request_id, creating, approval_reason, member_profile_update)
+                    return self._save(session, project_id, scene_id, changes, expected, context, request_id, creating, approval_reason)
+            return self._save(None, project_id, scene_id, changes, expected, context, request_id, creating, approval_reason)
 
 
 def create_scene_router(provider):

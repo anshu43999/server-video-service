@@ -1,10 +1,14 @@
 # AI 告警处置建议模拟服务契约 v1
 
-## 系统资料版本与项目继承（M41-T11）
+## 系统统一资料与项目只读使用（2026-11-16，M41-T12）
 
-平台管理员通过 `/aiyoloapi/platform/alert-advice/knowledge-entries` 维护系统资料草稿，并以 `/publish` 显式发布不可变版本。初始 V1 覆盖五种 PPE 模型识别分类。项目资料 API 返回系统继承、项目覆盖和项目新增的合并视图；所有匹配仍按告警类型 ID 与识别分类 ID 精确匹配。
+本节取代 M41-T11 的项目固定继承、主动升级、复制覆盖及项目启停规则。平台管理员维护唯一系统资料草稿，通过 `/aiyoloapi/platform/alert-advice/publish` 显式发布不可变版本。所有获授权项目只读取最新已发布系统版本，未发布草稿不可见；项目内的平台管理员同样只读，维护须进入平台入口。
 
-项目基础版本可通过 `GET /aiyoloapi/projects/{projectId}/alert-advice/base` 查询，并由负责人使用 `/base/upgrade` 和 `expectedRevision` 显式升级。`/knowledge-overrides` 采用写时复制；本地覆盖或停用项优先于系统项，停用不会回退到系统版本。系统发布不自动改变现有项目，新项目创建时固定继承当时最新版本。生成结果额外冻结 `knowledgeOrigin` 与 `systemKnowledgeVersion`，后续版本发布和项目升级不会改写已有建议快照。
+新项目不建立知识版本绑定；旧项目资料、修订和绑定行仅保留供历史审计，不再参与当前检索，也不自动合并到系统库。`GET /alert-advice/base` 兼容返回最新系统发布的 `version`、目录修订 `revision`、`mode=SYSTEM` 与空 `versions`，不表示项目关系。旧项目写入、覆盖、升级接口经认证与项目授权后统一返回 `410 PROJECT_KNOWLEDGE_READ_ONLY`，不写入知识数据。
+
+发布后所有项目后续查询/生成使用新版本；客户端已有有界缓存按既有周期刷新，不承诺离线即时更新。新建议冻结 `knowledgeOrigin=SYSTEM` 与 `systemKnowledgeVersion`，既有建议仍展示原快照（含旧项目来源），不被系统更新改写。
+
+实现清理（2026-11-16，M41-T13）：系统草稿校验/修订由独立模块管理，项目读取仓储无新增、编辑、启停、播种或本地资料回退方法。旧项目资料、修订和绑定表不再是运行时数据库健康检查的必需表；只保留ORM历史映射及原迁移链，没有删除现存业务数据。旧写接口410及历史来源兼容继续保留。
 
 ## 2026-11-05 详情读取约定（M29-T21）
 
@@ -20,7 +24,7 @@
 
 ## 2. 规范化匹配键
 
-唯一业务匹配键为 `(projectId, normalize(alertTypeId), normalize(recognitionCategoryId))`。`normalize` 与 Android M114 一致：去除首尾空白后使用与语言环境无关的大写转换。两个字段均不能为空；实现不得移除、替换或猜测中间字符。模型 ID、模型名称、展示名称、中文翻译、相似类别和证据内容都不能参与兜底匹配。
+唯一资料匹配键为 `(normalize(alertTypeId), normalize(recognitionCategoryId))`；`projectId` 仍用于请求授权、事件及建议快照隔离，不再决定资料所属或版本。`normalize` 与 Android M114 一致：去除首尾空白后使用与语言环境无关的大写转换。两个字段均不能为空；实现不得移除、替换或猜测中间字符。模型 ID、模型名称、展示名称、中文翻译、相似类别和证据内容都不能参与兜底匹配。
 
 服务端只从已持久化告警事实解析匹配字段：
 
@@ -35,9 +39,9 @@
 
 ### 3.1 KnowledgeEntry
 
-知识条目包含稳定 `entryId`、项目、规范化匹配键、标题、风险说明、零个或多个处置步骤、至少一条制度引用、适用条件、`status`（`ACTIVE`/`INACTIVE`）、单调递增 `revision`、创建/修改时间和操作者。
+知识条目包含稳定 `entryId`、规范化匹配键、标题、风险说明、零个或多个处置步骤、至少一条制度引用、适用条件、`status`（`ACTIVE`/`INACTIVE`）、单调递增 `revision`、创建/修改时间和操作者。
 
-同一项目同一规范化匹配键最多存在一个 `ACTIVE` 条目。条目可以只有制度引用而没有建议步骤，此时生成 `PARTIAL`，不能伪造步骤。历史修订不可被原位改写。
+系统库同一规范化匹配键只能对应一个条目（含已停用项）；当前检索仅使用 `ACTIVE` 条目，不回退到旧项目资料或旧发布版本。项目读取保留 `projectId` 作为授权上下文，`entryId=system:<系统ID>`、`sourceEntryId` 为原始系统 ID、`origin=SYSTEM`，`systemVersion` 为发布版本；平台维护接口使用原始系统 ID。条目可以只有制度引用而没有建议步骤，此时生成 `PARTIAL`，不能伪造步骤。历史修订不可被原位改写。
 
 ### 3.2 AdviceStep 与 PolicyReference
 
@@ -73,19 +77,18 @@ Retriever 必须回传其实际命中的规范化键，服务层再次与请求�
 
 所有路径均以 `/aiyoloapi/projects/{projectId}` 为前缀，不提供无项目兼容别名。JSON 响应符合 `ai-alert-advice-v1.schema.json`。
 
-### 5.1 知识资料管理
+### 5.1 知识资料只读使用
 
 | 方法与路径 | 能力 | 语义 |
 |---|---|---|
-| `GET /alert-advice/knowledge-entries` | `project.alert_knowledge.read` | 当前项目列表与精确筛选 |
-| `POST /alert-advice/knowledge-entries` | `project.alert_knowledge.manage` | 新建 revision 1 |
+| `GET /alert-advice/knowledge-entries` | `project.alert_knowledge.read` | 最新系统发布列表与精确筛选，返回 `entries` 和 `systemVersion` |
 | `GET /alert-advice/knowledge-entries/{entryId}` | `project.alert_knowledge.read` | 当前修订详情 |
-| `PUT /alert-advice/knowledge-entries/{entryId}` | `project.alert_knowledge.manage` | 带 `expectedRevision` 的完整更新 |
-| `POST /alert-advice/knowledge-entries/{entryId}/status` | `project.alert_knowledge.manage` | 带修订号启停 |
-| `GET /alert-advice/knowledge-entries/{entryId}/revisions` | `project.alert_knowledge.read` | 不可变修订历史 |
+| `GET /alert-advice/knowledge-entries/{entryId}/revisions` | `project.alert_knowledge.read` | 当前发布修订，`action=PUBLISHED`；不暴露草稿历史 |
 | `POST /alert-advice/knowledge-entries/match-preview` | `project.alert_knowledge.read` | 精确键预览，不读取告警 |
 
-写入使用请求 UUID 作为 `Idempotency-Key` 并使用 `expectedRevision` 做 CAS。
+以下项目路径均位于 `/alert-advice` 下，已退役：`POST /knowledge-entries`、`PUT /knowledge-entries/{entryId}`、`POST /knowledge-entries/{entryId}/status`、`POST /knowledge-overrides`、`POST /base/upgrade`。认证及项目授权通过后返回410。项目角色不再授予 `project.alert_knowledge.manage`。
+
+平台维护以 `/aiyoloapi/platform/alert-advice` 为前缀，要求 `platform.alert_knowledge.manage`：条目 GET/POST/PUT、`/{entryId}/status`、`/{entryId}/revisions` 与 `/knowledge-entries/match-preview` 操作系统草稿；`GET /versions`、`GET /versions/{version}` 读取发布历史；`POST /publish` 发布。编辑/启停使用条目 `expectedRevision`，发布使用目录 `expectedRevision` 做 CAS；重复旧修订请求返回409，维护操作写入审计。
 
 ### 5.2 告警建议
 
@@ -107,9 +110,9 @@ Retriever 必须回传其实际命中的规范化键，服务层再次与请求�
 | 查看/生成当前告警建议 | 允许 | 允许 | 允许 |
 | 查看生成历史 | 允许 | 允许 | 允许 |
 | 查看知识资料 | 允许 | 允许 | 允许 |
-| 新增、编辑、启停知识资料 | 禁止 | 允许 | 允许 |
+| 经项目接口新增、编辑、启停、覆盖、升级知识资料 | 禁止 | 禁止 | 禁止 |
 
-导航和按钮只用于可用性，服务端 capability 检查是授权边界。项目暂停/归档时遵循现有项目生命周期策略：历史只读可保留，知识写入和建议生成禁止。撤销成员关系或会话失效后立即拒绝。
+系统资料仅平台管理员在平台入口维护。导航和按钮只用于可用性，服务端 capability 检查是授权边界。项目暂停/归档时遵循现有项目生命周期策略：历史和知识只读可保留，建议生成禁止。撤销成员关系或会话失效后立即拒绝。
 
 ## 7. 错误契约
 
@@ -122,6 +125,7 @@ Retriever 必须回传其实际命中的规范化键，服务层再次与请求�
 | 403 | `CAPABILITY_REQUIRED` / `PROJECT_INACTIVE` | 无能力或项目不可写 |
 | 404 | `EVENT_NOT_FOUND` / `KNOWLEDGE_ENTRY_NOT_FOUND` / `ADVICE_GENERATION_NOT_FOUND` | 资源不存在或不可见 |
 | 409 | `REVISION_CONFLICT` / `IDEMPOTENCY_CONFLICT` / `ACTIVE_MATCH_KEY_CONFLICT` | 并发或唯一性冲突 |
+| 410 | `PROJECT_KNOWLEDGE_READ_ONLY` | 项目知识写接口已退役，请使用平台维护入口 |
 | 422 | `KNOWLEDGE_ENTRY_INVALID` / `MATCH_KEY_INVALID` | 字段或业务约束无效 |
 | 503 | `ADVICE_STORE_UNAVAILABLE` | 持久化基础设施不可用 |
 

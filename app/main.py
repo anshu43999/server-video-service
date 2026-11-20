@@ -249,9 +249,15 @@ class ProjectModelAssignmentRequest(BaseModel):
     modelId: str = Field(min_length=1, max_length=128)
     modelVersion: str = Field(min_length=1, max_length=128)
     target: Literal["pc", "mobile"]
-    parameterRevision: int = Field(ge=0)
+    parameterRevision: int | None = Field(default=None, ge=0)
     enabled: bool
     expectedRevision: int = Field(ge=0)
+
+
+class PlatformParameterPublishRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expectedRevision: int = Field(ge=0)
+    expectedPublishedRevision: int | None = Field(default=None, ge=0)
 
 
 class ModelMigrationRequest(BaseModel):
@@ -580,7 +586,7 @@ app.include_router(create_model_update_router(lambda: model_updates))
 app.include_router(create_service_principal_router())
 from .system_alert_knowledge import SystemKnowledgeStore
 from .alert_advice_api import create_system_alert_knowledge_router
-alert_advice_knowledge_store = AlertAdviceKnowledgeStore(database, system=SystemKnowledgeStore(database))
+alert_advice_knowledge_store = AlertAdviceKnowledgeStore(system=SystemKnowledgeStore(database))
 app.include_router(create_alert_advice_router(lambda: alert_advice_knowledge_store))
 app.include_router(create_system_alert_knowledge_router(lambda: alert_advice_knowledge_store))
 alert_advice_generation_store = AlertAdviceGenerationStore(database)
@@ -706,7 +712,7 @@ def _runtime_profile(project_id: str, source_id: str, model_id: str):
         return None
     if not published:
         return None
-    return member["parameterSnapshot"]
+    return getattr(stream, "runtime_parameter_snapshot", None)
 
 
 def _bind_registered_model(stream: StreamSession, model_id: str, version: str,
@@ -721,7 +727,7 @@ def _bind_registered_model(stream: StreamSession, model_id: str, version: str,
     if not profile or (profile.get("modelId") != model_id or profile.get("modelVersion") != version
                        or profile.get("platform") != "server"):
         raise HTTPException(409, detail={"code": "model_assignment_required", "message": "approved parameters are unavailable"})
-    return stream.bind_model(
+    result = stream.bind_model(
         model_id=model_id,
         model_path=str(path),
         scenario=item.get("scenario"),
@@ -731,6 +737,8 @@ def _bind_registered_model(stream: StreamSession, model_id: str, version: str,
         detection=profile["detection"],
         enabled_labels=[rule["rawLabel"] for rule in profile["alertRules"] if rule["enabled"]],
     )
+    stream.runtime_parameter_snapshot = json.loads(json.dumps(profile))
+    return result
 
 
 async def _session_from_configuration(configuration: StreamConfiguration) -> StreamSession:
@@ -930,7 +938,7 @@ def _project_catalog_models(context, target=None):
         model["assignment"] = assignment
         model["active"] = assignment["enabled"]
         assignment_target = "pc" if assignment["parameterPlatform"] == "server" else "mobile"
-        target_usable = project_target_usable(model, assignment_target)
+        target_usable = project_target_usable(model, assignment_target) and assignment.get("parameterPublished", False)
         if not target_usable and PROJECT_MODELS_ASSIGN not in context.capabilities:
             continue
         model["serverBindable"] = bool(assignment["enabled"] and target_usable and model["serverReady"]
@@ -1141,10 +1149,15 @@ def _available_project_models(context):
             "modelId", "name", "version", "scenario", "status", "releaseEligible",
             "serverReady", "androidReady", "supportedTargets", "targetReadiness", "targetReleaseEligible", "labels",
         )}
-        projection["parameterProfiles"] = {
-            platform: model_parameter_store.get(row, platform, context.project_id)
-            for platform in platforms
-        }
+        projection["parameterProfiles"] = {}
+        for platform in platforms:
+            try:
+                projection["parameterProfiles"][platform] = model_parameter_store.published(row, platform, context.project_id)
+            except ModelParameterError as exc:
+                if exc.code != "platform_parameters_unpublished":
+                    raise
+        if not projection["parameterProfiles"]:
+            continue
         results.append(projection)
     return {"models": results}
 
@@ -1177,10 +1190,24 @@ async def list_models(
 ):
     context = _catalog_scope(request)
     models = await _read_catalog(request, context,
-        lambda: model_catalog.list_models() if context is None else _project_catalog_models(context))
+        lambda: _platform_catalog_models() if context is None else _project_catalog_models(context))
     if scenario is not None:
         models = [model for model in models if model.get("scenario") == scenario]
     return {"models": models}
+
+
+def _platform_catalog_models():
+    models = model_catalog.list_models()
+    try:
+        states = model_parameter_store.publication_status(models)
+    except (ModelParameterError, SQLAlchemyError):
+        # A failed status read must not masquerade as an unpublished profile,
+        # or prevent administrators from inspecting the model files themselves.
+        states = {}
+    return [{**model, "parameterPublication": states.get((model["modelId"], model["version"]), {
+        platform: {"state": "unavailable", "publishedRevision": None, "hasUnpublishedChanges": False}
+        for platform in ("server", "android")
+    })} for model in models]
 
 
 @app.get("/aiyoloapi/models/{model_id}")
@@ -1509,6 +1536,23 @@ async def reset_model_parameters(
         raise HTTPException(status_code=503, detail={"code": exc.code, "message": str(exc)})
 
 
+@app.post("/aiyoloapi/platform/models/{model_id}/parameters/publish")
+@app.post("/aiyoloapi/models/{model_id}/parameters/publish", include_in_schema=False)
+async def publish_model_parameters(model_id: str, body: PlatformParameterPublishRequest, request: Request,
+    platform: Literal["android", "server"] = Query(default="android"), version: str | None = None,
+    principal=Depends(require_platform_capability(PLATFORM_MODELS_MANAGE))):
+    try:
+        result = model_parameter_store.publish(_parameter_model(model_id, version), platform, principal.account_id,
+            body.expectedRevision, body.expectedPublishedRevision, context=principal,
+            request_id=getattr(request.state, "request_id", None))
+        model_updates.wake()
+        return result
+    except ModelParameterConflict as exc:
+        raise HTTPException(409, detail={"code": exc.code, "message": str(exc)})
+    except ModelParameterError as exc:
+        raise HTTPException(422, detail={"code": exc.code, "message": str(exc)})
+
+
 def _project_parameter_model(model_id, context, version=None):
     assignments = project_model_assignments.assigned(context.project_id, model_id)
     versions = {item["modelVersion"] for item in assignments}
@@ -1523,7 +1567,7 @@ def _project_parameter_model(model_id, context, version=None):
 
 
 def _scene_profile_model(project_id, scene_id, member_id, scene_revision):
-    # The scene member owns its override; the project inventory remains unchanged.
+    # Scene ownership authorizes inspection, never parameter editing.
     scene = project_scenes.visible(project_id, scene_id, manage=True)
     if scene["revision"] != scene_revision:
         raise HTTPException(409, detail={"code": "revision_conflict", "message": "scene revision was changed"})
@@ -1539,7 +1583,12 @@ async def get_scene_member_profile(project_id: str, scene_id: str, member_id: st
     scene_revision: int = Query(ge=1, alias="sceneRevision"),
     context: ProjectContext = Depends(require_project_capability(PROJECT_SCENES_MANAGE))):
     model, platform = _scene_profile_model(project_id, scene_id, member_id, scene_revision)
-    return project_scenes.member_profile(project_id, scene_id, member_id, scene_revision)
+    scene = project_scenes.get(project_id, scene_id)
+    member = next(m for m in scene["models"] if m["memberId"] == member_id)
+    profile = project_scenes.reviewed_parameters(scene, member)
+    if profile is None:
+        raise HTTPException(409, detail={"code": "platform_parameters_unpublished", "message": "平台参数尚未发布"})
+    return {**profile, "sceneRevision": scene_revision, "audit": []}
 
 
 @app.put("/aiyoloapi/projects/{project_id}/scenes/{scene_id}/members/{member_id}/parameter-profile")
@@ -1548,64 +1597,43 @@ async def update_scene_member_profile(project_id: str, scene_id: str, member_id:
     scene_revision: int = Query(ge=1, alias="sceneRevision"),
     context: ProjectContext = Depends(require_project_capability(PROJECT_SCENES_MANAGE)),
     _parameter_authority=Depends(require_project_capability(PROJECT_MODELS_ASSIGN))):
-    try:
-        # Match scene approval's scene-before-parameters lock order. Revalidate
-        # authority and the binding again inside the parameter transaction.
-        with project_scenes._lock:
-            model, platform = _scene_profile_model(project_id, scene_id, member_id, scene_revision)
-            return project_scenes.save_member_profile(project_id, scene_id, member_id, scene_revision,
-                request.model_dump(exclude={"expectedRevision"}, exclude_none=True),
-                expected_revision=_expected_revision(request.expectedRevision),
-                actor=context.principal.account_id, context=context,
-                request_id=http_request.headers.get("x-request-id", "")[:128] or None)
-    except ModelParameterConflict as exc:
-        raise HTTPException(409, detail={"code": exc.code, "message": str(exc)})
-    except ModelParameterError as exc:
-        raise HTTPException(422, detail={"code": exc.code, "message": str(exc)})
+    raise HTTPException(410, detail={"code": "platform_parameters_read_only", "message": "模型参数统一由平台维护"})
 
 
 @app.get("/aiyoloapi/projects/{project_id}/models/{model_id}/parameters")
 async def get_project_model_parameters(project_id: str, model_id: str,
     platform: Literal["android", "server"] = Query(default="android"), version: str | None = None,
     context: ProjectContext = Depends(require_project_capability(PROJECT_READ))):
+    model = _project_parameter_model(model_id, context, version)
+    assigned = project_model_assignments.assigned(context.project_id, model_id, model["version"])
+    if not any(item["parameterPlatform"] == platform for item in assigned) or not project_target_usable(
+            model, "pc" if platform == "server" else "mobile"):
+        raise HTTPException(404, detail={"code": "model_not_found", "message": "该模型版本或目标端当前不可用，请刷新项目模型清单"})
+    # A missing publication is not a missing project model. Do not replace it
+    # with a draft or the historical parameter snapshot stored on assignments.
     try:
-        model = _project_parameter_model(model_id, context, version)
-        if PROJECT_MODELS_ASSIGN not in context.capabilities:
-            snapshot = project_model_assignments.snapshot(context.project_id, model_id, model["version"], platform)
-            if snapshot is None or not (model["status"] == "PUBLISHED" and model["releaseEligible"]):
-                raise HTTPException(404, detail={"code": "model_not_found", "message": "approved model parameters not found"})
-            return {**snapshot, "source": "approved", "projectId": context.project_id}
-        return model_parameter_store.get(model, platform, context.project_id)
+        return model_parameter_store.published(model, platform, context.project_id)
     except ModelParameterError as exc:
-        raise HTTPException(503, detail={"code": exc.code, "message": str(exc)})
+        if exc.code == "platform_parameters_unpublished":
+            target = "Android" if platform == "android" else "服务端"
+            raise HTTPException(409, detail={"code": exc.code, "message":
+                f"此模型版本的{target}运行参数尚未由平台发布，请联系平台管理员核对并发布参数"}) from exc
+        raise HTTPException(503, detail={"code": exc.code,
+            "message": "平台参数暂时不可用，请联系平台管理员检查参数配置"}) from exc
 
 
 @app.put("/aiyoloapi/projects/{project_id}/models/{model_id}/parameters")
 async def update_project_model_parameters(project_id: str, model_id: str, request: ModelParameterRequest,
     http_request: Request, platform: Literal["android", "server"] = Query(default="android"),
     version: str | None = None, context: ProjectContext = Depends(require_project_capability(PROJECT_MODELS_ASSIGN))):
-    try:
-        identity = _mutation_identity(context, http_request)
-        return model_parameter_store.save(_project_parameter_model(model_id, context, version), platform,
-            request.model_dump(exclude={"expectedRevision"}, exclude_none=True),
-            expected_revision=_expected_revision(request.expectedRevision), **identity)
-    except ModelParameterConflict as exc:
-        raise HTTPException(409, detail={"code": exc.code, "message": str(exc)})
-    except ModelParameterError as exc:
-        raise HTTPException(422, detail={"code": exc.code, "message": str(exc)})
+    raise HTTPException(410, detail={"code": "platform_parameters_read_only", "message": "模型参数统一由平台维护"})
 
 
 @app.delete("/aiyoloapi/projects/{project_id}/models/{model_id}/parameters")
 async def reset_project_model_parameters(project_id: str, model_id: str, http_request: Request,
     expectedRevision: int = Query(ge=0), platform: Literal["android", "server"] = Query(default="android"),
     version: str | None = None, context: ProjectContext = Depends(require_project_capability(PROJECT_MODELS_ASSIGN))):
-    try:
-        return model_parameter_store.reset(_project_parameter_model(model_id, context, version), platform,
-            expected_revision=expectedRevision, **_mutation_identity(context, http_request))
-    except ModelParameterConflict as exc:
-        raise HTTPException(409, detail={"code": exc.code, "message": str(exc)})
-    except ModelParameterError as exc:
-        raise HTTPException(422, detail={"code": exc.code, "message": str(exc)})
+    raise HTTPException(410, detail={"code": "platform_parameters_read_only", "message": "模型参数统一由平台维护"})
 
 
 def _model_download_release(request: Request, model_id: str, version: str | None, artifact_id: str):
@@ -2839,15 +2867,23 @@ async def set_yolo(
             "model": payload["model"],
         }
     previous = stream.yolo_enabled
+    previous_detector = stream.detector
+    previous_parameters = getattr(stream, "runtime_parameter_snapshot", None)
+    if request.enabled and not previous:
+        _bind_registered_model(stream, member["modelId"], member["version"], member["parameterSnapshot"])
     await stream.set_yolo(request.enabled)
     try:
         await asyncio.to_thread(
             stream_config_store.update, stream_id, project_id=project_id, yolo_enabled=stream.yolo_enabled
         )
     except StreamConfigNotFound as exc:
+        stream.detector = previous_detector
+        stream.runtime_parameter_snapshot = previous_parameters
         await stream.set_yolo(previous)
         raise HTTPException(status_code=409, detail={"code": "stream_config_missing", "message": "stream configuration is missing"}) from exc
     except Exception as exc:
+        stream.detector = previous_detector
+        stream.runtime_parameter_snapshot = previous_parameters
         await stream.set_yolo(previous)
         raise _storage_error(exc) from exc
     return {
@@ -2890,6 +2926,9 @@ async def update_stream_config(
     if any(value is not None for value in selector_fields) and not all(value is not None for value in selector_fields):
         raise HTTPException(422, detail={"code": "scene_plan_incomplete", "message": "sceneId, planId and sceneRevision must be supplied together"})
     selection_changed = all(value is not None for value in selector_fields)
+    starts_execution = (selection_changed or stream is None or stream.closed or
+                        request.enabled is True and not current.enabled or
+                        request.yolo_enabled is True and not stream.yolo_enabled)
     resolved = None
     if selection_changed or request.enabled is True or request.yolo_enabled is True:
         resolved = _resolve_stream_plan(project_id,
@@ -2904,6 +2943,8 @@ async def update_stream_config(
                        scene_id=resolved["sceneId"], plan_id=resolved["planId"],
                        scene_revision=resolved["revision"])
         approved_profile = member["parameterSnapshot"]
+        if not starts_execution:
+            approved_profile = stream.runtime_parameter_snapshot
         approved_confidence = approved_profile["detection"]["confidenceThreshold"]
         if request.confidence is not None and request.confidence != approved_confidence:
             raise HTTPException(409, detail={"code": "parameter_approval_required", "message": "stream confidence is controlled by approved model parameters"})
@@ -2922,7 +2963,8 @@ async def update_stream_config(
         member = resolved["members"][0]
         selected_model = member["modelId"]
         assignment = {"modelVersion": member["version"]}
-        if request.confidence != member["parameterSnapshot"]["detection"]["confidenceThreshold"]:
+        profile = member["parameterSnapshot"] if starts_execution else stream.runtime_parameter_snapshot
+        if request.confidence != profile["detection"]["confidenceThreshold"]:
             raise HTTPException(409, detail={"code": "parameter_approval_required", "message": "stream confidence is controlled by approved scene parameters"})
 
     if stream is None:
@@ -2960,6 +3002,7 @@ async def update_stream_config(
     old_yolo_enabled = stream.yolo_enabled
     old_overlay_enabled = stream.overlay_enabled
     old_detector = stream.detector
+    old_parameter_snapshot = getattr(stream, "runtime_parameter_snapshot", None)
     old_model = (stream.model_catalog_id, stream.model_version, stream.model_scenario)
     if request.confidence is not None and not (selected_model or current.model_id):
         stream.detector.confidence = request.confidence
@@ -2969,7 +3012,7 @@ async def update_stream_config(
         await stream.set_yolo(request.yolo_enabled)
     if request.overlay_enabled is not None:
         stream.overlay_enabled = request.overlay_enabled
-    if resolved is not None:
+    if resolved is not None and starts_execution:
         _bind_registered_model(stream, selected_model, assignment["modelVersion"], resolved["members"][0]["parameterSnapshot"])
     try:
         stored = await asyncio.to_thread(
@@ -2977,6 +3020,7 @@ async def update_stream_config(
         )
     except Exception as exc:
         stream.detector = old_detector
+        stream.runtime_parameter_snapshot = old_parameter_snapshot
         stream.detector.confidence = old_confidence
         stream.model_catalog_id, stream.model_version, stream.model_scenario = old_model
         stream.overlay_enabled = old_overlay_enabled
@@ -3057,6 +3101,7 @@ async def bind_stream_model(
         }
     old_detector = stream.detector
     old_model = (stream.model_catalog_id, stream.model_version, stream.model_scenario)
+    old_parameters = getattr(stream, "runtime_parameter_snapshot", None)
     model = _bind_registered_model(stream, model_id, version, profile)
     try:
         await asyncio.to_thread(
@@ -3067,6 +3112,7 @@ async def bind_stream_model(
     except Exception as exc:
         stream.detector = old_detector
         stream.model_catalog_id, stream.model_version, stream.model_scenario = old_model
+        stream.runtime_parameter_snapshot = old_parameters
         if isinstance(exc, StreamConfigNotFound):
             raise HTTPException(status_code=409, detail={"code": "stream_config_missing", "message": "stream configuration is missing"}) from exc
         raise _storage_error(exc) from exc

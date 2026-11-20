@@ -1,66 +1,38 @@
 import asyncio
 import json
 import unittest
-from contextlib import ExitStack
-from unittest.mock import patch
-
-from fastapi.testclient import TestClient
+import cv2
+import numpy as np
 from starlette.websockets import WebSocketDisconnect
 
-import app.auth as auth_module
 import app.main as main_module
-from app.config import settings
-from app.database import DatabaseManager
-from app.project_auth import reset_memory_project_authorization_for_tests
-from app.project_management import reset_memory_project_management_for_tests
-from app.stream_config import StreamConfigStore
+from test_project_model_assignments import ModelApiFixture
 
 
-class ProjectStreamIsolationTests(unittest.TestCase):
+class ProjectStreamIsolationTests(ModelApiFixture, unittest.TestCase):
     def setUp(self):
-        main_module.streams.clear()
-        main_module.stream_restore_errors.clear()
-        self.isolation = ExitStack()
-        self.addCleanup(self.isolation.close)
-        self.isolation.enter_context(patch("app.main.stream_config_store", StreamConfigStore(None)))
-        self.isolation.enter_context(patch("app.auth.database", DatabaseManager(None)))
-        self.isolation.enter_context(patch.dict(auth_module._memory_accounts, {}, clear=True))
-        self.isolation.enter_context(patch.dict(auth_module._memory_sessions, {}, clear=True))
-        self.isolation.enter_context(patch.object(main_module.database, "verify_schema", return_value={"status": "ok"}))
-        self.isolation.enter_context(patch.object(main_module.conversion_service, "start"))
-        self.isolation.enter_context(patch.object(main_module.conversion_service, "close"))
-        self.isolation.enter_context(
-            patch.object(main_module.model_catalog, "_load", return_value={"models": [], "activeServerModel": None})
-        )
-        reset_memory_project_authorization_for_tests()
-        reset_memory_project_management_for_tests()
-        self.old_settings = {
-            "deployment_env": settings.deployment_env,
-            "admin_token": settings.admin_token,
-            "mobile_token": settings.mobile_token,
-        }
-        settings.deployment_env = "production"
-        settings.admin_token = None
-        settings.mobile_token = None
-        self.client = TestClient(main_module.app)
-        self.client.__enter__()
-        setup = self.client.post(
-            "/aiyoloapi/auth/setup",
-            json={"username": "platform-admin", "password": "platform-admin-password"},
-        )
-        self.assertEqual(200, setup.status_code, setup.text)
-        self.admin = {"Authorization": f"Bearer {setup.json()['accessToken']}"}
+        super().setUp()
+        self.admin = self.headers
 
-    def tearDown(self):
-        self.client.__exit__(None, None, None)
-        for stream in list(main_module.streams.values()):
-            asyncio.run(stream.close())
-        main_module.streams.clear()
-        main_module.stream_restore_errors.clear()
-        reset_memory_project_authorization_for_tests()
-        reset_memory_project_management_for_tests()
-        for name, value in self.old_settings.items():
-            setattr(settings, name, value)
+    def scene_selection(self, project_id, headers):
+        path = f"/aiyoloapi/projects/{project_id}"
+        assignment = self.client.put(path + "/model-assignments", headers=headers, json=self.body)
+        self.assertEqual(200, assignment.status_code, assignment.text)
+        scene = self.client.post(path + "/scenes", headers=headers, json={
+            "sceneId": "transport", "name": "Isolated transport", "inputTypes": ["video"],
+            "expectedRevision": 0, "models": [{
+                "projectModelId": assignment.json()["projectModelId"],
+                "position": 0, "execution": "single",
+            }],
+        })
+        self.assertEqual(201, scene.status_code, scene.text)
+        approval = self.client.post(path + "/scenes/transport/approval", headers=headers, json={
+            "approved": True, "expectedRevision": scene.json()["revision"],
+            "reason": "Reviewed isolation fixture",
+        })
+        self.assertEqual(200, approval.status_code, approval.text)
+        return {"sceneId": "transport", "planId": "default",
+                "sceneRevision": approval.json()["revision"]}
 
     def create_account(self, username: str) -> dict:
         response = self.client.post(
@@ -128,6 +100,7 @@ class ProjectStreamIsolationTests(unittest.TestCase):
             (project_a_id, owner_a_headers, "camera-a.internal"),
             (project_b_id, owner_b_headers, "camera-b.internal"),
         ):
+            selection = self.scene_selection(project_id, headers)
             response = self.client.post(
                 f"/aiyoloapi/projects/{project_id}/streams",
                 headers=headers,
@@ -136,6 +109,7 @@ class ProjectStreamIsolationTests(unittest.TestCase):
                     "display_name": "Shared Camera",
                     "source_url": f"rtsp://operator:secret@{host}/live?token=hidden",
                     "enabled": False,
+                    **selection,
                 },
             )
             self.assertEqual(201, response.status_code, response.text)
@@ -148,10 +122,30 @@ class ProjectStreamIsolationTests(unittest.TestCase):
         self.assertIsNot(main_module.streams[key_a], main_module.streams[key_b])
         self.assertFalse(hasattr(main_module.streams[key_a], "publisher"))
         self.assertFalse(hasattr(main_module.streams[key_b], "publisher"))
-        main_module.streams[key_a].latest_frame = b"project-a-frame"
-        main_module.streams[key_b].latest_frame = b"project-b-frame"
-        self.assertEqual(b"project-a-frame", main_module.streams[key_a].latest_frame)
-        self.assertEqual(b"project-b-frame", main_module.streams[key_b].latest_frame)
+        # Exercise the real JPEG ingress/preview buffers, not an unused dynamic
+        # attribute. Disabled RTSP sources must not start network capture.
+        for project_id, headers, value in ((project_a_id, owner_a_headers, 40),
+                                           (project_b_id, owner_b_headers, 200)):
+            stream = main_module.streams[(project_id, "shared-camera")]
+            self.assertIsNone(stream._pull_task)
+            ok, encoded = cv2.imencode(".jpg", np.full((24, 32, 3), value, dtype=np.uint8))
+            self.assertTrue(ok)
+            with self.client.websocket_connect(
+                f"/aiyoloapi/projects/{project_id}/streams/shared-camera/ingest", headers=headers
+            ) as websocket:
+                websocket.send_bytes(encoded.tobytes())
+                websocket.send_text("processed-barrier")
+                self.assertTrue(websocket.receive_json()["ok"])
+        for username, own_id, other_id, value in (("user-a", project_a_id, project_b_id, 40),
+                                                  ("user-b", project_b_id, project_a_id, 200)):
+            self.login(username)  # Set the same-origin preview cookie.
+            preview = self.client.get(f"/aiyoloapi/projects/{own_id}/streams/shared-camera/preview")
+            self.assertEqual(200, preview.status_code)
+            decoded = cv2.imdecode(np.frombuffer(preview.content, np.uint8), cv2.IMREAD_COLOR)
+            self.assertEqual((24, 32, 3), decoded.shape)
+            self.assertAlmostEqual(value, float(decoded.mean()), delta=2)
+            self.assertEqual(404, self.client.get(
+                f"/aiyoloapi/projects/{other_id}/streams/shared-camera/preview").status_code)
         self.assertEqual(2, len(main_module.stream_config_store.list_all()))
 
         list_a = self.client.get(

@@ -69,3 +69,27 @@
 .target-choice span{display:grid;gap:4px}.target-choice small{font-weight:400;color:var(--color-ink-muted);line-height:1.5}
 @media(max-width:540px){.target-selection{grid-template-columns:1fr}}
 .model-workspace .operation-feedback.is-warning { color: var(--color-warning); background: var(--color-warning-soft); border-left: 3px solid var(--color-warning); padding: 12px; }
+.catalog-grid{align-items:start;gap:12px}
+.catalog-grid .model-card{padding:14px;display:flex;flex-direction:column;gap:8px}
+.catalog-grid .model-card-title{gap:8px}
+.catalog-grid .model-card-title h3{font-size:15px;line-height:1.5}
+.catalog-grid .model-card-title code{line-height:1.5}
+.catalog-grid .model-tags{gap:6px;margin:0}
+.catalog-grid .target-classification{font-size:11px;color:var(--color-ink-muted);font-weight:400;overflow-wrap:anywhere}
+.catalog-grid .model-tags .ui-tag{max-width:100%;height:auto;white-space:normal;overflow-wrap:anywhere}
+.catalog-technical{min-width:0;border-bottom:1px solid var(--color-border);padding-bottom:8px}
+.catalog-technical summary{cursor:pointer;font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+.catalog-technical summary>span{margin-left:8px;font-size:11px;color:var(--color-ink-muted)}
+.catalog-technical-content{padding-top:8px}
+.catalog-technical-content p{margin:6px 0;line-height:1.7}
+.catalog-labels{font-size:11px;color:var(--color-ink-muted);overflow-wrap:anywhere}
+.catalog-grid .catalog-card-actions{margin:0;gap:6px}
+.catalog-grid .model-actions button{margin:0;min-height:32px}
+.model-catalog-navigation{display:flex;align-items:center;gap:16px}
+.model-catalog-navigation .model-tabs{flex:1;min-width:0;width:auto;margin:0}
+.model-catalog-navigation>button{flex-shrink:0;min-height:34px}
+.models-page .catalog-intro{margin:8px 0}
+.models-page>.model-toolbar{margin:12px 0}
+.models-page>.model-toolbar>label:not(.model-search){display:flex;flex:0 0 auto;align-items:center;gap:8px;white-space:nowrap}
+.models-page>.model-toolbar .ui-select{flex:0 0 110px;width:110px;min-width:110px}
+@media(max-width:600px){.model-catalog-navigation{flex-wrap:wrap;gap:8px}.model-catalog-navigation .model-tabs{flex-basis:100%;order:1}.model-catalog-navigation>button{margin-left:auto}}

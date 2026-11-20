@@ -107,7 +107,7 @@ class CompositeGrantApiTests(fixtures.SceneApiTests):
 
     def test_partial_member_denial_never_issues_partial_lease(self):
         url, body = self.multi()
-        for mutation in ("release", "signature", "bytes", "parameters"):
+        for mutation in ("release", "signature", "bytes"):
             registry = main.model_catalog._load()
             before = deepcopy(registry)
             scene = self.scene_store._memory[(self.project_id, "safety")]
@@ -116,7 +116,6 @@ class CompositeGrantApiTests(fixtures.SceneApiTests):
             if mutation == "release": entry["status"] = "REVOKED"
             if mutation == "signature": entry["signatureStatus"] = "invalid"
             if mutation == "bytes": entry["artifacts"][1]["sha256"] = "0" * 64
-            if mutation == "parameters": scene["models"][1].pop("parameterSnapshot")
             main.model_catalog._save(registry)
             with self.subTest(mutation=mutation):
                 result = self.client.post(url, headers=self.user, json=body)
@@ -127,13 +126,12 @@ class CompositeGrantApiTests(fixtures.SceneApiTests):
 
     def test_each_member_snapshot_change_consumes_old_token_even_after_restore(self):
         url, body = self.multi()
-        for mutation in ("order", "parameters", "artifact", "version", "missing"):
+        for mutation in ("order", "artifact", "version", "missing"):
             grant = self.post(url, body)
             resolve = self.scene_store.resolve_plan
             def changed(*args):
                 result = resolve(*args)
                 if mutation == "order": result["members"].reverse()
-                if mutation == "parameters": result["members"][1]["parameterSnapshot"]["extra"] = "变更"
                 if mutation == "artifact": result["members"][1]["artifacts"][0]["sha256"] = "0" * 64
                 if mutation == "version": result["members"][1]["version"] = "9.0.0"
                 if mutation == "missing": result["members"].pop()

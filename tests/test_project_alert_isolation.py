@@ -172,6 +172,8 @@ class ProjectAlertApiIsolationTests(ProjectApiSupport, unittest.TestCase):
         self.assertEqual(200, exported.status_code)
         self.assertEqual(self.project_a, exported.json()["entries"][0]["projectId"])
 
+        before_a = alert_verification_store.config(self.project_a)
+        before_b = alert_verification_store.config(self.project_b)
         config_a = self.client.post(
             f"/aiyoloapi/projects/{self.project_a}/verification/config",
             headers=self.headers,
@@ -196,27 +198,29 @@ class ProjectAlertApiIsolationTests(ProjectApiSupport, unittest.TestCase):
                 "providerConfigured": False,
             },
         )
-        self.assertEqual(1, config_a.json()["dailyLimit"])
-        self.assertEqual(9, config_b.json()["dailyLimit"])
+        self.assertEqual(410, config_a.status_code, config_a.text)
+        self.assertEqual(410, config_b.status_code, config_b.text)
         read_a = self.client.get(
             f"/aiyoloapi/projects/{self.project_a}/verification/config",
             headers=self.user_a_headers,
-        ).json()
+        )
         read_b = self.client.get(
             f"/aiyoloapi/projects/{self.project_b}/verification/config",
             headers=self.owner_b_headers,
-        ).json()
-        self.assertEqual("review-a", read_a["modelId"])
-        self.assertEqual("review-b", read_b["modelId"])
+        )
+        self.assertEqual(410, read_a.status_code)
+        self.assertEqual(410, read_b.status_code)
+        self.assertEqual(before_a, alert_verification_store.config(self.project_a))
+        self.assertEqual(before_b, alert_verification_store.config(self.project_b))
 
         review = self.client.post(
             f"{self.alerts_a}/shared-event/verification",
             headers={**self.user_a_headers, "X-Operator-Id": "forged"},
             json={},
         )
-        self.assertEqual(202, review.status_code, review.text)
-        self.assertEqual(self.user_a_id, review.json()["actor"])
-        self.assertEqual(self.project_a, review.json()["projectId"])
+        self.assertEqual(410, review.status_code, review.text)
+        self.assertEqual("verification_retired", review.json()["detail"]["code"])
+        self.assertIsNone(alert_verification_store.get("shared-event", self.project_a))
         self.assertEqual(
             404,
             self.client.get(
@@ -257,8 +261,7 @@ class ProjectAlertApiIsolationTests(ProjectApiSupport, unittest.TestCase):
 
 class ProjectAlertDatabaseIsolationTests(unittest.TestCase):
     def test_same_event_id_and_related_records_are_project_scoped(self):
-        root = Path(__file__).resolve().parents[1]
-        with tempfile.TemporaryDirectory(dir=root / ".test-db") as temp:
+        with tempfile.TemporaryDirectory(prefix="project-alerts-") as temp:
             database = DatabaseManager(f"sqlite+pysqlite:///{Path(temp) / 'alerts.db'}")
             try:
                 Base.metadata.create_all(database.engine)

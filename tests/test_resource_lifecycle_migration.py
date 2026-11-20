@@ -23,7 +23,7 @@ class LifecycleMigrationTests(unittest.TestCase):
         self.engine=create_engine(self.url);self.addCleanup(self.engine.dispose)
 
     def test_additive_upgrade_empty_downgrade_and_reupgrade(self):
-        command.upgrade(self.config,'head')
+        command.upgrade(self.config,'20261025_22')
         self.assertIn('deleted_at',{col['name'] for col in inspect(self.engine).get_columns('project_scenes')})
         self.assertIn('resource_lifecycle_operations',inspect(self.engine).get_table_names())
         command.downgrade(self.config,'20261022_21')
@@ -31,7 +31,7 @@ class LifecycleMigrationTests(unittest.TestCase):
         command.upgrade(self.config,'head')
 
     def test_downgrade_refuses_durable_event_and_preserves_it(self):
-        command.upgrade(self.config,'head')
+        command.upgrade(self.config,'20261025_22')
         with self.engine.begin() as connection:
             connection.execute(text("INSERT INTO resource_lifecycle_events "
                 "(event_id,scope_key,lifecycle_revision,payload) VALUES ('test','scene:test/s',2,'{}')"))

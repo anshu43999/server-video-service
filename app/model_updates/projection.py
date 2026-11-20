@@ -64,7 +64,8 @@ class Projection:
             if row is None or row.project_id != project_id or not row.enabled or row.parameter_platform != 'android':
                 return None
             model = self.catalog.get(row.model_id, row.model_version)
-            artifact = approved_artifact(model, row.parameter_snapshot)
+            parameters = self.scenes.assignments.snapshot(project_id, row.model_id, row.model_version, "android")
+            artifact = approved_artifact(model, parameters)
             if artifact is None:
                 return None
             artifacts, revision = [artifact], row.revision

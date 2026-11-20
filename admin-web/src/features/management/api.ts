@@ -34,6 +34,7 @@ export const managementApi = {
 }
 
 const failures: Record<string, string> = {
+  platform_parameters_unpublished: '所选模型版本、目标端的平台运行参数尚未发布。请联系平台管理员，在“平台模型资产 → 模型参数档案”核对对应 Android／服务端参数并点击“发布参数”，然后刷新项目模型状态。模型文件发布或保存参数草稿不等于参数已发布。',
   scene_input_not_supported: '场景、模型成员或运行方案的输入类型不一致，请核对图片和视频输入配置。',
   revision_conflict: '数据已被其他操作修改。请关闭弹窗并刷新，再基于最新版本重新编辑；不会覆盖他人的更改。',
   last_project_owner: '不能移除或停用最后一位有效负责人。请先完成负责人移交。',

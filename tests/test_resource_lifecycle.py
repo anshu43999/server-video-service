@@ -114,12 +114,15 @@ class LifecycleApiTests(ModelApiFixture, unittest.TestCase):
         self.assertEqual(409, result.status_code, result.text)
         self.assertEqual('model_in_use', result.json()['detail']['code'])
         self.assertEqual(200, self.remove(self.scenes+'/safety', 1).status_code)
-        self.assertEqual(409, self.client.delete(
-            f'{self.project_path}/model-assignments/{self.project_model_id}',
-            headers=self.owner, params={'expectedRevision': 1}).status_code)
-        result = self.remove(self.release_path, preview['expectedRevision'], key='remove-model', headers=self.headers)
+        # The assignment itself still protects the platform release until explicitly removed.
+        result = self.remove(self.release_path, preview['expectedRevision'], key='still-assigned', headers=self.headers)
         self.assertEqual(409, result.status_code, result.text)
         self.assertEqual('model_in_use', result.json()['detail']['code'])
+        self.assertEqual(200, self.client.delete(
+            f'{self.project_path}/model-assignments/{self.project_model_id}',
+            headers=self.owner, params={'expectedRevision': 1}).status_code)
+        self.assertEqual(self.project_model_id, self.store.get(self.project_id, 'safety')['models'][0]['projectModelId'])
+        self.assertTrue(self.client.get(self.release_path+'/removal-impact', headers=self.headers).json()['safeToRemove'])
 
     def test_scene_audit_failure_does_not_leave_tombstone(self):
         self.create()
@@ -173,6 +176,8 @@ class LifecyclePersistenceTests(unittest.TestCase):
         self.context=SimpleNamespace(project_id='test-project',project_role='PROJECT_OWNER',principal=self.principal)
         self.catalog=ModelCatalog(self.registry)
         self.parameters=ModelParameterStore(models/'profiles.json',self.db)
+        for model_id in ('helmet', 'ppe'):
+            self.parameters.publish(self.catalog.get(model_id, '1.0.0'), 'server', 'test-admin', 0, None)
         self.streams=StreamConfigStore(self.db)
         self.assignments=ProjectModelAssignments(self.db,self.catalog,self.parameters,self.streams)
         self.scenes=ProjectScenes(self.db,self.catalog,self.assignments)

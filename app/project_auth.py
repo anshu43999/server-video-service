@@ -46,7 +46,6 @@ PROJECT_STREAMS_VIEW = "project.streams.view"
 PROJECT_ALERTS_READ = "project.alerts.read"
 PROJECT_ALERTS_DISPOSE = "project.alerts.dispose"
 PROJECT_ALERT_KNOWLEDGE_READ = "project.alert_knowledge.read"
-PROJECT_ALERT_KNOWLEDGE_MANAGE = "project.alert_knowledge.manage"
 PROJECT_ALERT_ADVICE_GENERATE = "project.alert_advice.generate"
 PROJECT_ALERT_ADVICE_READ = "project.alert_advice.read"
 PROJECT_ALERT_ADVICE_HISTORY_READ = "project.alert_advice.history.read"
@@ -90,7 +89,6 @@ PROJECT_OWNER_CAPABILITIES = frozenset(
         PROJECT_SCENES_MANAGE,
         PROJECT_SCENES_APPROVE,
         PROJECT_SETTINGS_MANAGE,
-        PROJECT_ALERT_KNOWLEDGE_MANAGE,
         PROJECT_EXPORTS_CREATE,
         PROJECT_AUDIT_READ,
         PROJECT_SERVICE_PRINCIPALS_MANAGE,

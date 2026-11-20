@@ -22,6 +22,8 @@ def enum_values(schema):
 
 
 class M36ApiContractGoldenTests(unittest.TestCase):
+    maxDiff = None
+
     def test_model_target_and_scene_contract_matches_golden(self):
         expected = json.loads(GOLDEN.read_text(encoding="utf-8"))
         openapi = app.openapi()

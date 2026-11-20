@@ -21,6 +21,9 @@ export const modelsApi = {
     const alertRules = profile.alertRules.map(({ rawLabel, displayName, eventCode, operator, enabled, severity, image, camera }) => ({ rawLabel, displayName, eventCode, operator, enabled, severity, image, camera }))
     return apiClient.request<ParameterProfile>(`${modelPath(id)}/parameters`, { method: 'PUT', query: { platform, version }, json: { schemaVersion: 2, expectedRevision: profile.revision, detection: profile.detection, alertRules } })
   },
+  publishParameters(id: string, platform: Platform, profile: ParameterProfile, version?: string) {
+    return apiClient.request<ParameterProfile>(`/platform/models/${encodeURIComponent(id)}/parameters/publish`, { method: 'POST', query: { platform, version }, json: { expectedRevision: profile.revision, expectedPublishedRevision: profile.publishedRevision ?? null } })
+  },
   resetParameters(id: string, platform: Platform, expectedRevision: number, version?: string) { return apiClient.request<ParameterProfile>(`${modelPath(id)}/parameters`, { method: 'DELETE', query: { platform, version, expectedRevision } }) },
   async download(model: ModelAsset, artifactId: string) {
     const blob = await apiClient.request<Blob>(`${modelPath(model.modelId)}/versions/${encodeURIComponent(model.version)}/artifacts/${encodeURIComponent(artifactId)}/download`, { response: 'blob', timeoutMs: 300_000 })

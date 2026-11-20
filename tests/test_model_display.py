@@ -18,6 +18,64 @@ class ModelDisplayTests(unittest.TestCase):
 
 
 class ModelDisplayApiTests(ModelApiFixture, unittest.TestCase):
+    def test_uninstalled_assignment_retains_exact_name_and_rejects_reactivation(self):
+        catalog = main.model_catalog
+        registry = catalog._load()
+        registry["models"][0]["name"] = "安全帽检测 一代"
+        registry["models"][1]["name"] = "安全帽检测 二代"
+        catalog._save(registry)
+        assigned = self._assign().json()
+        disabled = self._assign({**self.body, "enabled": False, "expectedRevision": 1})
+        self.assertEqual(200, disabled.status_code, disabled.text)
+        release_path = "/aiyoloapi/models/helmet/versions/1.0.0"
+        impact = self.client.get(release_path + "/removal-impact", headers=self.headers)
+        self.assertEqual(200, impact.status_code, impact.text)
+        self.assertTrue(impact.json()["safeToRemove"])
+        removed = self.client.delete(release_path, headers={**self.headers,
+            "If-Match": f'"{impact.json()["expectedRevision"]}"', "Idempotency-Key": "display-uninstall"})
+        self.assertEqual(200, removed.status_code, removed.text)
+        tombstone = catalog._load()["modelHistory"][-1]
+        self.assertEqual("安全帽检测 一代", tombstone["name"])
+        self.assertEqual({"name", "status"}, set(catalog.display_metadata("helmet", "1.0.0")))
+        self.assertEqual("安全帽检测 一代", catalog_model_name(catalog, "helmet", "1.0.0"))
+        # Ordinary users must still not see disabled inventory entries.
+        self.assertEqual([], self.client.get(self.assignments, headers=self.user).json()["assignments"])
+        row = self.client.get(self.assignments, headers=self.owner).json()["assignments"][0]
+        self.assertEqual("安全帽检测 一代", row["modelName"])
+        self.assertEqual("UNINSTALLED", row["modelStatus"])
+        self.assertEqual(2, row["revision"])
+        self.assertFalse(row["enabled"])
+        self.assertFalse(row["parameterPublished"])
+        rejected = self._assign({**self.body, "expectedRevision": 2})
+        self.assertEqual(409, rejected.status_code, rejected.text)
+        self.assertEqual("model_uninstalled", rejected.json()["detail"]["code"])
+        self.assertIn("不能重新启用", rejected.text)
+        self.assertIn("1.0.0", rejected.text)
+        with self.assertRaises(KeyError):
+            catalog.get("helmet", "1.0.0")
+        self.assertEqual("PUBLISHED", catalog.get("helmet", "2.0.0")["status"])
+        self.assertEqual(200, self.client.delete(f'{self.assignments}/{assigned["projectModelId"]}',
+            headers=self.owner, params={"expectedRevision": 2}).status_code)
+
+    def test_old_tombstones_do_not_borrow_other_version_names_or_restore_assets(self):
+        catalog = main.model_catalog
+        self._assign()
+        self._assign({**self.body, "enabled": False, "expectedRevision": 1})
+        catalog.uninstall("helmet", "1.0.0")
+        registry = catalog._load()
+        registry["modelHistory"][-1].pop("name")
+        catalog._save(registry)
+        before = deepcopy(catalog._load())
+        row = main.project_model_assignments.list(self.project_id)[0]
+        self.assertEqual("未命名模型", row["modelName"])
+        self.assertEqual("UNINSTALLED", row["modelStatus"])
+        self.assertEqual(before, catalog._load())
+        registry["modelHistory"] = []
+        catalog._save(registry)
+        row = main.project_model_assignments.list(self.project_id)[0]
+        self.assertEqual("MISSING", row["modelStatus"])
+        self.assertEqual("未命名模型", row["modelName"])
+
     def test_exact_release_name_project_and_scene_projection_without_reapproval(self):
         catalog = main.model_catalog
         registry = json.loads(catalog.registry_path.read_text(encoding="utf-8"))

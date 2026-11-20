@@ -1,3 +1,4 @@
+from knowledge_support import helmet_mock_seed
 import copy
 import tempfile
 import unittest
@@ -7,20 +8,21 @@ from uuid import uuid4
 
 import app.main as main_module
 from app.alert_advice_generation import AlertAdviceGenerationStore
-from app.alert_advice_knowledge import AlertAdviceKnowledgeStore, helmet_mock_seed
+from app.alert_advice_knowledge import AlertAdviceKnowledgeStore
 from app.alert_advice_service import AlertAdviceService, MockAdviceGenerator, MockKnowledgeRetriever
 from app.alerts.disposition import AlertDispositionStore
 from app.database import Base, DatabaseManager, ProjectRecord
 from app.project_auth import memory_platform_entry_audits
 from app.project_management import memory_audits_for_tests
+from app.system_alert_knowledge import SystemKnowledgeStore
 from project_api_support import ProjectApiSupport
 
 
 class AlertAdviceGenerationApiTests(ProjectApiSupport, unittest.TestCase):
     def setUp(self):
         self.start_project_api("advice-generation")
-        self.knowledge = AlertAdviceKnowledgeStore()
-        self.knowledge.ensure_mock_seed(self.project_id)
+        self.system = SystemKnowledgeStore()
+        self.knowledge = AlertAdviceKnowledgeStore(system=self.system)
         self.generations = AlertAdviceGenerationStore()
         self.events = AlertDispositionStore()
         self.events.register({
@@ -80,7 +82,9 @@ class AlertAdviceGenerationApiTests(ProjectApiSupport, unittest.TestCase):
 
         payload = copy.deepcopy(helmet_mock_seed()["payload"])
         payload["title"] = "知识已修改但旧快照不应变化"
-        self.knowledge.replace(self.project_id, "mock-ppe-no-helmet-head", payload, "owner", 1)
+        self.system.mutate("replace", "admin", entry_id="mock-ppe-no-helmet-head",
+                           payload=payload, expected_revision=1)
+        self.system.publish(self.system.catalog()["revision"], "New shared knowledge", "admin")
         detail = self.client.get(f"{self.base}/{result['generationId']}", headers=self.headers)
         self.assertEqual(result, detail.json())
         latest = self.client.get(f"{self.base}/latest", headers=self.headers)
@@ -157,8 +161,8 @@ class AlertAdviceGenerationApiTests(ProjectApiSupport, unittest.TestCase):
             f"{knowledge_base}/mock-ppe-no-helmet-head/status", headers=self.headers,
             json={"status": "INACTIVE", "expectedRevision": 1},
         )
-        self.assertEqual(403, denied_manage.status_code, denied_manage.text)
-        self.assertEqual("project.alert_knowledge.manage", denied_manage.json()["detail"]["capability"])
+        self.assertEqual(410, denied_manage.status_code, denied_manage.text)
+        self.assertEqual("PROJECT_KNOWLEDGE_READ_ONLY", denied_manage.json()["detail"]["code"])
 
         archived = self.client.post(
             f"{self.project_path}/archive", headers=self.headers, json={"expectedRevision": 2},
@@ -236,7 +240,6 @@ class AlertAdviceGenerationApiTests(ProjectApiSupport, unittest.TestCase):
             "evidence": {"snapshotDataUrl": "data:image/jpeg;base64,other-private"},
             "disposition": {"status": "OPEN", "actor": None, "actedAtUs": None},
         }, project_id=second_project_id)
-        self.knowledge.ensure_mock_seed(second_project_id)
         second_base = (f"/aiyoloapi/projects/{second_project_id}/alerts/"
                        "event-helmet-1/advice-generations")
         second = self.client.post(
@@ -278,8 +281,7 @@ class AlertAdviceGenerationPersistenceTests(unittest.TestCase):
                 "eventId": event_id, "projectId": project_id,
                 "alertTypeId": "PPE_NO_HELMET", "recognitionCategoryId": "HEAD",
             }, project_id=project_id)
-            knowledge = AlertAdviceKnowledgeStore(database)
-            knowledge.ensure_mock_seed(project_id)
+            knowledge = AlertAdviceKnowledgeStore(system=SystemKnowledgeStore())
             result = AlertAdviceService(MockKnowledgeRetriever(knowledge), MockAdviceGenerator()).generate(
                 project_id, events.get(event_id, project_id)
             )

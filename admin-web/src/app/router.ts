@@ -62,12 +62,12 @@ for (const route of consoleRoutes) {
 }
 
 export const managementRoutes: RouteRecordRaw[] = [
-  { path: 'platform/alert-knowledge', name: 'system-alert-knowledge', component: KnowledgeView, props: { system: true }, meta: { title: '系统 AI 知识资料', description: '维护系统基础资料并发布固定版本，供项目继承。', icon: 'knowledge', platformOnly: true, navigation: true } },
+  { path: 'platform/alert-knowledge', name: 'system-alert-knowledge', component: KnowledgeView, props: { system: true }, meta: { title: '系统 AI 知识资料', description: '统一维护和发布系统知识资料，所有项目只读使用。', icon: 'knowledge', platformOnly: true, navigation: true } },
   { path: 'platform/app-updates', name: 'app-updates', component: AppUpdatesView, meta: { title: 'App 版本管理', description: '登记、核验、发布和回退移动端安装包。', icon: 'appUpdates', platformOnly: true, navigation: true } },
   { path: 'scenes', name: 'scenes', component: ScenesView, meta: { title: '识别场景', description: '从项目模型中选择成员，配置可复用方案并管理审批状态。', icon: 'rules', requiresProject: true, capability: 'project.read', navigation: true } },
   { path: 'project-models', name: 'project-models', component: ProjectModelsView, meta: { title: '项目模型', description: '管理当前项目可用的精确模型版本，PC 与移动端清单相互独立。', icon: 'models', requiresProject: true, capability: 'project.read', navigation: true } },
   { path: 'project-diagnostics', name: 'project-diagnostics', component: ProjectDiagnosticsView, meta: { title: '项目诊断', description: '查看当前项目的运行会话、处理帧数与服务状态。', icon: 'diagnostics', requiresProject: true, capability: 'project.read', navigation: true } },
-  { path: 'alert-knowledge', name: 'alert-knowledge', component: KnowledgeView, meta: { title: 'AI 知识资料', description: '维护告警类型与识别分类对应的处置参考资料。', icon: 'knowledge', requiresProject: true, capability: 'project.alert_knowledge.read', navigation: true } },
+  { path: 'alert-knowledge', name: 'alert-knowledge', component: KnowledgeView, meta: { title: 'AI 知识资料', description: '只读查询系统统一发布的告警处置参考资料。', icon: 'knowledge', requiresProject: true, capability: 'project.alert_knowledge.read', navigation: true } },
   { path: 'platform/projects', name: 'platform-projects', component: PlatformProjectsView, meta: { title: '平台项目', description: '创建项目、指定负责人并管理项目生命周期。', icon: 'platformProjects', platformOnly: true, navigation: true } },
   { path: 'platform/accounts', name: 'accounts', component: AccountsView, meta: { title: '平台账号', description: '管理平台账号身份与全局访问状态。', icon: 'accounts', platformOnly: true, navigation: true } },
   { path: 'platform/audit', name: 'platform-audit', component: AuditView, meta: { title: '平台审计', description: '查询平台账号变更、管理操作与访问拒绝记录。', icon: 'audit', platformOnly: true, navigation: true } },

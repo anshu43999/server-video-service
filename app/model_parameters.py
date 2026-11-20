@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from .conversion import atomic_json
 from .database import (
@@ -17,7 +17,6 @@ from .database import (
     ModelParameterAuditRecord,
     ModelParameterProfileRecord,
     DEFAULT_PROJECT_ID,
-    database,
 )
 from .project_business import audit_change, lock_project, serialized
 
@@ -73,21 +72,14 @@ class ModelParameterStore:
     def _profile_key(model: dict[str, Any], platform: str) -> str:
         return f"{model['modelId']}\0{model['version']}\0{platform}"
 
-    def _file_key(self, model, platform, project_id):
-        key = self._profile_key(model, platform)
-        return key if project_id is None else json.dumps([project_id, key])
-
     @staticmethod
     def _database_profile_key(model_id: str, model_version: str, platform: str) -> str:
         identity = json.dumps([model_id, model_version, platform], ensure_ascii=False, separators=(",", ":"))
         return "mp-" + hashlib.sha256(identity.encode("utf-8")).hexdigest()
 
     @classmethod
-    def _database_key_for_model(cls, model: dict[str, Any], platform: str, project_id=None) -> str:
-        key = cls._database_profile_key(str(model["modelId"]), str(model["version"]), platform)
-        # Preserve pre-scope project keys and their audit/assignment references.
-        # Only the default project shares storage with platform defaults.
-        return "project-" + key if project_id == DEFAULT_PROJECT_ID else key
+    def _database_key_for_model(cls, model: dict[str, Any], platform: str) -> str:
+        return cls._database_profile_key(str(model["modelId"]), str(model["version"]), platform)
 
     @staticmethod
     def _event_code(label: str) -> str:
@@ -359,215 +351,202 @@ class ModelParameterStore:
         ][-20:]
         return result
 
-    def _inherited_profile(self, model, platform, stored=None):
-        profile = self.get(model, platform)
-        profile.pop("audit", None)
-        profile.update(source="inherited", inheritedRevision=profile["revision"],
-                       revision=(stored or {}).get("revision", 0),
-                       updatedAt=(stored or {}).get("updatedAt"),
-                       updatedBy=(stored or {}).get("updatedBy"))
+    @staticmethod
+    def _platform_only(project_id):
+        if project_id is not None:
+            raise ModelParameterError("platform_parameters_read_only", "model parameters are maintained by the platform")
+
+    @staticmethod
+    def _authority(session, context):
+        if context is None:
+            return  # Internal tools/tests; HTTP entry points always supply a principal.
+        from .database import AccountRecord
+        # Recheck current account under the same transaction as publication.
+        principal = getattr(context, "principal", context)
+        if session is not None:
+            account = session.scalar(select(AccountRecord).where(
+                AccountRecord.account_id == principal.account_id).with_for_update())
+            if account is None or not account.enabled or account.platform_role != "PLATFORM_ADMIN":
+                raise ModelParameterError("capability_required", "platform model authority was revoked")
+
+    @staticmethod
+    def _publication(payload, key):
+        return next((deepcopy(item["snapshot"]) for item in reversed(payload["audit"])
+                     if item.get("profileKey") == key and item.get("action") == "PUBLISHED"), None)
+
+    @serialized
+    def publication_status(self, models):
+        """Batch platform-only catalog hints, without exposing editable profiles."""
+        if not models:
+            return {}
+        if self._database is not None:
+            self._import_legacy_once()
+            keys = [self._database_key_for_model(model, platform)
+                    for model in models for platform in sorted(PLATFORMS)]
+            with self._database.session() as session:
+                profiles = {row.profile_key: row.payload for row in session.scalars(
+                    select(ModelParameterProfileRecord).where(
+                        ModelParameterProfileRecord.project_id == DEFAULT_PROJECT_ID,
+                        ModelParameterProfileRecord.scope == "PLATFORM",
+                        ModelParameterProfileRecord.profile_key.in_(keys)))}
+                latest = select(func.max(ModelParameterAuditRecord.id)).where(
+                    ModelParameterAuditRecord.project_id == DEFAULT_PROJECT_ID,
+                    ModelParameterAuditRecord.profile_key.in_(keys),
+                    ModelParameterAuditRecord.action == "PUBLISHED",
+                ).group_by(ModelParameterAuditRecord.profile_key)
+                publications = {row.profile_key: row.payload.get("snapshot") for row in session.scalars(
+                    select(ModelParameterAuditRecord).where(ModelParameterAuditRecord.id.in_(latest)))}
+            key_for = self._database_key_for_model
+        else:
+            payload = self._load()
+            profiles = payload["profiles"]
+            publications = {item.get("profileKey"): item.get("snapshot") for item in payload["audit"]
+                            if item.get("action") == "PUBLISHED"}
+            key_for = self._profile_key
+        results = {}
+        for model in models:
+            states = {}
+            for platform in sorted(PLATFORMS):
+                key = key_for(model, platform)
+                published = publications.get(key)
+                revision = published.get("revision") if isinstance(published, dict) else None
+                state = "unpublished"
+                if key in publications:
+                    try:
+                        if not isinstance(published, dict) or isinstance(revision, bool) or not isinstance(revision, int) or revision < 0:
+                            raise ModelParameterError("profile_invalid", "invalid publication")
+                        self._validate_profile(model, published)
+                        state = "published"
+                    except ModelParameterError:
+                        state, revision = "unavailable", None
+                draft = profiles.get(key) or {}
+                states[platform] = {
+                    "state": state, "publishedRevision": revision,
+                    "hasUnpublishedChanges": state == "unpublished" or
+                    state == "published" and draft.get("revision", 0) != revision,
+                }
+            results[(model["modelId"], model["version"])] = states
+        return results
+
+    @serialized
+    def get(self, model, platform, project_id=None):
+        self._validate_platform(platform)
+        if project_id is not None:
+            return self.published(model, platform, project_id)
+        if self._database is not None:
+            self._import_legacy_once()
+            key = self._database_key_for_model(model, platform)
+            with self._database.session() as session:
+                payload, stored = self._database_payload(session, key)
+        else:
+            payload = self._load()
+            key = self._profile_key(model, platform)
+            stored = payload["profiles"].get(key)
+        profile = self._normalize_profile(model, stored) if stored else self.default_profile(model, platform)
+        self._validate_profile(model, profile)
+        result = self._response(payload, profile, key)
+        published = self._publication(payload, key)
+        result["publishedRevision"] = published["revision"] if published else None
+        result["hasUnpublishedChanges"] = published is None or published["revision"] != profile["revision"]
+        return result
+
+    @serialized
+    def published(self, model, platform, project_id=None):
+        self._validate_platform(platform)
+        if self._database is not None:
+            self._import_legacy_once()
+            key = self._database_key_for_model(model, platform)
+            with self._database.session() as session:
+                payload, _ = self._database_payload(session, key)
+        else:
+            key = self._profile_key(model, platform)
+            payload = self._load()
+        profile = self._publication(payload, key)
+        if profile is None:
+            raise ModelParameterError("platform_parameters_unpublished", "platform parameters must be published before use")
+        self._validate_profile(model, profile)
+        if project_id is not None:
+            profile["projectId"] = project_id
         return profile
 
     @serialized
-    def get(self, model: dict[str, Any], platform: str, project_id: str | None = None) -> dict[str, Any]:
-        self._validate_platform(platform)
-        if self._database is not None:
-            self._import_legacy_once()
-            key = self._database_key_for_model(model, platform, project_id)
-            with self._database.session() as session:
-                payload, stored = self._database_payload(session, key, project_id or DEFAULT_PROJECT_ID)
-                profile = self.default_profile(model, platform) if stored is None else self._normalize_profile(model, stored)
-                if project_id is not None and (stored is None or stored.get("source") == "inherited"):
-                    profile = self._inherited_profile(model, platform, stored)
-                profile["projectId"] = project_id
-                self._validate_profile(model, profile)
-                return self._response(payload, profile, key)
-        with self._lock:
-            payload = self._load()
-            payload["schemaVersion"] = PROFILE_SCHEMA_VERSION
-            key = self._file_key(model, platform, project_id)
-            stored = payload["profiles"].get(key)
-            profile = self.default_profile(model, platform) if stored is None else self._normalize_profile(model, stored)
-            if project_id is not None and (stored is None or stored.get("source") == "inherited"):
-                profile = self._inherited_profile(model, platform, stored)
-            profile["projectId"] = project_id
-            self._validate_profile(model, profile)
-            return self._response(payload, profile, key)
-
-    @serialized
-    def save(
-        self,
-        model: dict[str, Any],
-        platform: str,
-        values: dict[str, Any],
-        actor: str,
-        expected_revision: int | None,
-        project_id: str | None = None,
-        context=None,
-        request_id: str | None = None,
-        before_write=None,
-    ) -> dict[str, Any]:
-        self._validate_platform(platform)
+    def save(self, model, platform, values, actor, expected_revision, project_id=None,
+             context=None, request_id=None):
+        self._platform_only(project_id)
         values = self._normalize_values(values)
-        candidate = {
-            "schemaVersion": PROFILE_SCHEMA_VERSION,
-            "modelId": model["modelId"],
-            "modelName": model.get("name") or model["modelId"],
-            "modelVersion": model["version"],
-            "platform": platform,
-            "revision": 0,
-            "source": "custom",
-            "updatedAt": None,
-            "updatedBy": None,
-            "detection": deepcopy(values.get("detection")),
-            "alertRules": deepcopy(values.get("alertRules")),
-        }
-        self._validate_profile(model, candidate)
-        if self._database is not None:
-            self._import_legacy_once()
-            key = self._database_key_for_model(model, platform, project_id)
-            with self._database.session() as session:
-                lock_project(session, project_id or DEFAULT_PROJECT_ID, enforce_lifecycle=project_id is not None)
-                if before_write is not None:
-                    before_write(session)
-                row = session.scalar(select(ModelParameterProfileRecord).where(
-                    ModelParameterProfileRecord.project_id == (project_id or DEFAULT_PROJECT_ID),
-                    ModelParameterProfileRecord.profile_key == key
-                ).with_for_update())
-                current_profile = self._normalize_profile(model, row.payload) if row else None
-                revision = int(current_profile.get("revision", 0)) if current_profile else 0
-                if expected_revision is not None and expected_revision != revision:
-                    raise ModelParameterConflict("revision_conflict", "model parameters were changed by another operator")
-                now = self._now()
-                profile = {
-                    "schemaVersion": PROFILE_SCHEMA_VERSION, "modelId": model["modelId"],
-                    "modelName": model.get("name") or model["modelId"], "modelVersion": model["version"],
-                    "platform": platform, "revision": revision + 1, "source": "custom",
-                    "updatedAt": now, "updatedBy": actor, "detection": deepcopy(values["detection"]),
-                    "alertRules": deepcopy(values["alertRules"]),
-                    "projectId": project_id,
-                }
-                if row is None:
-                    row = ModelParameterProfileRecord(
-                        project_id=project_id or DEFAULT_PROJECT_ID,
-                        scope="PROJECT" if project_id is not None else "PLATFORM",
-                        profile_key=key, model_id=model["modelId"], model_version=model["version"],
-                        platform=platform, revision=profile["revision"], payload=profile,
-                    )
-                    session.add(row)
-                else:
-                    row.revision = profile["revision"]
-                    row.payload = deepcopy(profile)
-                session.flush()
-                audit = {"profileKey": key, "action": "UPDATED", "revision": profile["revision"],
-                         "at": now, "actor": actor, "snapshot": deepcopy(profile)}
-                session.add(ModelParameterAuditRecord(
-                    project_id=project_id or DEFAULT_PROJECT_ID,
-                    profile_key=key, action="UPDATED", revision=profile["revision"], actor=actor, payload=audit,
-                ))
-                audit_change(session, context, request_id, "model_parameters.update", "model_parameters", key, current_profile, profile)
-                session.flush()
-                payload, _ = self._database_payload(session, key, project_id or DEFAULT_PROJECT_ID)
-                return self._response(payload, profile, key)
-        with self._lock:
-            if before_write is not None:
-                before_write(None)
-            payload = self._load()
-            payload["schemaVersion"] = PROFILE_SCHEMA_VERSION
-            key = self._file_key(model, platform, project_id)
-            current = payload["profiles"].get(key)
-            current_profile = self._normalize_profile(model, current) if current else None
-            revision = int(current_profile.get("revision", 0)) if current_profile else 0
-            if expected_revision is not None and expected_revision != revision:
-                raise ModelParameterConflict("revision_conflict", "model parameters were changed by another operator")
-            now = self._now()
-            profile = {
-                "schemaVersion": PROFILE_SCHEMA_VERSION,
-                "modelId": model["modelId"],
-                "modelName": model.get("name") or model["modelId"],
-                "modelVersion": model["version"],
-                "platform": platform,
-                "revision": revision + 1,
-                "source": "custom",
-                "updatedAt": now,
-                "updatedBy": actor,
-                "detection": deepcopy(values["detection"]),
-                "alertRules": deepcopy(values["alertRules"]),
-                "projectId": project_id,
-            }
-            payload["profiles"][key] = profile
-            payload["audit"].append(
-                {"profileKey": key, "action": "UPDATED", "revision": profile["revision"], "at": now, "actor": actor, "snapshot": deepcopy(profile)}
-            )
-            payload["audit"] = payload["audit"][-500:]
-            atomic_json(self.path, payload)
-            audit_change(None, context, request_id, "model_parameters.update", "model_parameters", key, current_profile, profile)
-            return self._response(payload, profile, key)
+        return self._write(model, platform, values, actor, expected_revision, "UPDATED",
+                           context, request_id)
 
     @serialized
-    def reset(self, model: dict[str, Any], platform: str, actor: str,
-              project_id: str | None = None, expected_revision: int | None = None,
-              context=None, request_id: str | None = None) -> dict[str, Any]:
+    def reset(self, model, platform, actor, project_id=None, expected_revision=None,
+              context=None, request_id=None):
+        self._platform_only(project_id)
+        return self._write(model, platform, self.default_profile(model, platform), actor,
+                           expected_revision, "RESET", context, request_id)
+
+    @serialized
+    def publish(self, model, platform, actor, expected_revision, expected_published_revision,
+                context=None, request_id=None):
+        return self._write(model, platform, None, actor, expected_revision, "PUBLISHED",
+                           context, request_id, expected_published_revision=expected_published_revision)
+
+    def _write(self, model, platform, values, actor, expected, action, context, request_id,
+               expected_published_revision=None):
+        from contextlib import nullcontext
         self._validate_platform(platform)
         if self._database is not None:
             self._import_legacy_once()
-            key = self._database_key_for_model(model, platform, project_id)
-            with self._database.session() as session:
-                lock_project(session, project_id or DEFAULT_PROJECT_ID, enforce_lifecycle=project_id is not None)
-                row = session.scalar(select(ModelParameterProfileRecord).where(
-                    ModelParameterProfileRecord.project_id == (project_id or DEFAULT_PROJECT_ID),
-                    ModelParameterProfileRecord.profile_key == key
-                ).with_for_update())
-                current_profile = self._normalize_profile(model, row.payload) if row else None
-                revision = int(current_profile.get("revision", 0)) if current_profile else 0
-                if expected_revision is not None and expected_revision != revision:
-                    raise ModelParameterConflict("revision_conflict", "model parameters were changed by another operator")
-                now = self._now()
-                profile = self.default_profile(model, platform)
-                if project_id is not None:
-                    profile = self._inherited_profile(model, platform)
-                profile.update({"revision": revision + 1, "updatedAt": now, "updatedBy": actor, "projectId": project_id})
+        with (self._database.session() if self._database is not None else nullcontext(None)) as session:
+            if session is not None:
+                lock_project(session, DEFAULT_PROJECT_ID, enforce_lifecycle=False)
+                self._authority(session, context)
+                key = self._database_key_for_model(model, platform)
+                payload, stored = self._database_payload(session, key)
+            else:
+                key = self._profile_key(model, platform)
+                payload = self._load()
+                stored = payload["profiles"].get(key)
+            current = self._normalize_profile(model, stored) if stored else self.default_profile(model, platform)
+            revision = current["revision"]
+            if expected is not None and expected != revision:
+                raise ModelParameterConflict("revision_conflict", "model parameter draft was changed")
+            previous = self._publication(payload, key)
+            if action == "PUBLISHED":
+                previous_revision = previous["revision"] if previous else None
+                if previous_revision != expected_published_revision:
+                    raise ModelParameterConflict("publication_conflict", "published model parameters were changed")
+                if previous_revision == revision:
+                    return previous
+                profile = {k: deepcopy(current[k]) for k in
+                           ("schemaVersion", "modelId", "modelVersion", "platform", "revision",
+                            "detection", "alertRules")}
+                profile.update(source="platform", updatedAt=self._now())
+                draft = current
+            else:
+                profile = {**self.default_profile(model, platform),
+                           "detection": deepcopy(values["detection"]), "alertRules": deepcopy(values["alertRules"]),
+                           "revision": revision + 1, "source": "default" if action == "RESET" else "custom",
+                           "updatedAt": self._now(), "updatedBy": actor}
+                draft = profile
+            self._validate_profile(model, profile)
+            audit = {"profileKey": key, "action": action, "revision": profile["revision"],
+                     "at": self._now(), "actor": actor, "snapshot": deepcopy(profile)}
+            if session is not None:
+                row = session.get(ModelParameterProfileRecord, (DEFAULT_PROJECT_ID, key))
                 if row is None:
-                    row = ModelParameterProfileRecord(
-                        project_id=project_id or DEFAULT_PROJECT_ID,
-                        scope="PROJECT" if project_id is not None else "PLATFORM",
+                    row = ModelParameterProfileRecord(project_id=DEFAULT_PROJECT_ID, scope="PLATFORM",
                         profile_key=key, model_id=model["modelId"], model_version=model["version"],
-                        platform=platform, revision=profile["revision"], payload=profile,
-                    )
+                        platform=platform, revision=draft["revision"], payload=deepcopy(draft))
                     session.add(row)
-                else:
-                    row.revision = profile["revision"]
-                    row.payload = deepcopy(profile)
+                elif action != "PUBLISHED":
+                    row.revision, row.payload = draft["revision"], deepcopy(draft)
                 session.flush()
-                audit = {"profileKey": key, "action": "RESET", "revision": profile["revision"],
-                         "at": now, "actor": actor, "snapshot": deepcopy(profile)}
-                session.add(ModelParameterAuditRecord(
-                    project_id=project_id or DEFAULT_PROJECT_ID,
-                    profile_key=key, action="RESET", revision=profile["revision"], actor=actor, payload=audit,
-                ))
-                audit_change(session, context, request_id, "model_parameters.reset", "model_parameters", key, current_profile, profile)
-                session.flush()
-                payload, _ = self._database_payload(session, key, project_id or DEFAULT_PROJECT_ID)
-                return self._response(payload, profile, key)
-        with self._lock:
-            payload = self._load()
-            payload["schemaVersion"] = PROFILE_SCHEMA_VERSION
-            key = self._file_key(model, platform, project_id)
-            current = payload["profiles"].get(key)
-            current_profile = self._normalize_profile(model, current) if current else None
-            revision = int(current_profile.get("revision", 0)) if current_profile else 0
-            if expected_revision is not None and expected_revision != revision:
-                raise ModelParameterConflict("revision_conflict", "model parameters were changed by another operator")
-            now = self._now()
-            profile = self.default_profile(model, platform)
-            if project_id is not None:
-                profile = self._inherited_profile(model, platform)
-            profile.update({"revision": revision + 1, "updatedAt": now, "updatedBy": actor, "projectId": project_id})
-            payload["profiles"][key] = profile
-            payload["audit"].append(
-                {"profileKey": key, "action": "RESET", "revision": profile["revision"], "at": now, "actor": actor, "snapshot": deepcopy(profile)}
-            )
-            payload["audit"] = payload["audit"][-500:]
-            atomic_json(self.path, payload)
-            audit_change(None, context, request_id, "model_parameters.reset", "model_parameters", key, current_profile, profile)
-            return self._response(payload, profile, key)
+                session.add(ModelParameterAuditRecord(project_id=DEFAULT_PROJECT_ID, profile_key=key,
+                    action=action, revision=profile["revision"], actor=actor, payload=audit))
+            else:
+                payload["profiles"][key] = deepcopy(draft)
+                payload["audit"].append(audit)  # Published history must never be truncated.
+                atomic_json(self.path, payload)
+            audit_change(session, context, request_id, "model_parameters." + action.lower(),
+                         "model_parameters", key, previous if action == "PUBLISHED" else current, profile)
+        return self.published(model, platform) if action == "PUBLISHED" else self.get(model, platform)

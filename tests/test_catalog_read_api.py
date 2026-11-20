@@ -26,13 +26,17 @@ class CatalogReadApiTests(ModelApiFixture, unittest.TestCase):
         self.assertEqual(200, self._assign().status_code)
         platform = self.client.get('/aiyoloapi/models', headers=self.headers)
         self.assertEqual(200, platform.status_code)
-        self.assertEqual(json.loads(json.dumps(main.model_catalog.list_models())), platform.json()['models'])
+        catalog = platform.json()['models']
+        self.assertEqual(json.loads(json.dumps(main.model_catalog.list_models())),
+                         [{k: v for k, v in model.items() if k != 'parameterPublication'} for model in catalog])
+        self.assertTrue(all(model['parameterPublication']['server']['state'] == 'published' for model in catalog))
         for route in (self.project_path + '/models', '/aiyoloapi/models'):
             headers = dict(self.user, **{'X-Project-Id': self.project_id})
             response = self.client.get(route, headers=headers)
             self.assertEqual(200, response.status_code, response.text)
             self.assertEqual(['helmet'], [m['modelId'] for m in response.json()['models']])
             self.assertEqual(['1.0.0'], response.json()['models'][0]['availableVersions'])
+            self.assertNotIn('parameterPublication', response.json()['models'][0])
         other = self.client.get('/aiyoloapi/projects/' + self.other_id + '/models', headers=self.headers)
         self.assertEqual({'models': []}, other.json())
         denied = self.client.get('/aiyoloapi/projects/' + self.other_id + '/models', headers=self.user)

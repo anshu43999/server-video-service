@@ -1,0 +1,72 @@
+# REVIEW ONLY: fragment of existing controller spec.template.spec.
+# Not a standalone resource; not included in production kustomization.
+# Merge named lists with existing env/mounts/volumes; do not replace them.
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+initContainers:
+  - name: prepare-app-update-directories
+    image: 192.168.0.171:30002/saas-prod/aiyolo-video-service:1.0.3-appupdates.20261106-r1
+    command: [/bin/sh, -ec]
+    args:
+      - mkdir -p /app/evidence/app-apk-verification /app/app-update-data/external /app/app-update-data/uploads /tmp/app-apk-verification
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop: [ALL]
+    volumeMounts:
+      - {name: app-update-evidence, mountPath: /app/evidence}
+      - {name: app-update-data, mountPath: /app/app-update-data}
+      - {name: temp, mountPath: /tmp}
+containers:
+  - name: CHANGE_ME_EXISTING_VIDEO_CONTAINER_NAME
+    image: 192.168.0.171:30002/saas-prod/aiyolo-video-service:1.0.3-appupdates.20261106-r1
+    # Preserve existing database/MinIO/model env and signing mounts.
+    env:
+      - {name: APP_UPDATES_ENABLED, value: 'true'}
+      - {name: APP_APK_EXTERNAL_ENABLED, value: 'true'}
+      - {name: APP_APK_WORKER_ENABLED, value: 'false'}
+      - name: APP_UPDATE_KEY_ID
+        valueFrom:
+          configMapKeyRef: {name: aiyolo-app-update-runtime, key: APP_UPDATE_KEY_ID}
+      - {name: APP_UPDATE_PRIVATE_KEY_PATH, value: /app/app-update-signing/app-update-ed25519.pem}
+      - {name: APP_UPDATE_SCOPES_PATH, value: /app/app-update-config/scopes.json}
+      - {name: APP_APK_COMPATIBILITY_PATH, value: /app/app-update-config/compatibility.json}
+      - {name: APP_APK_AAPT2_PATH, value: /opt/android/build-tools/36.0.0/aapt2}
+      - {name: APP_APK_JAVA_PATH, value: /usr/bin/java}
+      - {name: APP_APK_APKSIGNER_JAR_PATH, value: /opt/android/build-tools/36.0.0/lib/apksigner.jar}
+      - {name: APP_APK_EVIDENCE_ROOT, value: /app/evidence/app-apk-verification}
+      - {name: APP_APK_STAGING_ROOT, value: /tmp/app-apk-verification}
+      - {name: APP_APK_EXTERNAL_ROOT, value: /app/app-update-data/external}
+      - {name: APP_APK_UPLOAD_ROOT, value: /app/app-update-data/uploads}
+    volumeMounts:
+      - {name: app-update-signing, mountPath: /app/app-update-signing, readOnly: true}
+      - {name: app-update-config, mountPath: /app/app-update-config, readOnly: true}
+      - {name: app-update-evidence, mountPath: /app/evidence}
+      - {name: app-update-data, mountPath: /app/app-update-data}
+      - {name: temp, mountPath: /tmp}
+volumes:
+  - name: app-update-signing
+    secret:
+      secretName: aiyolo-app-update-signing
+      optional: false
+      defaultMode: 0440
+      items:
+        - {key: app-update-ed25519.pem, path: app-update-ed25519.pem}
+  - name: app-update-config
+    configMap:
+      name: aiyolo-app-update-files
+      optional: false
+      items:
+        - {key: scopes.json, path: scopes.json}
+        - {key: compatibility.json, path: compatibility.json}
+  - name: app-update-evidence
+    persistentVolumeClaim: {claimName: CHANGE_ME_APP_EVIDENCE_PVC}
+  - name: app-update-data
+    persistentVolumeClaim: {claimName: CHANGE_ME_APP_UPDATE_DATA_PVC}
+  # Reuse existing temp if present; decide capacity before applying.
+  - name: temp
+    emptyDir: {}

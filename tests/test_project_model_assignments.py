@@ -54,6 +54,9 @@ class ModelApiFixture(ProjectApiSupport):
         registry.write_text(json.dumps({"activeServerModel": "helmet@2.0.0", "models": self.entries}), encoding="utf-8")
         catalog = ModelCatalog(registry)
         profiles = ModelParameterStore(models / "profiles.json")
+        for entry in self.entries:
+            for platform in ("server", "android"):
+                profiles.publish(entry, platform, "fixture-admin", 0, None)
         configs = StreamConfigStore(None)
         assignments = ProjectModelAssignments(
             None, catalog, profiles, configs,

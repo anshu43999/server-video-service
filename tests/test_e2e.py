@@ -1,92 +1,55 @@
-import unittest
 import time
-from contextlib import ExitStack
-from unittest.mock import patch
+import unittest
 
 import cv2
 import numpy as np
-from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
-import app.auth as auth_module
-import app.main as main_module
-from app.config import settings
-from app.database import DatabaseManager
-from app.main import app, streams
-from app.project_auth import reset_memory_project_authorization_for_tests
-from app.project_management import reset_memory_project_management_for_tests
-from app.stream_config import StreamConfigStore
+from stream_api_support import StreamApiFixture
 
 
 def frame_jpeg(value: int) -> bytes:
     frame = np.full((48, 64, 3), value, dtype=np.uint8)
-    ok, encoded = cv2.imencode(".jpg", frame)
+    ok, encoded = cv2.imencode('.jpg', frame)
     assert ok
     return encoded.tobytes()
 
 
-class EndToEndTests(unittest.TestCase):
-    def setUp(self):
-        streams.clear()
-        self.isolation = ExitStack()
-        self.addCleanup(self.isolation.close)
-        self.isolation.enter_context(patch('app.main.stream_config_store', StreamConfigStore(None)))
-        self.isolation.enter_context(patch('app.auth.database', DatabaseManager(None)))
-        self.isolation.enter_context(patch.dict(auth_module._memory_accounts, {}, clear=True))
-        self.isolation.enter_context(patch.dict(auth_module._memory_sessions, {}, clear=True))
-        self.isolation.enter_context(patch.object(main_module.database, 'verify_schema', return_value={'status': 'ok'}))
-        self.isolation.enter_context(patch.object(main_module.conversion_service, 'start'))
-        self.isolation.enter_context(patch.object(main_module.conversion_service, 'close'))
-        self.old_environment = settings.deployment_env
-        self.old_admin = settings.admin_token
-        self.old_mobile = settings.mobile_token
-        settings.deployment_env = 'production'
-        settings.admin_token = None
-        settings.mobile_token = None
-        reset_memory_project_authorization_for_tests()
-        reset_memory_project_management_for_tests()
-
-    def tearDown(self):
-        settings.deployment_env = self.old_environment
-        settings.admin_token = self.old_admin
-        settings.mobile_token = self.old_mobile
-        reset_memory_project_authorization_for_tests()
-        reset_memory_project_management_for_tests()
-
-    def setup_project(self, client: TestClient) -> tuple[str, dict[str, str]]:
-        setup = client.post('/aiyoloapi/auth/setup', json={
-            'username': 'e2e-admin', 'password': 'temporary-test-password',
-        })
-        self.assertEqual(setup.status_code, 200)
-        headers = {'Authorization': f"Bearer {setup.json()['accessToken']}"}
-        account_id = client.get('/aiyoloapi/auth/me', headers=headers).json()['accountId']
-        project = client.post('/aiyoloapi/projects', headers=headers, json={
-            'projectCode': 'e2e-project',
-            'displayName': 'E2E Project',
-            'ownerAccountId': account_id,
-        })
-        self.assertEqual(project.status_code, 201, project.text)
-        return project.json()['projectId'], headers
-
+class EndToEndTests(StreamApiFixture, unittest.TestCase):
     def test_multiple_real_frames_round_trip_and_state(self):
-        with TestClient(app) as client:
-            project_id, headers = self.setup_project(client)
-            streams_path = f"/aiyoloapi/projects/{project_id}/streams"
-            self.assertEqual(
-                client.post(streams_path, headers=headers, json={"stream_id": "e2e"}).status_code,
-                201,
-            )
-            with client.websocket_connect(f"{streams_path}/e2e/ingest", headers=headers) as ingest:
-                with client.websocket_connect(f"{streams_path}/e2e/ws", headers=headers) as output:
-                    for value in (10, 80, 160, 240):
-                        ingest.send_bytes(frame_jpeg(value))
-                        received = output.receive_bytes()
-                        self.assertTrue(received.startswith(b"\xff\xd8"))
-                        time.sleep(0.06)
-            details = client.get(streams_path, headers=headers).json()[0]
-            self.assertEqual(details["project_id"], project_id)
-            self.assertEqual(details["frames_received"], 4)
-            self.assertEqual(details["state"], "outputting")
+        self.create_stream('e2e')
+        path = self.streams_path + '/e2e'
+        with self.client.websocket_connect(path + '/ingest') as ingest:
+            for value in (10, 80, 160, 240):
+                ingest.send_bytes(frame_jpeg(value))
+                # The serial ingest reply proves decoding finished before preview.
+                ingest.send_text('processed-barrier')
+                self.assertTrue(ingest.receive_json()['ok'])
+                deadline = time.monotonic() + 2
+                while True:
+                    response = self.client.get(path + '/preview')
+                    self.assertEqual(200, response.status_code, response.text)
+                    self.assertEqual('image/jpeg', response.headers['content-type'])
+                    self.assertEqual('raw', response.headers['x-preview-mode'])
+                    decoded = cv2.imdecode(np.frombuffer(response.content, np.uint8), cv2.IMREAD_COLOR)
+                    self.assertEqual((48, 64, 3), decoded.shape)
+                    if abs(float(decoded.mean()) - value) <= 2:
+                        break
+                    if time.monotonic() >= deadline:
+                        self.fail('preview did not advance to the newly ingested frame')
+                    time.sleep(0.05)  # Preview encoding is intentionally capped.
+                time.sleep(0.04)  # Stay below the input-frame limit.
+        details = self.client.get(self.streams_path).json()[0]
+        self.assertEqual(details['project_id'], self.project_id)
+        self.assertEqual(details['frames_received'], 4)
+        self.assertEqual(details['state'], 'ingesting')
+        self.assertEqual(details['frames_processed'], 0)
+        self.assertEqual(403, self.client.get(path + '/preview', headers=self.headers).status_code)
+        with self.assertRaises(WebSocketDisconnect) as closed:
+            with self.client.websocket_connect(path + '/ws'):
+                self.fail('retired distribution websocket unexpectedly accepted')
+        self.assertEqual(1008, closed.exception.code)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

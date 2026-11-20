@@ -589,7 +589,7 @@ class ModelCatalog:
         history.append({
             key: tombstone[key]
             for key in (
-                "modelId", "version", "status", "manifestSha256", "artifacts",
+                "modelId", "version", "name", "status", "manifestSha256", "artifacts",
                 "releaseEligible", "publishedAt", "uninstalledAt", "lifecycleRevision", "operationId", "deletedAt",
             )
             if key in tombstone
@@ -650,6 +650,18 @@ class ModelCatalog:
             "retainedSharedFiles": intent["retainedSharedFiles"] + len(target_paths & shared_paths),
             "cleanupFailures": cleanup_failures,
         }
+
+    def display_metadata(self, model_id: str, version: str) -> dict[str, Any]:
+        """Exact-release labels only, including tombstones; never runtime assets."""
+        registry = self._load()
+        item = self._find_entry(registry, model_id, version)
+        if item is None:
+            item = next((entry for entry in reversed(registry.get("modelHistory", []))
+                         if entry.get("modelId") == model_id and entry.get("version") == version
+                         and entry.get("status") == "UNINSTALLED"), None)
+        if item is None:
+            raise KeyError((model_id, version))
+        return {"name": item.get("name"), "status": self._status(item)}
 
     def versions(self, model_id: str) -> list[dict[str, Any]]:
         registry = self._load()

@@ -1,5 +1,10 @@
 export type Platform = 'android' | 'server'
 export type ModelTarget = 'pc' | 'mobile'
+export interface ParameterPublication {
+  state: 'published' | 'unpublished' | 'unavailable'
+  publishedRevision: number | null
+  hasUnpublishedChanges: boolean
+}
 export interface ModelArtifact { artifactId: string; platform: string; format: string; sizeBytes?: number; sha256?: string; exists?: boolean; hashValid?: boolean }
 export interface ModelAsset {
   modelId: string; name: string; version: string; scenario?: string; status?: string
@@ -13,6 +18,7 @@ export interface ModelAsset {
   supportedTargets?: ModelTarget[]; supportedTargetsSource?: string
   targetReadiness?: Partial<Record<ModelTarget, {ready:boolean;supported?:boolean;reason?:string}>>
   targetReleaseEligible?: Partial<Record<ModelTarget, boolean>>
+  parameterPublication?: Partial<Record<Platform, ParameterPublication>>
 }
 export interface CalibrationDataset {
   datasetId: string; name: string; version: string; scenario: string; imageCount: number; sizeBytes: number
@@ -38,8 +44,8 @@ export interface AlertParameter {
   camera: { minimumConfidence: number; minimumConsecutiveFrames: number; minimumDwellTimeMs: number; cooldownMs: number }
 }
 export interface ParameterProfile {
+  publishedRevision?: number | null; hasUnpublishedChanges?: boolean
   sceneRevision?: number
-  inventoryRevision?: number
   schemaVersion: number; modelId: string; modelVersion: string; platform: Platform; revision: number; source: string
   detection: { confidenceThreshold: number; iouThreshold: number; maxDetections: number }; alertRules: AlertParameter[]
   audit?: { action: string; revision: number; actor: string; at: string }[]

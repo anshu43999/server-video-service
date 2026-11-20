@@ -2,6 +2,8 @@
 
 独立的服务器端视频流处理服务：接入 RTSP/文件等视频源，在服务器运行 YOLO 与正式告警规则，提供按项目隔离的 PC 实时预览；符合规则的告警持久化后由告警功能展示和提示。
 
+需求入口：[服务端与管理后台需求基线V3.4](PRODUCT_REQUIREMENTS.md)；资料状态与旧文档替代入口见[文档治理](docs/document-governance.md)及[工作区导航](../docs/文档导航与资料状态.md)。以下说明实现与运行入口，不替代需求和真实验收记录。
+
 当前视频边界见 [ADR-003](docs/adr-003-analysis-alerts-only.md)：**保留后台/PC接入、实时预览和YOLO分析；取消PC推流及移动端远程视频/直播收流，不再通过MediaMTX向移动端分发。** PC专用预览使用同源登录Cookie和当前项目权限，最高5fps/宽1280；关闭YOLO仍可看原画面。旧播放接口继续退役。M34/M101仍在实施，Android清理、告警闭环及真实三端验收不能视为已完成；ADR-002中的分发方案仅作历史参考。
 
 告警引擎规格见 [docs/alert-engine-spec.md](docs/alert-engine-spec.md)（状态：冻结，机器可读契约 [docs/alert-engine.schema.json](docs/alert-engine.schema.json)）：**服务端与 App 共用同一份规格**，服务端实现远程视频流事件（`M11`），App 侧实现本地图片与相机事件（`M15`）。这是一个告警引擎，不是预警引擎，不做趋势外推与未来状态预测。双侧共用的一致性金样向量在 [docs/alert-engine-conformance/](docs/alert-engine-conformance/README.md)（29 条，服务端加载器 `tests/test_alert_engine_conformance.py`，App 侧原样复制执行）。
@@ -29,7 +31,7 @@ npm run build:preview  # /admin-next/ 产物写入 dist-preview/
 
 只要 `dist-preview/index.html` 存在，FastAPI 就会提供独立 `/admin-next/` 预览。应整体发布同一次构建的 HTML 和 assets，HTML 使用 `no-cache`，带内容哈希的资源使用一年 `immutable` 缓存，缺失资源为 404；网关不能把 API 错误改为 SPA HTML。旧前端已归档到本机 `E:\aiyolo\archives\server-admin-legacy\20261009-M32-T11` 并从产品目录删除，当前仅支持 `ADMIN_FRONTEND_MODE=vue`。历史查询与带备份恢复见 [本地档案说明](../archives/server-admin-legacy/README.md)，详细验证命令和缓存策略见 [管理前端发布与回退](docs/admin-frontend-release.md)。
 
-模型资产页现提供 **PT 上传与异步本机/WSL 转换**：PT 在服务端验证后可直接按流绑定；TFLite 单独转换并登记下载产物。配置现有虚拟环境、校准集、任务重试与当前 App 接线边界见 [本机模型转换说明](docs/local-model-conversion.md)。COCO 仅用于用户功能测试。
+模型资产页现提供 **PT上传与异步local/WSL/remote转换**：PT经验证、发布和项目分配后，由已批准的场景/方案显式用于服务端视频运行；TFLite单独转换并登记移动产物。项目分配不自动创建场景或运行授权。配置虚拟环境、校准集、任务重试与产物边界见[模型转换说明](docs/local-model-conversion.md)，容器远程执行见[远程转换协议](docs/remote-model-conversion.md)；Android消费与安装以其独立需求和验收记录为准。服务端推理和转换固定CPU，COCO仅用于功能测试。
 
 ## 一键启动（Windows）
 
@@ -46,12 +48,12 @@ npm run build:preview  # /admin-next/ 产物写入 dist-preview/
 
 本地真实 RTSP 验收可以使用既有的摄像机地址；若使用工作区的文件循环测试源，在工作区根目录单独运行 `tools/rtsp/start_rtsp_video.ps1 -NoAdbReverse`，再在本工程执行 `start-server.ps1 -NoInstall`。测试源作为输入，不是后台的输出分发服务；不要误停共享的摄像机源，也不要打开 Android 直播。
 
-PC 登录后进入明确项目，在“视频流管理”创建安全字符 ID（如 `inspection-001`），配置 RTSP 输入地址并按权限绑定模型。视频墙和流详情通过同源 Cookie 查看实时 JPEG 预览，最高 5fps、宽1280；切模型、撤权、断流与无人预览均需验证。移动端只使用服务地址访问模型与告警功能，不填写媒体地址。
+PC登录后进入明确项目，在“视频流”创建安全字符ID（如`inspection-001`），配置RTSP输入并显式选择获准场景/方案。流详情通过同源Cookie查看实时JPEG预览，最高5fps、宽1280；视频墙已移除。切方案/模型、撤权、断流与无人预览均需验证。移动端只使用业务服务地址访问项目、模型、告警与升级等接口，不填写远程媒体地址。
 
 ## 开发任务 Harness
 
 App 全量 APK 升级的自有上传接口、MinIO 版本固定、运行配置和恢复流程见 [APK 上传说明](docs/app-apk-upload.md)。默认关闭。
-第三方公开 HTTPS 链接的登记、逐跳核验和临时文件清理见 [外链 APK 说明](docs/app-apk-external.md)；发布下载和 Android 安装流程仍在后续任务中。
+第三方公开HTTPS链接的登记、逐跳核验和临时文件清理见[外链APK说明](docs/app-apk-external.md)；发布与恢复见[升级服务](docs/app-update-service.md)，Android安装由其独立Harness实现与验收。接口或源码完成不代表两种来源的真实设备联合及生产放行已经通过。
 
 服务器项目有独立的任务驱动开发流程，位于 `harness/`：
 
@@ -69,10 +71,12 @@ python harness/harness.py next
 - 平台账号、项目空间、成员关系和项目权限持续生效；项目负责人维护源/参数，项目用户按权限使用模型、预览和告警功能。
 - 支持 RTSP/HTTP/文件/摄像头输入，以及已鉴权的服务/设备 ingest；不提供 PC 或 Android 推流界面。
 - YOLO 使用 latest-only 和独立限速；关闭或模型故障不取消 PC 原画面预览。无人观看时分析与正式告警仍运行。
-- PC 同源快照预览/视频墙；不提供 WHEP、LL-HLS、RTSP 分发、通用 MJPEG 或逐帧检测 WebSocket。
+- PC流详情同源快照预览；不提供项目视频墙、WHEP、LL-HLS、RTSP分发、通用MJPEG或逐帧检测WebSocket。
 - 告警按规则及冷却去重持久化，PC/移动端从告警功能查询、提示、处置和读取受保护证据。
 - 移动端旧数据审批功能与数据表已移除；旧数据不读取、不迁移。升级到当前版本会删除旧审批相关数据库表。
 - 保留模型资产、转换、签名、项目分配、证据与运行状态；正式链路的联合验收仍由后续任务执行。
+- 管理台按平台/项目作用域提供模型、场景、知识资料、账号/成员、审计与App版本等入口；显示与写操作分别受角色/capability和服务端鉴权控制。
+- 智能复核已退役；人工告警处置、模拟知识资料及用户主动AI处置建议独立保留，不调用真实大模型，不把历史结果自动重算。
 
 ## 快速开始
 
@@ -84,7 +88,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8080
 ```
 
-模型权重不作为默认部署保证。安装 `requirements-yolo.txt`，通过模型资产登记可用的模型并按项目分配、按流绑定；默认模型路径可用 `YOLO_MODEL_PATH` 设置：
+模型权重不作为默认部署保证。安装`requirements-yolo.txt`，通过模型资产登记可用模型并按项目分配、配置获准场景/方案；流运行须显式选择并校验方案，不以默认模型路径代替项目授权。开发配置中的模型路径可用`YOLO_MODEL_PATH`设置：
 
 ```powershell
 pip install -r requirements-yolo.txt
@@ -129,7 +133,7 @@ Content-Type: application/json
 {"stream_id":"inspection-001","source_url":"rtsp://camera.example/live"}
 ```
 
-按当前项目授权绑定模型，再向 `/aiyoloapi/projects/{project_id}/streams/inspection-001/yolo` 发送 `{"enabled":true}`。不要在日志中保存完整输入凭据。
+先为流显式选择当前项目获准的sceneId/planId并完成参数与授权核验，再向 `/aiyoloapi/projects/{project_id}/streams/inspection-001/yolo` 发送 `{"enabled":true}`；上例只创建输入，不自动满足分析启动条件。不要在日志中保存完整输入凭据。
 
 PC 同源登录 Cookie 访问 `GET /aiyoloapi/projects/{project_id}/streams/inspection-001/preview`；有效画面返回 200 JPEG，无帧/断流返回 204，Bearer 请求拒绝。接口定义见 [项目视频契约](docs/project-stream-isolation.md) 和 `/docs`。
 

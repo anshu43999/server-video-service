@@ -22,7 +22,7 @@ class UpdateMigrationTests(unittest.TestCase):
         self.engine = create_engine(self.url); self.addCleanup(self.engine.dispose)
 
     def test_upgrade_empty_safe_downgrade_and_reupgrade(self):
-        command.upgrade(self.config,'head')
+        command.upgrade(self.config,'20261025_23')
         names = inspect(self.engine).get_table_names()
         for table in ('targets','devices','inbox','reports','changes','push_outbox','snapshots','tickets','domain_outbox','rate_buckets','metrics'):
             self.assertIn('model_update_' + table, names)
@@ -31,7 +31,7 @@ class UpdateMigrationTests(unittest.TestCase):
         command.upgrade(self.config,'head')
 
     def test_durable_facts_prevent_downgrade(self):
-        command.upgrade(self.config,'head')
+        command.upgrade(self.config,'20261025_23')
         with self.engine.begin() as connection:
             connection.execute(text("INSERT INTO model_update_installations (installation_id,epoch) VALUES ('test',1)"))
         with self.assertRaisesRegex(RuntimeError,'durable facts'):

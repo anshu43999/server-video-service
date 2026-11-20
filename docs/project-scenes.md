@@ -4,7 +4,7 @@
 
 ## 存储与升级
 
-场景以 `(project_id, scene_id)` 隔离；成员引用同项目的稳定 `projectModelId`，并在场景 revision 中固定目标端、成员顺序、输入能力及方案参数快照。position 从 0 连续排序，不是成员身份。一个项目模型可以被多个场景复用；场景成员不能越过项目模型清单直接引用全局模型目录。
+场景以 `(project_id, scene_id)` 隔离；成员引用同项目的稳定 `projectModelId`，并在场景 revision 中固定目标端、成员顺序、输入能力及方案策略。position 从 0 连续排序，不是成员身份。一个项目模型可以被多个场景复用；场景成员不能越过项目模型清单直接引用全局模型目录。
 
 未配置数据库时使用显式进程内存后端；配置数据库则场景、成员与成功审计同事务提交，失败全部回滚。PostgreSQL 使用项目行锁串行化跨进程首次创建与更新，所有写入校验 expectedRevision。启动 schema 健康检查要求新表；发布时应通过既有迁移流程升级，本次未执行生产升级。非空场景表禁止 downgrade，避免误删配置。
 
@@ -26,12 +26,12 @@
 创建载荷：
 
 ```json
-{"sceneId":"site-safety","name":"现场安全","inputTypes":["image","video"],"enabled":true,"expectedRevision":0,"members":[{"memberId":"member-helmet","projectModelId":"pm-helmet-pc","position":0,"inputTypes":["image"],"parameterRevision":4}],"plans":[{"planId":"image-safety","inputTypes":["image"],"memberIds":["member-helmet"],"execution":"single","enabled":true}]}
+{"sceneId":"site-safety","name":"现场安全","inputTypes":["image","video"],"enabled":true,"expectedRevision":0,"members":[{"memberId":"member-helmet","projectModelId":"pm-helmet-pc","position":0,"inputTypes":["image"]}],"plans":[{"planId":"image-safety","inputTypes":["image"],"memberIds":["member-helmet"],"execution":"single","enabled":true}]}
 ```
 
 至少一个成员、最多 100 个；inputTypes 非空无重复。同一项目模型在一个场景内不可重复，成员位置连续。每个 `projectModelId` 必须属于当前项目且处于启用状态；服务端从该清单项读取精确模型版本/目标端，并复核目标端发布、产物就绪及输入能力。不能通过传入 modelId/version 绕过项目模型分配，也不存在以模型 `scenario` 标签关联成员的规则。
 
-所有修改递增 revision 并清除 approved；创建不是批准或运行授权。可停用包含已撤回/损坏成员的场景；重新启用、修改输入、成员或方案必须重新校验。项目模型停用或移除后，依赖该模型的场景不能批准或取得新的运行授权，且必须显式修订场景解除引用。项目模型参数 revision 更新后，旧场景成员快照不会被静默替换；批准将返回 `project_model_revision_conflict`，管理者必须通过 `PUT /{sceneId}/members` 重新提交该 `projectModelId` 与最新 `parameterRevision`，待场景 revision 更新后再批准。
+所有修改递增 revision 并清除 approved；创建不是批准或运行授权。可停用包含已撤回/损坏成员的场景；重新启用、修改输入、成员或方案必须重新校验。项目模型停用或移除后，依赖该模型的场景不能批准或取得新的运行授权，且必须显式修订场景解除引用。平台参数发布后，目录与新运行自动使用最新发布版，不修改场景revision或审批；历史参数快照保留，运行中的任务保持启动参数。项目不能覆盖参数或固定参数修订，详见[平台统一参数](platform-model-parameters.md)。
 
 成功写入产生 `scene.create` / `scene.update` / `scene.approval` 项目审计，含操作者、服务端生成 requestId、前后 revision 和快照。批准记录 reason，批准和撤销都递增 revision。失败不会生成成功审计。过期写入 `409 revision_conflict`，重复创建 `409 scene_id_conflict`，格式问题 422。写入在项目锁内重新检查数据库账号/当前成员角色；请求开始时的 capability 不替代事务内的撤权检查。
 
@@ -41,8 +41,16 @@ GET 列表/详情可带 `target=pc|mobile` 与 `inputType=image|video`。过滤�
 
 普通用户没有权限看到草稿、禁用、撤销批准或成员损坏的查询投影；直接访问详情统一 404。每次读取重新计算模型生命周期、已发布目标、文件完整性和输入适用性。返回产物仅包含当前成员目标端与场景作用域下载 URL，不暴露主机路径或其他版本下载地址；下载请求再次校验当前会话成员、项目生命周期、批准状态、目标、精确版本及哈希。即使 PROJECT_OWNER 也不能用草稿下载。权限撤销、暂停/归档、模型撤销及文件篡改在下次读取/下载生效，不使用旧目录响应作为授权令牌。已开始传输的字节无法追溯撤回。
 
-场景批准冻结当前成员身份、目标端、方案选择和批准参数修订；它不创建或修改项目模型清单。安装准备、目录读取、场景 resolve 和运行授权仍是不同操作，只有显式选择的 sceneId/planId 可进入运行流程。
+场景批准固定当前成员身份、目标端、输入与方案选择；参数由平台发布，新运行读取最新发布版；它不创建或修改项目模型清单。安装准备、目录读取、场景 resolve 和运行授权仍是不同操作，只有显式选择的 sceneId/planId 可进入运行流程。
 
 ## 执行边界
 
 resolve 要求 `project.inspection.use`，并绑定 sceneId、planId、sceneRevision、target 和 inputType。resolve 是在线解析，不会替调用方选择默认场景/方案，也不是离线授权凭证或运行授权；运行开始必须再获得与当前场景/方案及完整成员集合一致的 runtime grant。支持的 single/sync/async 语义由方案明确声明，未被服务端和客户端共同支持的执行方式必须拒绝，不能静默丢弃成员或回退到项目模型单模型执行。
+
+## 管理后台新建默认方案（2026-11-18）
+
+新建场景选择一个模型时，自动准备一个单模型方案；选择多个模型时，自动准备一个包含全部已选成员的联合方案，默认同步，可直接切换异步。添加、移除和排序成员时，尚未自定义的方案随之更新，方案成员顺序与场景一致，不再默认拆分为多个单模型方案。
+
+新版 App 的联合范围为两个移动端模型共同支持的拍照（含相册）、本机视频或两种用途。图片同步等待同一张图的两个结果，异步可先查看已完成的成员；都依次推理，不做跨模型融合。PC/跨端、非双成员或成员不支持所选用途时，不默认保存或拆分。已有方案不自动扩展用途；图片运行仍需支持该能力的 App、在线整套授权与设备预算。
+
+已有场景和用户手动自定义的方案不会自动重写或迁移。自定义后新增成员，应由用户核对方案是否覆盖需要一起使用的模型；原有仅配置组合仍按既有能力状态显示，不代表联合运行已开放。保存新场景仍为待批准状态，不自动批准或启动巡检。

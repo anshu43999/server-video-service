@@ -19,6 +19,15 @@ for(const width of [1366,390]) {
       if(route.request().method()!=='GET'){writes++;await route.abort();return}
       await route.fulfill({json:{scenes}})
     })
+    await page.route(`**/aiyoloapi/projects/${projectId}/scenes/*/removal-impact`,async route=>{
+      const sceneId=new URL(route.request().url()).pathname.split('/').at(-2)
+      const scene=scenes.find(item=>item.sceneId===sceneId)!
+      await route.fulfill({json:{expectedRevision:scene.revision,safeToRemove:true,knownDevices:0,unknownDeviceCount:0,dependentCounts:{assignments:0,scenes:0,plans:scene.plans.length,streams:0,activeSlots:0}}})
+    })
+    await page.route(`**/aiyoloapi/projects/${projectId}/scenes/*`,async route=>{
+      if(route.request().method()!=='GET'){writes++;await route.abort();return}
+      await route.fallback()
+    })
     await page.goto(`/admin/scenes?project=${projectId}`)
     const region=page.getByRole('region',{name:'项目识别场景列表'})
     const rows=region.locator('.el-table__body-wrapper tr')
@@ -30,8 +39,20 @@ for(const width of [1366,390]) {
     expect(Math.max(...heights)-Math.min(...heights)).toBeLessThanOrEqual(2)
     const visible=await rows.evaluateAll(elements=>elements.filter(e=>{const r=e.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight}).length)
     console.log(JSON.stringify({viewport:`${width}x768`,completeRows:visible,rowHeight:heights[0],total:scenes.length}))
-    await page.screenshot({path:`../evidence/M33/M33-T55/list-${width}.png`,animations:'disabled'})
+    await page.screenshot({path:info.outputPath(`list-${width}.png`),animations:'disabled'})
     if(width===1366)expect(visible).toBeGreaterThanOrEqual(6)
+
+    const rowRemove=region.getByRole('button',{name:`删除场景 ${scenes[0]!.name}`,exact:true})
+    await expect(rowRemove).toBeInViewport()
+    await rowRemove.click()
+    const removal=page.getByRole('dialog',{name:'云端软删除场景',exact:true})
+    await expect(removal).toBeVisible()
+    await expect(removal.getByRole('button',{name:'确认删除场景',exact:true})).toBeDisabled()
+    await removal.getByText('我已确认影响，执行云端软删除',{exact:true}).click()
+    await expect(removal.getByRole('button',{name:'确认删除场景',exact:true})).toBeEnabled()
+    await removal.getByRole('button',{name:'取消',exact:true}).click()
+    await expect(removal).toHaveCount(0)
+    expect(writes).toBe(0)
 
     // The fixed detail action remains reachable without horizontal scrolling.
     const first=page.getByRole('button',{name:`查看详情 ${scenes[0]!.name}`,exact:true})
@@ -49,7 +70,7 @@ for(const width of [1366,390]) {
     await first.focus();await page.keyboard.press('Enter')
     const detail=page.getByRole('dialog',{name:'场景详情',exact:true})
     await expect(detail).toBeVisible()
-    await expect(detail.getByRole('button',{name:/编辑场景|停用场景|撤销批准/})).toHaveCount(0)
+    await expect(detail.getByRole('button',{name:/编辑场景|停用场景|撤销批准|删除场景/})).toHaveCount(0)
     await expect(detail.locator('.scene-members > li')).toHaveCount(20)
     await expect(detail.locator('.scene-plan-summary > ul > li')).toHaveCount(10)
     expect(await detail.evaluate(e=>e.scrollWidth<=e.clientWidth)).toBe(true)
@@ -58,7 +79,7 @@ for(const width of [1366,390]) {
     await page.getByRole('button',{name:`查看详情 ${longName}`,exact:true}).click()
     await expect(detail.getByRole('heading',{name:longName,exact:true})).toBeVisible()
     expect(await detail.evaluate(e=>e.scrollWidth<=e.clientWidth)).toBe(true)
-    await page.screenshot({path:`../evidence/M33/M33-T55/long-name-${width}.png`,animations:'disabled'})
+    await page.screenshot({path:info.outputPath(`long-name-${width}.png`),animations:'disabled'})
     expect(writes).toBe(0)
   })
 }

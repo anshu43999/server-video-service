@@ -31,7 +31,7 @@ are rejected. A shared vector is in `project-scene-runtime-grants-v2-golden.json
 The grant also binds account, project, scene revision, plan,
 input, target, negotiated client contract/capabilities, execution mode, account
 revision/platform role, project revision, and membership revision/creation
-identity. Any changed authority generation or member snapshot rejects renewal;
+identity. A new start binds the latest platform publication. Renewal preserves the original parameter revision/digest while rechecking authority and structural member identity. A parameter-only publication does not revoke an active lease. Any changed authority generation, artifact, member order/identity or scene revision rejects renewal;
 the presented token is consumed on failed revalidation, so restoring permissions
 cannot revive it. An HTTP authorization dependency may reject a revoked principal
 before the handler is reached; that request cannot consume the old grant, but a

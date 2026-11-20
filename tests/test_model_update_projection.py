@@ -48,6 +48,8 @@ class UpdateProjectionTests(unittest.TestCase):
         with self.db.session() as session:
             if session.get(ProjectRecord,DEFAULT_PROJECT_ID) is None:
                 session.add(ProjectRecord(project_id=DEFAULT_PROJECT_ID,project_code='default-lock',display_name='Lock'))
+        for entry in entries:
+            self.parameters.publish(entry, "android", "admin", 0, None)
         self.saved=self.assignments.save('project-one','ppe','1.0.0','mobile',0,True,0)
 
     def upload(self, entries, revision=1):
@@ -138,6 +140,26 @@ class UpdateProjectionTests(unittest.TestCase):
         artifact = approved_artifact(self.catalog.get('ppe', '1.0.0'), parameters)
         self.assertEqual(parameter_digest(parameters), artifact['parameterDigest'])
         self.assertNotEqual(digest(parameters), artifact['parameterDigest'])
+
+    def test_platform_parameter_only_release_updates_target_without_weights_or_reapproval(self):
+        entry = self.entry()
+        self.upload([entry])
+        self.projection.one(self.device)
+        model = self.catalog.get('ppe', '1.0.0')
+        draft = self.parameters.get(model, 'android')
+        draft['detection']['confidenceThreshold'] = .21
+        self.parameters.save(model, 'android', draft, 'admin', 0)
+        self.projection.one(self.device)
+        self.assertFalse(any(v['kind'] == 'update_ready' for v in self.current()))
+        self.parameters.publish(model, 'android', 'admin', 1, 0)
+        self.projection.one(self.device)
+        target = next(v['target'] for v in self.current() if v['kind'] == 'update_ready')
+        self.assertEqual(1, target['approvalRevision'])
+        artifact = target['artifacts'][0]
+        self.assertEqual(1, artifact['parameterRevision'])
+        self.assertNotEqual(entry['artifacts'][0]['parameterDigest'], artifact['parameterDigest'])
+        for key in ('artifactDigest', 'manifestDigest', 'sizeBytes'):
+            self.assertEqual(entry['artifacts'][0][key], artifact[key])
 
     def test_scene_approved_latest_release_does_not_emit_waiting_approval(self):
         body = dict(name='Approved suite', inputTypes=['image'], enabled=True,

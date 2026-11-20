@@ -7,9 +7,11 @@ import UiStatePanel from '../../components/ui/UiStatePanel.vue'
 import { errorText, formatBytes, modelsApi } from './api'
 import { removalSummary, removalOutcome, type RemovalImpact } from './lifecycle'
 import { isApiError } from '../../api/errors'
-import type { ModelAsset, ModelTarget } from './types'
-import { targetLabel, targetStatus, targetReady, supportedTargets } from './capabilities'
+import type { ModelAsset, ModelTarget, Platform } from './types'
+import { targetLabel, targetReady, supportedTargets } from './capabilities'
+import { modelStatusLabel } from './presentation'
 import ParametersDialog from './ParametersDialog.vue'
+import CatalogReadiness from './CatalogReadiness.vue'
 import CalibrationPane from './CalibrationPane.vue'
 import ConversionPane from './ConversionPane.vue'
 import { createCatalogChangeTracker } from './catalogChanges'
@@ -23,6 +25,10 @@ const phase = ref<'loading' | 'ready' | 'error'>('loading'), error = ref(''), me
 const query = ref(''), scenario = ref(''), busy = ref(false), registerOpen = ref(false), manifest = ref('')
 const detailOpen = ref(false), detail = ref<ModelAsset | null>(null), detailTarget = ref<ModelAsset | null>(null), detailError = ref(''), detailBusy = ref(false)
 const parameterModel = ref<ModelAsset | null>(null), removeTarget = ref<ModelAsset | null>(null)
+const parameterPlatform = ref<Platform>('android')
+function openParameters(model: ModelAsset, platform: Platform = 'android') {
+  parameterPlatform.value = platform; parameterModel.value = model
+}
 const removalImpact=ref<RemovalImpact|null>(null),removalKey=ref(''),removalChecked=ref(false)
 async function beginRemoval(model:ModelAsset){
   if(busy.value)return
@@ -36,7 +42,7 @@ async function publish(){
   const model=publishTarget.value;const targets:ModelTarget[]=[]
   if(publishPc.value)targets.push('pc');if(publishMobile.value)targets.push('mobile')
   if(!model||!licenseApproved.value||!publishReason.value.trim()||!targets.length)return
-  if(await operate(()=>modelsApi.publish(model,targets,publishReason.value.trim()),'所选目标端已通过发布门禁。'))publishTarget.value=null
+  if(await operate(()=>modelsApi.publish(model,targets,publishReason.value.trim()),'模型文件已按所选目标端发布；项目添加还需对应端参数已发布，请查看“项目添加条件”。'))publishTarget.value=null
 }
 let controller: AbortController | undefined, detailController: AbortController | undefined, disposed = false
 const families = computed(() => [...new Map(models.value.map(m => [m.modelId, m])).values()])
@@ -99,25 +105,34 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); detailController?.
 </script>
 <template>
   <section class="models-page model-workspace">
-    <div class="model-actions page-actions"><UiButton class="secondary-button" @click="refresh"><RefreshCw :size="16" />刷新目录</UiButton></div>
-    <UiTabs class="model-tabs" aria-label="模型工作区" :model-value="pane" :items="[{id:'catalog',label:'模型目录'},{id:'upload',label:'上传与处理'},{id:'calibration',label:'校准集'}]" @update:model-value="value => router.replace({query:{...route.query,pane:value}})" />
+    <div class="model-catalog-navigation">
+      <UiTabs class="model-tabs" aria-label="模型工作区" :model-value="pane" :items="[{id:'catalog',label:'模型目录'},{id:'upload',label:'上传与处理'},{id:'calibration',label:'校准集'}]" @update:model-value="value => router.replace({query:{...route.query,pane:value}})" />
+      <UiButton class="secondary-button" @click="refresh"><RefreshCw :size="16" />刷新目录</UiButton>
+    </div>
     <p v-if="message" class="operation-feedback" :class="`is-${tone}`" role="status">{{ message }}</p>
     <template v-if="pane === 'catalog'">
+      <p class="model-muted catalog-intro">模型文件与运行参数需分别发布。请查看每个版本的“项目添加条件”，确认对应端均已发布后，再到项目中添加模型。</p>
       <div class="model-toolbar"><label class="model-search"><span class="sr-only">搜索模型</span><UiInput v-model="query" placeholder="搜索名称、ID、类别" /></label><label>场景<UiSelect v-model="scenario"><UiOption value="">全部场景</UiOption><UiOption v-for="s in scenarios" :key="s" :value="s">{{ s }}</UiOption></UiSelect></label><UiButton class="primary-button" :disabled="busy" @click="registerOpen = true">登记 Manifest</UiButton></div>
       <UiStatePanel v-if="phase !== 'ready'" :state="phase" title="模型目录" :message="error || '正在读取模型资产…'" @retry="refresh" />
       <UiStatePanel v-else-if="!filtered.length" state="empty" title="暂无匹配的模型" message="上传训练模型或登记已有 Manifest 后，真实资产会显示在这里。" />
-      <div v-else class="model-grid">
+      <div v-else class="model-grid catalog-grid">
         <article v-for="model in filtered" :key="`${model.modelId}:${model.version}`" class="model-card">
-          <div class="model-card-title"><Box :size="22" /><div><h3>{{ model.name }}</h3><code>{{ model.modelId }} / {{ model.version }}</code></div><UiTag v-if="model.active" class="model-badge ready" tone="success">新流默认</UiTag></div>
-          <div class="model-tags"><UiTag class="model-badge">{{ model.status || '状态未知' }}</UiTag><UiTag>{{ model.scenario || '未分类' }}</UiTag></div>
-          <p class="target-classification">{{ targetLabel(model) }}<small v-if="model.supportedTargetsSource==='legacy-derived'">历史产物派生</small></p>
-          <dl class="model-readiness"><div><dt>PC 端</dt><dd :class="{ready:targetReady(model,'pc')}">{{ targetStatus(model,'pc') }}</dd></div><div><dt>移动端</dt><dd :class="{ready:targetReady(model,'mobile')}">{{ targetStatus(model,'mobile') }}</dd></div><div><dt>移动签名</dt><dd>{{ supportedTargets(model).includes('mobile') ? model.signatureStatus || 'unsigned' : '不适用' }}</dd></div></dl>
-          <p v-if="supportedTargets(model).includes('pc')" class="model-muted">PC 运行验证：{{ model.serverValidated && model.serverValidationSha256?.toLowerCase() === model.sha256?.toLowerCase() ? '已通过当前产物验证' : '尚未通过或验证已过期' }}</p>
-          <UiButton v-if="supportedTargets(model).includes('pc')" class="secondary-button" :disabled="busy||!targetReady(model,'pc')" @click="validatePcRuntime(model)">验证 PC 运行时</UiButton>
-          <UiButton v-if="['READY','PUBLISHED'].includes(model.status||'')" class="secondary-button" :disabled="busy||(!targetReady(model,'pc')&&!targetReady(model,'mobile'))" @click="beginPublish(model)">按端发布</UiButton>
-          <p class="model-labels">{{ (model.labels ?? []).join(' · ') || '暂无类别信息' }}</p>
-          <p v-if="!model.serverBindable" class="model-muted">当前版本不可新绑定。版本状态、产物完整性和绑定投影以服务端为准。</p>
-          <div class="model-actions"><UiButton class="secondary-button" @click="openDetail(model)">版本详情</UiButton><UiButton class="secondary-button" @click="parameterModel = model">参数档案</UiButton><UiButton class="secondary-button" :disabled="busy || model.active || !model.serverBindable" @click="activate(model)">设为新流默认</UiButton><UiButton class="secondary-button danger-text" :disabled="busy || model.status === 'UNINSTALLED'" @click="beginRemoval(model)">卸载</UiButton></div>
+          <div class="model-card-title"><Box :size="20" /><div><h3>{{ model.name }}</h3><code>{{ model.version }}</code></div><UiTag v-if="model.active" class="model-badge ready" tone="success">新流默认</UiTag></div>
+          <div class="model-tags"><UiTag class="model-badge">{{ model.status === 'PUBLISHED' ? '模型文件已发布' : modelStatusLabel(model.status) }}</UiTag><UiTag>{{ model.scenario || '未分类' }}</UiTag><span class="target-classification">{{ targetLabel(model) }}</span></div>
+          <CatalogReadiness :model="model" @parameters="platform => openParameters(model, platform)" />
+          <details class="catalog-technical">
+            <summary>技术信息<span>{{ (model.labels ?? []).length }} 个类别 · ID / 签名 / 运行验证</span></summary>
+            <div class="catalog-technical-content">
+              <code>模型 ID：{{ model.modelId }}</code>
+              <p v-if="model.supportedTargetsSource==='legacy-derived'" class="model-muted">目标端根据历史产物派生。</p>
+              <p class="model-muted">移动签名：{{ supportedTargets(model).includes('mobile') ? model.signatureStatus || 'unsigned' : '不适用' }}</p>
+              <p v-if="supportedTargets(model).includes('pc')" class="model-muted">PC 运行验证：{{ model.serverValidated && model.serverValidationSha256?.toLowerCase() === model.sha256?.toLowerCase() ? '已通过当前产物验证' : '尚未通过或验证已过期' }}</p>
+              <p class="catalog-labels">类别：{{ (model.labels ?? []).join(' · ') || '暂无类别信息' }}</p>
+              <p v-if="!model.serverBindable" class="model-muted">当前版本不可新绑定。版本状态、产物完整性和绑定投影以服务端为准。</p>
+              <div class="model-actions"><UiButton v-if="supportedTargets(model).includes('pc')" class="secondary-button" :disabled="busy||!targetReady(model,'pc')" @click="validatePcRuntime(model)">验证 PC 运行时</UiButton><UiButton class="secondary-button" :disabled="busy || model.active || !model.serverBindable" @click="activate(model)">设为新流默认</UiButton></div>
+            </div>
+          </details>
+          <div class="model-actions catalog-card-actions"><UiButton class="secondary-button" @click="openDetail(model)">版本详情</UiButton><UiButton class="secondary-button" @click="openParameters(model)">参数档案</UiButton><UiButton v-if="['READY','PUBLISHED'].includes(model.status||'')" class="secondary-button" :disabled="busy||(!targetReady(model,'pc')&&!targetReady(model,'mobile'))" @click="beginPublish(model)">按端发布</UiButton><UiButton class="secondary-button danger-text" :disabled="busy || model.status === 'UNINSTALLED'" @click="beginRemoval(model)">卸载</UiButton></div>
         </article>
       </div>
       <section class="model-panel"><header><h3>项目模型使用</h3></header><p class="model-muted">此处维护全局模型资产，不读取任何项目的视频流。请显式进入项目后，在项目视频流中查看和维护绑定。</p><UiButton class="secondary-button" @click="router.push({ name: 'projects' })">进入项目空间</UiButton></section>
@@ -126,9 +141,10 @@ onBeforeUnmount(() => { disposed = true; controller?.abort(); detailController?.
     <CalibrationPane v-else />
     <UiDialog v-model:open="registerOpen" title="登记模型 Manifest" :busy="busy"><form class="model-form" @submit.prevent="register"><p class="model-muted">填写服务器 models 目录内已有 Manifest 的受控路径，登记时会校验产物与哈希。</p><label>Manifest 路径<UiInput v-model="manifest" required maxlength="512" /></label><footer><UiButton type="button" class="secondary-button" :disabled="busy" @click="registerOpen=false">取消</UiButton><UiButton class="primary-button" :disabled="busy">{{ busy ? '校验中…' : '校验并登记' }}</UiButton></footer><p v-if="tone === 'error'" class="operation-feedback is-error">{{ message }}</p></form></UiDialog>
     <UiDialog v-model:open="detailOpen" title="模型版本详情" :busy="busy"><div class="model-detail"><UiStatePanel v-if="detailBusy" state="loading" /><UiStatePanel v-else-if="detailError" state="error" :message="detailError" @retry="detailTarget && openDetail(detailTarget)" /><template v-else-if="detail"><h3>{{ detail.name }}</h3><code>{{ detail.modelId }} / {{ detail.version }}</code><label>查看版本<UiSelect :value="detail.version" @change="value => detail && openDetail(detail, String(value))"><UiOption v-for="v in detail.availableVersions || [detail.version]" :key="v" :value="v">{{ v }}</UiOption></UiSelect></label><p>版本状态：{{ detail.status }} · 签名：{{ detail.signatureStatus }} · 输入：{{ detail.inputSize ?? '未知' }}</p><p>商业发布：{{ detail.releaseEligible ? '符合发布门禁' : '尚未满足发布门禁' }}</p><p v-if="detail.revokeReason">撤回原因：{{ detail.revokeReason }}</p><p class="model-muted">原始类别：{{ (detail.labels ?? []).join(' · ') || '暂无' }}</p><pre v-if="detail.license">{{ JSON.stringify(detail.license, null, 2) }}</pre><article v-for="artifact in detail.artifacts" :key="artifact.artifactId" class="artifact-row"><strong>{{ artifact.artifactId }} · {{ artifact.platform }} / {{ artifact.format }}</strong><p>{{ formatBytes(artifact.sizeBytes) }} · {{ artifact.exists && artifact.hashValid ? '文件校验通过' : '文件缺失或校验失败' }}</p><code>{{ artifact.sha256 }}</code><UiButton class="secondary-button" :disabled="busy || !artifact.exists || !artifact.hashValid" @click="download(artifact.artifactId)">下载产物</UiButton></article></template><p v-if="tone === 'error'" class="operation-feedback is-error">{{ message }}</p></div></UiDialog>
-    <ParametersDialog v-if="parameterModel" :model="parameterModel" @close="parameterModel=null" />
+    <ParametersDialog v-if="parameterModel" :model="parameterModel" :initial-platform="parameterPlatform" @close="parameterModel=null;refresh()" />
     <UiDialog :open="!!publishTarget" title="按目标端发布模型" :busy="busy" @update:open="value=>{if(!value)publishTarget=null}"><form class="model-form" @submit.prevent="publish">
       <p>{{publishTarget?.name}} / {{publishTarget?.version}}</p><p class="model-muted">PC 发布不要求移动转换或签名。移动端需独立复验与受信任发布签名；服务器会再次校验许可证和产物。</p>
+      <p class="model-muted">此操作发布模型文件。项目添加模型还需要对应端的运行参数已发布，请在“参数档案”中分别核对并发布。</p>
       <label class="model-check"><UiInput v-model="publishPc" type="checkbox" :disabled="busy||!publishTarget||!targetReady(publishTarget,'pc')"/>发布 PC 端</label>
       <label class="model-check"><UiInput v-model="publishMobile" type="checkbox" :disabled="busy||!publishTarget||!targetReady(publishTarget,'mobile')"/>发布移动端</label>
       <label>发布原因<UiInput v-model="publishReason" required maxlength="512" :disabled="busy"/></label><label class="model-check"><UiInput v-model="licenseApproved" type="checkbox" :disabled="busy"/>确认来源及分发许可证已审核</label>

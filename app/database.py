@@ -416,6 +416,7 @@ class SystemKnowledgeReleaseRecord(Base):
 
 
 class ProjectKnowledgeBaseRecord(Base):
+    """Historical schema mapping only; current knowledge reads never use project pins."""
     __tablename__ = "project_knowledge_bases"
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.project_id", ondelete="RESTRICT"), primary_key=True)
     version: Mapped[int] = mapped_column(Integer, ForeignKey("system_knowledge_releases.version", ondelete="RESTRICT"), nullable=False)
@@ -423,6 +424,7 @@ class ProjectKnowledgeBaseRecord(Base):
 
 
 class AlertAdviceKnowledgeEntryRecord(Base):
+    """Retained historical project materials; no product repository writes these rows."""
     __tablename__ = "alert_advice_knowledge_entries"
 
     project_id: Mapped[str] = mapped_column(
@@ -456,6 +458,7 @@ class AlertAdviceKnowledgeEntryRecord(Base):
 
 
 class AlertAdviceKnowledgeRevisionRecord(Base):
+    """Retained project-material history, separate from system catalog revisions."""
     __tablename__ = "alert_advice_knowledge_revisions"
 
     project_id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -614,9 +617,10 @@ class ProjectSceneMemberRecord(Base):
     scene_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     position: Mapped[int] = mapped_column(Integer, primary_key=True)
     member_id: Mapped[str] = mapped_column(String(128), nullable=False, default="legacy-member")
-    project_model_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("project_model_assignments.assignment_id", ondelete="RESTRICT"), nullable=False
+    project_model_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("project_model_assignments.assignment_id", ondelete="RESTRICT"), nullable=True
     )
+    archived_project_model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     model_id: Mapped[str] = mapped_column(String(255), nullable=False)
     model_version: Mapped[str] = mapped_column(String(128), nullable=False)
     target: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -628,6 +632,11 @@ class ProjectSceneMemberRecord(Base):
         ForeignKeyConstraint(["project_id", "scene_id"], ["project_scenes.project_id", "project_scenes.scene_id"], ondelete="CASCADE", name="fk_scene_members_project_scene"),
         UniqueConstraint("project_id", "scene_id", "member_id", name="uq_scene_member_identity"),
         UniqueConstraint("project_id", "scene_id", "project_model_id", name="uq_scene_member_project_model"),
+        CheckConstraint(
+            "(project_model_id IS NOT NULL AND archived_project_model_id IS NULL) OR "
+            "(project_model_id IS NULL AND archived_project_model_id IS NOT NULL)",
+            name="ck_scene_member_inventory_identity",
+        ),
         CheckConstraint("position >= 0", name="ck_scene_member_position"),
         CheckConstraint("target IN ('pc', 'mobile')", name="ck_scene_member_target"),
         CheckConstraint("execution IN ('single', 'sync', 'async')", name="ck_scene_member_execution"),
@@ -979,9 +988,8 @@ class DatabaseManager:
             "alert_rules", "alert_rule_bindings", "alert_rule_audits",
             "model_parameter_profiles", "model_parameter_audits",
             "alert_verification_config", "alert_verifications", "alert_delivery_receipts",
-            "alert_advice_knowledge_entries", "alert_advice_knowledge_revisions",
             "alert_advice_generations",
-            "system_knowledge_catalog", "system_knowledge_releases", "project_knowledge_bases",
+            "system_knowledge_catalog", "system_knowledge_releases",
             "conversion_config", "conversion_jobs", "calibration_datasets",
             "stream_configs", "project_business_config", "alembic_version",
         }
@@ -1005,6 +1013,10 @@ class DatabaseManager:
             raise RuntimeError("resource lifecycle schema is not initialized; run 'python -m alembic upgrade head'")
         if not {"member_id", "input_types", "project_model_id", "parameter_revision"}.issubset(scene_member_columns):
             raise RuntimeError("scene suite schema is not initialized; run 'python -m alembic upgrade head'")
+        if "archived_project_model_id" not in scene_member_columns or not next(
+                column["nullable"] for column in inspect(self.engine).get_columns("project_scene_members")
+                if column["name"] == "project_model_id"):
+            raise RuntimeError("scene history reference schema is not initialized; run 'python -m alembic upgrade head'")
         grant_columns = {column["name"] for column in inspect(self.engine).get_columns("project_scene_runtime_grants")}
         if not {"execution_mode", "member_snapshot", "authority_snapshot", "request_digest"}.issubset(grant_columns):
             raise RuntimeError("composite runtime grant schema is not initialized; run 'python -m alembic upgrade head'")

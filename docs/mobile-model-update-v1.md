@@ -1,5 +1,7 @@
 # M111 服务端模型更新控制面
 
+> 2026-11-16参数所有权修订：以[平台统一模型参数](platform-model-parameters.md)为准。旧的项目/场景参数覆盖、按审批固定参数和参数重审批规则退役；新运行使用平台最新发布，已运行会话保持启动快照。以下既有场景、安装、权限和更新协议中不冲突的部分继续有效。
+
 这是 `mobile-app/harness` 中 M111-T02 的跨仓实现说明，不是第二份产品需求。权威执行定义为 `../mobile-app/harness/proposals/M111-execution-plan-v1.md` 修订3；线格式为 `app/model_updates/contract-v1.schema.json`，回归核对其与移动端副本一致。真实 FCM 设备送达及容量基线最终验收归 M111-T05，本文件不宣称已通过。
 
 ## 数据路线与事务
@@ -50,7 +52,7 @@ FCM HTTP v1仅normal data，三字段type/contractVersion/eventId，TTL86400s，
 
 迁移revision `20261025_23` 依赖 `_22`，新增12张model_update表，不改业务历史模型。部署前对目标库做可恢复备份并确认正确DATABASE_URL，独立维护窗口运行既有Alembic upgrade head，先隔离演练再部署；启动仍verify_schema，不自动迁移。禁止把测试命令连接到开发/生产库。存在任何持久事实时downgrade拒绝，不能删表绕过；回退应用需保留数据库和补偿事实，正式降级须备份恢复与兼容评审。
 
-复核命令（在server-video-service根执行）：`.venv/Scripts/python.exe tools/accept_m111_updates.py --postgres`。Runner创建随机临时数据目录、回环端口和独立schemas，核对data_directory/current_user，最后清schema并停实例核对portClosed。每轮result.json与失败日志保留，正式摘要在 `harness/evidence/M111/T02/postgres-result.json`。该命令不连接5432/aiyolo_dev、不改Default Project、不重启8080。
+复核命令（在server-video-service根执行）：`.venv/Scripts/python.exe -B tools/accept_m111_updates.py --postgres`。Runner创建随机临时数据目录、回环端口和独立schemas，核对data_directory/current_user，最后清schema并停实例核对portClosed。自2026-11-12起各轮通过/失败/跳过和清理结果写入唯一[MD测试报告](../harness/evidence/M111/T02/TEST_REPORT.md)，确认报告持久化且隔离资源停止后清除本次临时目录，不再保留整轮日志或result.json副本。历史失败事实已摘要迁移，未知版本不补填。该命令不连接5432/aiyolo_dev、不改Default Project、不重启8080。
 
 ## M112-T03：全库存生命周期扩展
 

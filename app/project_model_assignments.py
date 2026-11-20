@@ -1,4 +1,4 @@
-"""Project-scoped approval of published model releases and parameter snapshots."""
+"""Project inventory of platform model releases; parameters stay platform-owned."""
 from __future__ import annotations
 
 from copy import deepcopy
@@ -9,8 +9,8 @@ from threading import RLock
 from fastapi import HTTPException
 from sqlalchemy import select
 
-from .database import (DEFAULT_PROJECT_ID, ModelParameterProfileRecord, ProjectModelAssignmentRecord,
-                       ProjectSceneMemberRecord, ProjectRecord, StreamConfigRecord,
+from .database import (DEFAULT_PROJECT_ID, ProjectModelAssignmentRecord,
+                       ProjectSceneMemberRecord, ProjectSceneRecord, ProjectRecord, StreamConfigRecord,
                        AccountRecord, ProjectMembershipRecord)
 from .project_business import _memory_model_assignments, audit_change, lock_project
 from .resource_lifecycle import guard_model_write
@@ -56,7 +56,7 @@ class ProjectModelAssignments:
         return "pc" if cls._platform(platform) == "server" else "mobile"
 
     @classmethod
-    def _public(cls, row):
+    def _stored_public(cls, row):
         if isinstance(row, dict):
             value = {key: deepcopy(item) for key, item in row.items()
                      if key != "parameterSnapshot"}
@@ -100,10 +100,35 @@ class ProjectModelAssignments:
                     if key[0] == project_id and (platform is None or self._platform(row.get("parameterPlatform", "server")) == platform)]
         return rows
 
+    def _public(self, row):
+        from .model_parameters import ModelParameterError
+        value = self._stored_public(row)
+        try:
+            profile = self.parameters.published(self.catalog.get(value["modelId"], value["modelVersion"]),
+                                                value["parameterPlatform"], value["projectId"])
+        except (KeyError, ModelParameterError):
+            profile = None
+        value["parameterRevision"] = profile["revision"] if profile else 0
+        value["parameterPublished"] = profile is not None
+        value["parameterProfileKey"] = None
+        return value
+
+    def _resolved(self, row):
+        from .model_parameters import ModelParameterError
+        value = self._stored_public(row)
+        try:
+            profile = self.parameters.published(self.catalog.get(value["modelId"], value["modelVersion"]),
+                                                value["parameterPlatform"], value["projectId"])
+        except (KeyError, ModelParameterError):
+            profile = None
+        value.update(parameterRevision=profile["revision"] if profile else 0,
+                     parameterPublished=profile is not None, parameterProfileKey=None)
+        return {**value, "parameterSnapshot": profile}
+
     def _display(self, row):
-        from .model_display import catalog_model_name
+        from .model_display import catalog_model_metadata
         value = self._public(row)
-        value["modelName"] = catalog_model_name(self.catalog, value["modelId"], value["modelVersion"])
+        value.update(catalog_model_metadata(self.catalog, value["modelId"], value["modelVersion"]))
         return value
 
     def get(self, project_id, project_model_id):
@@ -118,7 +143,7 @@ class ProjectModelAssignments:
             return self._display(row) if row is not None else None
 
     def resolve(self, project_id, project_model_id, *, session=None, lock=False, enabled_only=True):
-        """Resolve one inventory item, including its frozen parameter snapshot.
+        """Resolve one inventory item with the current platform publication.
 
         Scene writes pass their existing transaction so the inventory authorization
         and scene revision are checked under the same project lock.
@@ -137,14 +162,14 @@ class ProjectModelAssignments:
             row = session.scalar(query)
             if row is None or enabled_only and not row.enabled:
                 return None
-            return {**self._public(row), "parameterSnapshot": deepcopy(row.parameter_snapshot)}
+            return self._resolved(row)
         with self._lock:
             row = next((item for item in _memory_model_assignments.values()
                         if item.get("projectId") == project_id
                         and item.get("projectModelId", item.get("assignmentId")) == project_model_id), None)
             if row is None or enabled_only and not row.get("enabled"):
                 return None
-            return {**self._public(row), "parameterSnapshot": deepcopy(row.get("parameterSnapshot"))}
+            return self._resolved(row)
 
     def assigned(self, project_id, model_id, version=None, *, active_only=True):
         return [row for row in self.list(project_id)
@@ -166,29 +191,26 @@ class ProjectModelAssignments:
                     and (version is None or row.get("modelVersion") == version)]
 
     def snapshot(self, project_id, model_id, version=None, platform=None):
-        target_platform = self._platform(platform) if platform is not None else None
+        from .model_parameters import ModelParameterError
+        target = self._platform(platform) if platform is not None else None
         for assignment in self.assigned(project_id, model_id, version):
-            if target_platform is not None and assignment["parameterPlatform"] != target_platform:
+            if target is not None and assignment["parameterPlatform"] != target:
                 continue
-            if self.database is not None and self.database.enabled:
-                with self.database.session() as session:
-                    row = session.get(ProjectModelAssignmentRecord, assignment["projectModelId"])
-                    if (row is not None and row.enabled and row.parameter_snapshot
-                            and row.model_id == model_id and row.model_version == assignment["modelVersion"]
-                            and (target_platform is None or row.parameter_platform == target_platform)):
-                        return deepcopy(row.parameter_snapshot)
-            else:
-                with self._lock:
-                    row = _memory_model_assignments.get(self._memory_key(
-                        project_id, model_id, assignment["modelVersion"], assignment["parameterPlatform"]))
-                    if row and row.get("enabled") and row.get("parameterSnapshot"):
-                        return deepcopy(row["parameterSnapshot"])
+            try:
+                return self.parameters.published(self.catalog.get(model_id, assignment["modelVersion"]),
+                                                 assignment["parameterPlatform"], project_id)
+            except ModelParameterError:
+                return None
         return None
 
     def _validate_model(self, model_id, version, platform):
         try:
             model = self.catalog.get(model_id, version)
         except KeyError as exc:
+            from .model_display import catalog_model_metadata
+            if catalog_model_metadata(self.catalog, model_id, version)["modelStatus"] == "UNINSTALLED":
+                raise HTTPException(409, detail={"code": "model_uninstalled", "message":
+                    f"模型 {model_id} / {version} 已从平台卸载，不能重新启用。请移除项目旧条目，再分配平台已发布的可用版本。"}) from exc
             raise HTTPException(404, detail={"code": "model_not_found", "message": "model release not found"}) from exc
         if model.get("status") != "PUBLISHED" or not model.get("releaseEligible"):
             raise HTTPException(409, detail={"code": "model_not_published", "message": "only published releases may be assigned"})
@@ -208,16 +230,9 @@ class ProjectModelAssignments:
         platform = self._platform(target)
         model = self._validate_model(model_id, version, platform)
         with self._lock, self.parameters._lock:
-            profile = self.parameters.get(model, platform, project_id)
-            if profile["revision"] != parameter_revision:
-                raise AssignmentConflict("parameter revision was changed")
-            # Keep the consumable profile contract in the frozen assignment. Scenes
-            # copy this exact snapshot at approval; they must not reconstruct metadata
-            # from whichever project/global profile happens to be current later.
-            snapshot = {key: deepcopy(profile[key]) for key in
-                        ("schemaVersion", "source", "updatedAt", "detection", "alertRules")}
-            snapshot.update(projectId=project_id, modelId=model_id, modelVersion=version, platform=platform,
-                            revision=parameter_revision, inheritedRevision=profile.get("inheritedRevision"))
+            # Parameters are platform-owned; the client cannot pin a revision.
+            if enabled:
+                self.parameters.published(model, platform)
             if self.database is not None and self.database.enabled:
                 with (nullcontext(_session) if _session is not None else self.database.session()) as session:
                     lock_project(session, DEFAULT_PROJECT_ID, enforce_lifecycle=False)
@@ -234,8 +249,7 @@ class ProjectModelAssignments:
                     before = self._public(row) if row else None
                     if expected_revision != (row.revision if row else 0):
                         raise AssignmentConflict("project model was changed")
-                    if row is not None and (row.parameter_revision != parameter_revision
-                            or row.parameter_snapshot != snapshot or not enabled) and platform == "server":
+                    if row is not None and not enabled and platform == "server":
                         bound = session.scalar(select(StreamConfigRecord.stream_id).where(
                             StreamConfigRecord.project_id == project_id,
                             StreamConfigRecord.model_id == model_id,
@@ -243,25 +257,16 @@ class ProjectModelAssignments:
                             StreamConfigRecord.enabled.is_(True)).limit(1))
                         if bound is not None:
                             raise AssignmentConflict("project model is used by an active stream")
-                    key = self.parameters._database_key_for_model(model, platform, project_id)
-                    stored = session.get(ModelParameterProfileRecord, (project_id, key))
-                    if (stored.revision if stored else 0) != parameter_revision:
-                        raise AssignmentConflict("parameter revision was changed")
-                    if profile.get("source") == "inherited":
-                        inherited_key = self.parameters._database_key_for_model(model, platform)
-                        inherited = session.get(ModelParameterProfileRecord, (DEFAULT_PROJECT_ID, inherited_key))
-                        if (inherited.revision if inherited else 0) != profile.get("inheritedRevision", 0):
-                            raise AssignmentConflict("inherited parameter revision was changed")
-                    if stored is None:
-                        key = None
                     if row is None:
                         row = ProjectModelAssignmentRecord(
                             project_id=project_id, model_id=model_id, model_version=version,
                             created_at=datetime.now(timezone.utc),
                             created_by_account_id=context.principal.account_id if context else None)
                         session.add(row)
-                    row.parameter_platform, row.parameter_revision = platform, parameter_revision
-                    row.parameter_profile_key, row.parameter_snapshot = key, snapshot
+                    row.parameter_platform = platform
+                    if before is None:
+                        row.parameter_revision, row.parameter_snapshot = 0, {}
+                        row.parameter_profile_key = None
                     row.enabled, row.revision = enabled, expected_revision + 1
                     row.updated_at = datetime.now(timezone.utc)
                     session.flush()
@@ -278,19 +283,12 @@ class ProjectModelAssignments:
             guard_model_write(None, self.catalog, model_id, version)
             if self.catalog.get(model_id, version) != model:
                 raise AssignmentConflict("model release changed before assignment; refresh selection")
-            latest_profile = self.parameters.get(model, platform, project_id)
-            if latest_profile.get("revision") != parameter_revision:
-                raise AssignmentConflict("parameter revision was changed")
-            snapshot = {key: deepcopy(latest_profile[key]) for key in
-                        ("schemaVersion", "source", "updatedAt", "detection", "alertRules")}
-            snapshot.update(projectId=project_id, modelId=model_id, modelVersion=version, platform=platform,
-                            revision=parameter_revision, inheritedRevision=latest_profile.get("inheritedRevision"))
             memory_key = self._memory_key(project_id, model_id, version, platform)
             existing = _memory_model_assignments.get(memory_key)
             before = self._public(existing) if existing else None
             if expected_revision != (existing.get("revision", 0) if existing else 0):
                 raise AssignmentConflict("project model was changed")
-            if existing and platform == "server" and (not enabled or existing.get("parameterSnapshot") != snapshot):
+            if existing and platform == "server" and not enabled:
                 if self.stream_store is not None and any(
                         item.enabled and item.model_id == model_id and item.model_version == version
                         for item in self.stream_store.list(project_id)):
@@ -300,8 +298,9 @@ class ProjectModelAssignments:
                      "assignmentId": existing.get("assignmentId", existing.get("projectModelId")) if existing else None,
                      "projectId": project_id, "modelId": model_id, "modelVersion": version,
                      "parameterPlatform": platform, "target": self._target(platform),
-                     "parameterRevision": parameter_revision, "parameterProfileKey": None,
-                     "parameterSnapshot": snapshot, "enabled": enabled, "revision": expected_revision + 1}
+                     "parameterRevision": (existing or {}).get("parameterRevision", 0), "parameterProfileKey": None,
+                     "parameterSnapshot": deepcopy((existing or {}).get("parameterSnapshot", {})),
+                     "enabled": enabled, "revision": expected_revision + 1}
             after["assignmentId"] = after["assignmentId"] or after["projectModelId"]
             _memory_model_assignments[memory_key] = deepcopy(after)
             public_after = self._public(after)
@@ -327,10 +326,17 @@ class ProjectModelAssignments:
                     before = self._public(row)
                     if row.revision != expected_revision:
                         raise AssignmentConflict("project model was changed")
-                    referenced = session.scalar(select(ProjectSceneMemberRecord.member_id).where(
-                        ProjectSceneMemberRecord.project_model_id == project_model_id).limit(1))
-                    if referenced is not None:
-                        raise AssignmentConflict("project model is referenced by a project scene")
+                    references = session.execute(select(ProjectSceneMemberRecord, ProjectSceneRecord).outerjoin(
+                        ProjectSceneRecord,
+                        (ProjectSceneMemberRecord.project_id == ProjectSceneRecord.project_id)
+                        & (ProjectSceneMemberRecord.scene_id == ProjectSceneRecord.scene_id)).where(
+                            ProjectSceneMemberRecord.project_model_id == project_model_id)).all()
+                    blockers = [scene.display_name if scene is not None else member.scene_id
+                                for member, scene in references
+                                if member.project_id != project_id or scene is None or scene.deleted_at is None]
+                    if blockers:
+                        raise AssignmentConflict("项目模型仍被未删除的场景引用：" + "、".join(blockers[:5])
+                                                 + "。停用不等于删除，请先调整或删除这些场景。")
                     if row.parameter_platform == "server":
                         bound = session.scalar(select(StreamConfigRecord.stream_id).where(
                             StreamConfigRecord.project_id == project_id,
@@ -339,6 +345,12 @@ class ProjectModelAssignments:
                             StreamConfigRecord.enabled.is_(True)).limit(1))
                         if bound is not None:
                             raise AssignmentConflict("project model is used by an active stream")
+                    # Deleted scenes are immutable audit records, not live dependencies.
+                    # Detach only their FK; retain the original identity and every snapshot.
+                    for member, _scene in references:
+                        member.archived_project_model_id = member.project_model_id
+                        member.project_model_id = None
+                    session.flush()
                     session.delete(row)
                     session.flush()
                     audit_change(session, context, request_id, "project_model.remove",
@@ -355,9 +367,12 @@ class ProjectModelAssignments:
                 raise AssignmentConflict("project model was changed")
             try:
                 from .main import project_scenes
-                if any(member.get("projectModelId") == project_model_id
-                       for scene in project_scenes.list(project_id) for member in scene.get("models", [])):
-                    raise AssignmentConflict("project model is referenced by a project scene")
+                blockers = [scene.get("name", scene["sceneId"]) for scene in project_scenes.list(project_id)
+                            if not scene.get("deletedAt") and any(member.get("projectModelId") == project_model_id
+                                                                  for member in scene.get("models", []))]
+                if blockers:
+                    raise AssignmentConflict("项目模型仍被未删除的场景引用：" + "、".join(blockers[:5])
+                                             + "。停用不等于删除，请先调整或删除这些场景。")
             except ImportError:
                 pass
             if row.get("parameterPlatform") == "server" and self.stream_store is not None and any(
@@ -365,8 +380,8 @@ class ProjectModelAssignments:
                     for item in self.stream_store.list(project_id)):
                 raise AssignmentConflict("project model is used by an active stream")
             key = self._memory_key(project_id, row["modelId"], row["modelVersion"], row["parameterPlatform"])
-            _memory_model_assignments.pop(key, None)
             audit_change(None, context, request_id, "project_model.remove", "project_model", project_model_id, before, None)
+            _memory_model_assignments.pop(key, None)
             return {"projectModelId": project_model_id, "removed": True}
 
     def _check_write_authority(self, session, project_id, context):

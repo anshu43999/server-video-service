@@ -1,0 +1,26 @@
+# Development build overlay: preserve the verified application base image.
+# Verify the local tag's image ID before building; do not pass a bare image ID
+# as FROM. A registry-published name@digest is also supported when available.
+ARG VIDEO_BASE_IMAGE=aiyolo-video-service:1.0.3-build.20261106-c1e554f
+FROM ${VIDEO_BASE_IMAGE}
+USER root
+RUN test "$(dpkg --print-architecture)" = amd64 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends openjdk-17-jre-headless \
+    && rm -rf /var/lib/apt/lists/*
+COPY tools/install_android_verifier.py tools/check_app_update_runtime.py /app/tools/
+RUN python /app/tools/install_android_verifier.py --destination /opt/android/build-tools/36.0.0
+ENV APP_APK_AAPT2_PATH=/opt/android/build-tools/36.0.0/aapt2 \
+    APP_APK_JAVA_PATH=/usr/bin/java \
+    APP_APK_APKSIGNER_JAR_PATH=/opt/android/build-tools/36.0.0/lib/apksigner.jar \
+    APP_APK_EVIDENCE_ROOT=/app/evidence/app-apk-verification \
+    APP_APK_STAGING_ROOT=/tmp/app-apk-verification \
+    APP_APK_EXTERNAL_ROOT=/app/app-update-data/external \
+    APP_APK_UPLOAD_ROOT=/app/app-update-data/uploads
+RUN mkdir -p /app/app-update-data/external /app/app-update-data/uploads \
+        /app/evidence/app-apk-verification /tmp/app-apk-verification \
+    && chown -R 10001:10001 /app/app-update-data /app/evidence/app-apk-verification /tmp/app-apk-verification
+USER app
+RUN python /app/tools/check_app_update_runtime.py --tools-only
+# Runtime flags/keys are explicitly injected by the approved deployment.
+# The inherited entrypoint, CPU runtime, application and healthcheck are preserved.

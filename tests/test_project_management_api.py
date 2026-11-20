@@ -6,6 +6,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import event
+from alembic import command
+from alembic.config import Config
 
 from app import auth
 from app.auth import reset_memory_auth_for_tests
@@ -42,7 +44,11 @@ class ProjectManagementDatabaseTests(unittest.TestCase):
         self.path = Path(temporary.name)
         database.close()
         database.url = f"sqlite:///{self.path.as_posix()}"
-        Base.metadata.create_all(database.engine)
+        config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+        config.set_main_option("sqlalchemy.url", database.url.replace("%", "%%"))
+        # Project creation requires the immutable knowledge release seeded by
+        # migration, not just empty tables from metadata.create_all().
+        command.upgrade(config, "head")
         settings.deployment_env = "production"
         settings.admin_token = None
         settings.mobile_token = None
@@ -153,7 +159,11 @@ class ProjectManagementDatabaseTests(unittest.TestCase):
         )
         self.assertEqual("SUSPENDED", suspended.json()["lifecycleState"])
         self.assertEqual(3, suspended.json()["revision"])
-        suspended_capabilities = self.client.get("/aiyoloapi/auth/projects", headers=self.admin).json()["projects"][0]["capabilities"]
+        # Migrations also seed the active default project. Match the project
+        # under test by identity, never by incidental list order.
+        suspended_projects = self.client.get("/aiyoloapi/auth/projects", headers=self.admin).json()["projects"]
+        suspended_capabilities = next(item for item in suspended_projects
+                                      if item["projectId"] == project_id)["capabilities"]
         self.assertNotIn("project.inspection.use", suspended_capabilities)
         self.assertNotIn("project.streams.manage", suspended_capabilities)
         self.assertIn("project.members.manage", suspended_capabilities)
@@ -304,12 +314,13 @@ class ProjectManagementDatabaseTests(unittest.TestCase):
         self.assertEqual(1, len(self.client.get("/aiyoloapi/auth/projects", headers=owner_headers).json()["projects"]))
         self.assertEqual([], self.client.get("/aiyoloapi/auth/projects", headers=member_headers).json()["projects"])
         admin_projects = self.client.get("/aiyoloapi/auth/projects", headers=self.admin).json()["projects"]
-        self.assertTrue(admin_projects[0]["platformEntry"])
+        archived_project = next(item for item in admin_projects if item["projectId"] == project_id)
+        self.assertTrue(archived_project["platformEntry"])
         self.assertEqual({
             "project.read", "project.alerts.read", "project.audit.read",
             "project.alert_knowledge.read", "project.alert_advice.read",
             "project.alert_advice.history.read",
-        }, set(admin_projects[0]["capabilities"]))
+        }, set(archived_project["capabilities"]))
         entered = self.client.get(
             f"/aiyoloapi/projects/{project_id}",
             headers={**self.admin, "X-Request-Id": "platform-entry"},

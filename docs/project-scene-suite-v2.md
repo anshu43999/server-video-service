@@ -1,5 +1,7 @@
 # Project scene suite and run-plan contract v2
 
+> 2026-11-16参数所有权修订：以[平台统一模型参数](platform-model-parameters.md)为准。旧的项目/场景参数覆盖、按审批固定参数和参数重审批规则退役；新运行使用平台最新发布，已运行会话保持启动快照。以下既有场景、安装、权限和更新协议中不冲突的部分继续有效。
+
 - Contract: `project-scene-suite-v2`
 - Owner task: `M36-T12`
 - Consumer task: Android `M107-T01`

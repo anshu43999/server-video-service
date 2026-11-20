@@ -114,6 +114,23 @@ class ProjectModelInventoryMigrationTests(unittest.TestCase):
 
 
 class ProjectModelInventorySqliteTests(AssignmentStorageChecks, unittest.TestCase):
+    def test_uninstalled_display_survives_store_reopen_without_assignment_mutation(self):
+        from app.model_catalog import ModelCatalog
+        registry = self.catalog._load()
+        registry["models"][0]["name"] = "持久化历史模型"
+        self.catalog._save(registry)
+        saved = self.save_inventory()
+        disabled = self.save_inventory(expected=1, enabled=False)
+        self.catalog.uninstall("helmet", "1.0.0")
+        reopened_catalog = ModelCatalog(self.catalog.registry_path)
+        reopened = ProjectModelAssignments(self.database, reopened_catalog, self.profiles, self.streams)
+        row = reopened.get(self.project_id, saved["projectModelId"])
+        self.assertEqual("持久化历史模型", row["modelName"])
+        self.assertEqual("UNINSTALLED", row["modelStatus"])
+        self.assertFalse(row["enabled"])
+        self.assertEqual(disabled["revision"], row["revision"])
+        self.assertTrue(reopened.remove(self.project_id, saved["projectModelId"], row["revision"])["removed"])
+
     def save(self, store=None, version="1.0.0", parameter=0, expected=0, enabled=True):
         return (store or self.store).save(
             self.project_id, "helmet", version, "pc", parameter, enabled, expected
@@ -170,8 +187,8 @@ class ProjectModelInventorySqliteTests(AssignmentStorageChecks, unittest.TestCas
 
         saved = self.save_inventory()
         inherited = self.store.resolve(self.project_id, saved["projectModelId"])["parameterSnapshot"]
-        self.assertEqual((2, "inherited", 0, None), tuple(
-            inherited[key] for key in ("schemaVersion", "source", "inheritedRevision", "updatedAt")))
+        self.assertEqual((2, "platform", 0), tuple(
+            inherited[key] for key in ("schemaVersion", "source", "revision")))
         self.assertNotIn("audit", inherited)
         self.assertNotIn("updatedBy", inherited)
 
@@ -185,11 +202,12 @@ class ProjectModelInventorySqliteTests(AssignmentStorageChecks, unittest.TestCas
         model = self.catalog.get("helmet", "1.0.0")
         values = self.profiles.get(model, "server", self.project_id)
         values["detection"]["confidenceThreshold"] = .4
-        custom = self.profiles.save(model, "server", values, "owner", 0, self.project_id)
+        self.profiles.save(model, "server", values, "admin", 0)
+        self.profiles.publish(model, "server", "admin", 1, 0)
         self.save_inventory(parameter=1, expected=1)
         current = self.store.resolve(self.project_id, saved["projectModelId"])["parameterSnapshot"]
-        self.assertEqual((2, "custom", None, custom["updatedAt"]), tuple(
-            current[key] for key in ("schemaVersion", "source", "inheritedRevision", "updatedAt")))
+        self.assertEqual((2, "platform", 1), tuple(
+            current[key] for key in ("schemaVersion", "source", "revision")))
         self.assertNotIn("updatedBy", current)
         self.database.close()
         reopened = ProjectScenes(self.database, self.catalog, self.store)
@@ -199,14 +217,11 @@ class ProjectModelInventorySqliteTests(AssignmentStorageChecks, unittest.TestCas
 
 @unittest.skipUnless(os.environ.get("RUN_POSTGRES_TESTS") == "1", "requires isolated PostgreSQL schema")
 class ProjectModelInventoryPostgreSqlTests(ProjectModelInventorySqliteTests):
-    @classmethod
-    def setUpClass(cls):
-        cls.postgres = isolated_postgresql_url("m33_project_model_inventory")
-        cls.database_url = cls.postgres.__enter__()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.postgres.__exit__(None, None, None)
+    def setUp(self):
+        scope = isolated_postgresql_url("m33_project_model_inventory")
+        self.database_url = scope.__enter__()
+        self.addCleanup(lambda: scope.__exit__(None, None, None))
+        super().setUp()
 
     def test_parallel_first_assignment_serializes_by_project(self):
         barrier = Barrier(2)

@@ -1,15 +1,13 @@
-"""Project-scoped simulated alert-advice knowledge management API."""
+"""System knowledge maintenance and project-authorized read-only usage."""
 from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from .alert_advice_knowledge import (
     ACTIVE,
-    INACTIVE,
-    AlertAdviceKnowledgeStore,
     KnowledgeConflict,
     KnowledgeError,
     KnowledgeMatchConflict,
@@ -17,7 +15,6 @@ from .alert_advice_knowledge import (
     normalize_match_key,
 )
 from .project_auth import (
-    PROJECT_ALERT_KNOWLEDGE_MANAGE,
     PROJECT_ALERT_KNOWLEDGE_READ,
     ProjectContext,
     require_project_capability,
@@ -98,18 +95,6 @@ class MatchPreview(BaseModel):
     recognitionCategoryId: str = Field(min_length=1, max_length=128)
 
 
-class BaseUpgrade(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    version: StrictInt = Field(ge=1)
-    expectedRevision: StrictInt = Field(ge=1)
-
-
-class KnowledgeOverride(KnowledgeBody):
-    inheritedEntryId: str = Field(min_length=1, max_length=160)
-    expectedBaseRevision: StrictInt = Field(ge=1)
-    status: Literal["ACTIVE", "INACTIVE"] = "ACTIVE"
-
-
 class KnowledgePublish(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     expectedRevision: StrictInt = Field(ge=1)
@@ -117,7 +102,7 @@ class KnowledgePublish(BaseModel):
 
 
 def _payload(body: KnowledgeBody):
-    return body.model_dump(exclude={"entryId", "alertTypeId", "recognitionCategoryId", "status", "expectedRevision", "inheritedEntryId", "expectedBaseRevision"})
+    return body.model_dump(exclude={"entryId", "alertTypeId", "recognitionCategoryId", "status", "expectedRevision"})
 
 
 def _actor(context: ProjectContext):
@@ -139,102 +124,72 @@ def _raise_store_error(exc):
 
 
 def create_alert_advice_router(store_provider) -> APIRouter:
+    """Project authorization remains mandatory; knowledge ownership is system-only."""
     router = APIRouter(prefix="/aiyoloapi/projects/{project_id}/alert-advice", tags=["alert-advice"])
     read = require_project_capability(PROJECT_ALERT_KNOWLEDGE_READ)
-    manage = require_project_capability(PROJECT_ALERT_KNOWLEDGE_MANAGE)
+
+    def store():
+        value = store_provider()
+        if value.system is None:
+            raise HTTPException(503, detail={"code": "ADVICE_STORE_UNAVAILABLE", "message": "system knowledge is unavailable"})
+        return value
 
     @router.get("/base")
     def project_base(project_id: str, context: ProjectContext = Depends(read)):
-        system = store_provider().system
-        if system is None:
-            raise HTTPException(404, "System knowledge is not configured")
-        return {**system.binding(context.project_id), "versions": system.versions()}
-
-    @router.post("/base/upgrade")
-    def upgrade_base(project_id: str, body: BaseUpgrade, request: Request, context: ProjectContext = Depends(manage)):
-        try:
-            return store_provider().system.adopt(context.project_id, body.version, body.expectedRevision, _actor(context), context=context, request_id=_request_id(request))
-        except KnowledgeError as exc:
-            _raise_store_error(exc)
-
-    @router.post("/knowledge-overrides", status_code=201)
-    def override_entry(project_id: str, body: KnowledgeOverride, request: Request, context: ProjectContext = Depends(manage)):
-        try:
-            return store_provider().override(context.project_id, body.inheritedEntryId, _payload(body), body.status,
-                                             _actor(context), body.expectedBaseRevision, context=context, request_id=_request_id(request))
-        except KnowledgeError as exc:
-            _raise_store_error(exc)
+        # Read-only compatibility metadata, never a stored project binding.
+        release = store().system.latest_release()
+        return {"version": release["version"], "revision": release["catalogRevision"], "versions": [], "mode": "SYSTEM"}
 
     @router.get("/knowledge-entries")
     def list_entries(project_id: str, status: Literal["ACTIVE", "INACTIVE"] | None = None,
                      alertTypeId: str | None = Query(default=None, max_length=128),
                      recognitionCategoryId: str | None = Query(default=None, max_length=128),
                      context: ProjectContext = Depends(read)):
-        entries = store_provider().list(context.project_id)
+        release = store().system.published(context.project_id)
+        entries = release["entries"]
         if status is not None:
             entries = [item for item in entries if item["status"] == status]
         if alertTypeId is not None or recognitionCategoryId is not None:
             if alertTypeId is None or recognitionCategoryId is None:
                 raise HTTPException(422, detail={"code": "MATCH_KEY_INVALID", "message": "both match fields are required"})
-            key = normalize_match_key(alertTypeId, recognitionCategoryId)
+            try:
+                key = normalize_match_key(alertTypeId, recognitionCategoryId)
+            except KnowledgeError as exc:
+                _raise_store_error(exc)
             entries = [item for item in entries if (item["matchKey"]["alertTypeId"], item["matchKey"]["recognitionCategoryId"]) == key]
-        return {"entries": entries}
-
-    @router.post("/knowledge-entries", status_code=201)
-    def create_entry(project_id: str, body: KnowledgeCreate, request: Request,
-                     context: ProjectContext = Depends(manage), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
-        try:
-            item = store_provider().create(
-                context.project_id, body.entryId, body.alertTypeId, body.recognitionCategoryId,
-                _payload(body), _actor(context), status=body.status, context=context,
-                request_id=idempotency_key or _request_id(request),
-            )
-            return item
-        except KnowledgeError as exc:
-            _raise_store_error(exc)
+        return {"entries": entries, "systemVersion": release["version"]}
 
     @router.post("/knowledge-entries/match-preview")
     def preview(project_id: str, body: MatchPreview, context: ProjectContext = Depends(read)):
         key = normalize_match_key(body.alertTypeId, body.recognitionCategoryId)
-        matched = store_provider().find_active_exact(context.project_id, *key)
+        matched = store().find_active_exact(context.project_id, *key)
         return {"matchKey": {"alertTypeId": key[0], "recognitionCategoryId": key[1]},
                 "matched": matched is not None, "entry": matched}
 
     @router.get("/knowledge-entries/{entry_id}")
     def get_entry(project_id: str, entry_id: str, context: ProjectContext = Depends(read)):
         try:
-            return store_provider().get(context.project_id, entry_id)
-        except KnowledgeError as exc:
-            _raise_store_error(exc)
-
-    @router.put("/knowledge-entries/{entry_id}")
-    def replace_entry(project_id: str, entry_id: str, body: KnowledgeReplace, request: Request,
-                      context: ProjectContext = Depends(manage), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
-        try:
-            return store_provider().replace(
-                context.project_id, entry_id, _payload(body), _actor(context), body.expectedRevision,
-                context=context, request_id=idempotency_key or _request_id(request),
-            )
-        except KnowledgeError as exc:
-            _raise_store_error(exc)
-
-    @router.post("/knowledge-entries/{entry_id}/status")
-    def set_entry_status(project_id: str, entry_id: str, body: KnowledgeStatus, request: Request,
-                         context: ProjectContext = Depends(manage), idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
-        try:
-            return store_provider().set_status(
-                context.project_id, entry_id, body.status, _actor(context), body.expectedRevision,
-                context=context, request_id=idempotency_key or _request_id(request),
-            )
+            return store().get(context.project_id, entry_id)
         except KnowledgeError as exc:
             _raise_store_error(exc)
 
     @router.get("/knowledge-entries/{entry_id}/revisions")
     def revisions(project_id: str, entry_id: str, context: ProjectContext = Depends(read)):
         try:
-            return {"revisions": store_provider().revisions(context.project_id, entry_id)}
+            return {"revisions": store().revisions(context.project_id, entry_id)}
         except KnowledgeError as exc:
             _raise_store_error(exc)
+
+    # Keep explicit tombstones for old clients. Authentication/project membership are
+    # checked before returning 410; no body parsing, copying, or database writes occur.
+    @router.post("/base/upgrade")
+    @router.post("/knowledge-overrides")
+    @router.post("/knowledge-entries")
+    @router.put("/knowledge-entries/{entry_id}")
+    @router.post("/knowledge-entries/{entry_id}/status")
+    def retired_project_write(project_id: str, context: ProjectContext = Depends(read)):
+        raise HTTPException(410, detail={"code": "PROJECT_KNOWLEDGE_READ_ONLY",
+                            "message": "知识资料由平台统一维护，项目仅可查看和使用", "retryable": False})
 
     return router
 

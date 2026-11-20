@@ -6,10 +6,12 @@ export interface Assignment {
   projectId?: string
   modelId: string
   modelName?: string
+  modelStatus?: string
   modelVersion: string
   target: ModelTarget
   parameterPlatform: Platform
   parameterRevision: number
+  parameterPublished?: boolean
   parameterProfileKey?: string | null
   enabled: boolean
   revision: number
@@ -24,7 +26,6 @@ export interface AssignmentWrite {
   modelId: string
   modelVersion: string
   target: ModelTarget
-  parameterRevision: number
   enabled: boolean
   expectedRevision: number
 }

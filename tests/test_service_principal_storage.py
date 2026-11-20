@@ -224,7 +224,6 @@ class ServicePrincipalPostgreSqlTests(StorageChecks, unittest.TestCase):
             command.downgrade(config, "20261012_09")
             command.upgrade(config, "20261012_11")
             command.upgrade(config, "20261012_11")
-            command.check(config)
             db = DatabaseManager(url)
             try:
                 with db.session() as session:
@@ -236,6 +235,8 @@ class ServicePrincipalPostgreSqlTests(StorageChecks, unittest.TestCase):
                 with db.session() as session:
                     self.assertEqual("20261012_11", session.scalar(text("SELECT version_num FROM alembic_version")))
                     self.assertIsNotNone(session.get(ServicePrincipalRecord, "migration-principal"))
+                command.upgrade(config, "head")
+                command.check(config)
             finally:
                 db.close()
 

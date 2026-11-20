@@ -478,9 +478,6 @@ def _create_project(payload: ProjectCreateRequest, principal, request_id: str) -
             _memory_projects[project_id] = project
             _memory_memberships[(project_id, owner.account_id)] = membership
             set_memory_project(project_id, code, lifecycle_state=PROJECT_ACTIVE, revision=1)
-            from .main import alert_advice_knowledge_store
-            if alert_advice_knowledge_store.system is not None:
-                alert_advice_knowledge_store.system.pin_new_memory_project(project_id)
             set_memory_membership(project_id, owner.account_id, PROJECT_OWNER, revision=1)
             context = _project_context_for_platform(principal, project_id)
             _add_project_audit(None, context, request_id, "project.create", "project", project_id, None, 1, {
@@ -511,8 +508,6 @@ def _create_project(payload: ProjectCreateRequest, principal, request_id: str) -
                 # can validate its foreign keys in this transaction.
                 session.flush()
                 context = _project_context_for_platform(principal, project_id)
-                from .system_alert_knowledge import pin_new_project
-                pin_new_project(session, project_id)
                 _add_project_audit(session, context, request_id, "project.create", "project", project_id, None, 1, {
                     "projectCode": code, "displayName": display_name, "ownerAccountId": owner.account_id,
                     "requestFingerprint": _fingerprint({"code": code, "owner": owner.account_id}),

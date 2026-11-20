@@ -1,7 +1,6 @@
 """M112-T02 isolated regressions; never connects tests to the application DB."""
 import argparse
 from datetime import datetime, timezone
-import json
 import os
 from pathlib import Path
 import socket
@@ -10,6 +9,7 @@ import sys
 import tempfile
 
 from sqlalchemy import create_engine, text
+from test_report_retention import finalize_run, version_context
 
 ROOT = Path(__file__).resolve().parents[1]
 PG = Path(r"D:\PostgreSQL\bin")
@@ -20,12 +20,15 @@ def main():
     parser.add_argument('--postgres', action='store_true')
     parser.add_argument('--pattern', action='append')
     args = parser.parse_args()
+    if any('/' in p or chr(92) in p for p in (args.pattern or [])):
+        parser.error('--pattern must be a filename pattern, not a path')
     (ROOT / '.tmp').mkdir(exist_ok=True)
     runtime = Path(tempfile.mkdtemp(prefix='m112-lifecycle-', dir=ROOT / '.tmp')).resolve()
     env = os.environ.copy()
-    env.update(DATABASE_URL='', RUN_POSTGRES_TESTS='0', PYTHONUTF8='1')
+    env.update(DATABASE_URL='', RUN_POSTGRES_TESTS='0', PYTHONUTF8='1', PYTHONDONTWRITEBYTECODE='1')
     result = {'startedAt': datetime.now(timezone.utc).isoformat(), 'runtime': str(runtime),
               'isolatedPostgresql': args.postgres, 'tests': []}
+    result.update(version_context(ROOT))
     started, port, data = False, None, runtime / 'pg-data'
     try:
         if args.postgres:
@@ -71,22 +74,28 @@ def main():
             finally:
                 engine.dispose()
         result['testsCompleted'] = True
+    except Exception as error:
+        result['runnerError'] = f'{type(error).__name__}: {error}'
     finally:
+        stopped = not started
         if started:
-            subprocess.run([str(PG/'pg_ctl.exe'), '-D', str(data), '-m', 'fast', '-w', 'stop'], check=True)
+            try:
+                stop = subprocess.run([str(PG/'pg_ctl.exe'), '-D', str(data), '-m', 'fast', '-w', 'stop'],
+                                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                stopped = stop.returncode == 0
+            except OSError as error:
+                result['runnerError'] = f"{result.get('runnerError', '')}; stop failed: {error}"
         if port:
             with socket.socket() as sock:
                 sock.settimeout(2); result['portClosed'] = sock.connect_ex(('127.0.0.1', port)) != 0
         result['completedAt'] = datetime.now(timezone.utc).isoformat()
+        result['resourcesStopped'] = stopped and not (data/'postmaster.pid').exists() and result.get('portClosed', True)
         result['passed'] = bool(result.get('testsCompleted') and result['tests']
-            and all(row['exitCode'] == 0 for row in result['tests']) and result.get('portClosed', True))
-        evidence = ROOT/'harness/evidence/M112/T02'
-        evidence.mkdir(parents=True, exist_ok=True)
-        name = 'postgres-result.json' if args.postgres else 'backend-result.json'
-        (evidence/name).write_text(json.dumps(result, indent=2), encoding='utf-8')
-        (runtime/'result.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
-        print(json.dumps(result, indent=2), flush=True)
-    return 0 if result['passed'] else 1
+            and all(row['exitCode'] == 0 for row in result['tests']) and result['resourcesStopped'])
+        report = ROOT/'harness/evidence/M112/T02/TEST_REPORT.md'
+        cleaned = finalize_run(ROOT, runtime, 'm112-lifecycle-', report, 'M112后端回归', result)
+        print(f"Report: {report}; passed={result['passed']}; {result['cleanup']}", flush=True)
+    return 0 if result['passed'] and cleaned else 1
 
 
 if __name__ == '__main__':

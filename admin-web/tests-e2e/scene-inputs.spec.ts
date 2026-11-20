@@ -18,6 +18,7 @@ for (const width of [1440, 390]) {
       const sceneId = `input-${width}-${kind}-${order}`
       await page.getByRole('button', { name: '创建场景', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: '创建项目场景', exact: true })
+      await dialog.getByRole('button', { name: '高级设置（可选）', exact: true }).click()
       await dialog.getByLabel('场景 ID', { exact: true }).fill(sceneId)
       await dialog.getByLabel('场景名称', { exact: true }).fill(`${kind === 'image' ? '图片' : '视频'}单输入场景`)
       const add = async () => {
@@ -25,7 +26,7 @@ for (const width of [1440, 390]) {
         await dialog.getByRole('button', { name: '添加项目模型成员', exact: true }).click()
       }
       if (order === 'after') await add()
-      await toggleElementSwitch(page, kind === 'image' ? '适用视频' : '适用图片')
+      await toggleElementSwitch(page, kind === 'image' ? '视频巡检 / 连续帧识别' : '拍照巡检 / 图片识别')
       if (order === 'before') await add()
       const member = dialog.locator('.scene-member-inputs')
       await expect(member.getByRole('switch', { name: kind === 'image' ? '本机相机连续帧' : '图片', exact: true })).toBeDisabled()

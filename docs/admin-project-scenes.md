@@ -1,5 +1,7 @@
 # 项目模型与项目场景管理界面
 
+> 2026-11-16参数所有权修订：以[平台统一模型参数](platform-model-parameters.md)为准。旧的项目/场景参数覆盖、按审批固定参数和参数重审批规则退役；新运行使用平台最新发布，已运行会话保持启动快照。以下既有场景、安装、权限和更新协议中不冲突的部分继续有效。
+
 类型：当前领域界面目标说明；项目模型、场景与运行边界以 `PRODUCT_REQUIREMENTS.md` FR-13 为准。
 
 历史实现：M36-T05。当前契约见 `project-model-assignments.md`、`project-scenes.md`、`project-scene-suite-v2.md` 与 `model-signing-publish.md`。

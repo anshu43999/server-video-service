@@ -20,8 +20,8 @@
     "SceneModels": {"required": ["models", "expectedRevision"], "fields": ["expectedRevision", "models"], "enums": {}},
     "SceneApproval": {"required": ["approved", "expectedRevision", "reason"], "fields": ["approved", "expectedRevision", "reason"], "enums": {}},
     "SceneResolution": {"required": ["expectedRevision", "target", "inputType"], "fields": ["expectedRevision", "inputType", "target"], "enums": {"inputType": ["image", "video"], "target": ["pc", "mobile"]}},
-    "SceneMember": {"required": ["modelId", "version", "position"], "fields": ["execution", "inputTypes", "memberId", "modelId", "position", "target", "version"], "enums": {"execution": ["single", "sync", "async"], "inputTypes": ["image", "video"], "target": ["pc", "mobile"]}},
-    "ScenePlan": {"required": ["planId", "name", "inputTypes", "memberIds"], "fields": ["enabled", "execution", "inputTypes", "memberIds", "name", "planId"], "enums": {"execution": ["single", "sync", "async"], "inputTypes": ["image", "video"]}},
+    "SceneMember": {"required": ["projectModelId", "position"], "fields": ["execution", "inputTypes", "memberId", "parameterRevision", "position", "projectModelId"], "enums": {"execution": ["single", "sync", "async"], "inputTypes": ["image", "video"]}},
+    "ScenePlan": {"required": ["planId", "name", "inputTypes", "memberIds"], "fields": ["cameraPolicy", "enabled", "execution", "inputTypes", "memberIds", "name", "planId"], "enums": {"execution": ["single", "sync", "async"], "inputTypes": ["image", "video"]}},
     "ScenePlans": {"required": ["plans", "expectedRevision"], "fields": ["expectedRevision", "plans"], "enums": {}},
     "ScenePlanResolution": {"required": ["planId", "expectedRevision", "target", "inputType"], "fields": ["clientContractVersion", "expectedRevision", "inputType", "planId", "supportedExecutionModes", "target"], "enums": {"inputType": ["image", "video"], "supportedExecutionModes": ["single", "sync", "async"], "target": ["pc", "mobile"]}},
     "SceneInstallationRequest": {"required": ["expectedRevision", "target"], "fields": ["expectedRevision", "memberIds", "planId", "target"], "enums": {"target": ["pc", "mobile"]}}

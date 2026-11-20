@@ -56,6 +56,9 @@ class PostgreSQLDefaultProjectRolloutTests(unittest.TestCase):
                 self.assertEqual("already-applied", migration.apply(source, bundle, maintenance=True)["phase"])
                 with migration.database_connection(source) as connection:
                     migration.reconcile(connection, bundle, migration.verify_bundle(bundle))
+                with migration.database_connection(source, write=True) as connection:
+                    command.upgrade(migration.config(connection), "head")
+                with migration.database_connection(source) as connection:
                     command.check(migration.config(connection))
                 with migration.database_connection(restored, write=True) as connection:
                     self.assertEqual(migration.LEGACY, migration.preflight(connection)["revision"])

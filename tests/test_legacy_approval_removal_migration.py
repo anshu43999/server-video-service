@@ -30,7 +30,7 @@ class LegacyApprovalRemovalMigrationTests(unittest.TestCase):
         finally:
             engine.dispose()
 
-        command.upgrade(self.config, "head")
+        command.upgrade(self.config, "20261019_13")
         engine = create_engine(self.url)
         try:
             tables = set(inspect(engine).get_table_names())
@@ -42,6 +42,7 @@ class LegacyApprovalRemovalMigrationTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "permanently removed"):
             command.downgrade(self.config, "20261014_12")
+        command.upgrade(self.config, "head")
 
 
 if __name__ == "__main__":

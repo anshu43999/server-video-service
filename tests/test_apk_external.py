@@ -306,7 +306,11 @@ class PostgreSQLExternalTests(JobAssertions, unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(prefix="apk-external-pg-", dir=ROOT / ".tmp")
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        cluster = isolated_postgresql_url("apk_external")
+        # Exercise the external-job downgrade itself, before newer migrations
+        # correctly prohibit rolling back across their own durable history.
+        revision = ("20261029_29" if self._testMethodName ==
+                    "test_migration_refuses_external_history_downgrade" else "head")
+        cluster = isolated_postgresql_url("apk_external", revision=revision)
         url = cluster.__enter__()
         self.addCleanup(lambda: cluster.__exit__(None, None, None))
         self.db = DatabaseManager(url)

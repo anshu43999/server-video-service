@@ -43,6 +43,8 @@ class AssignmentStorageChecks:
             session.add(ProjectRecord(project_id=self.project_id, project_code=self.project_id, display_name="A", created_at=now, updated_at=now))
         self.catalog = ModelCatalog(registry)
         self.profiles = ModelParameterStore(root / "profiles.json", self.database)
+        for version in ("1.0.0", "2.0.0"):
+            self.profiles.publish(self.catalog.get("helmet", version), "server", "admin", 0, None)
         self.streams = StreamConfigStore(self.database)
         self.store = ProjectModelAssignments(self.database, self.catalog, self.profiles, self.streams)
 
@@ -63,12 +65,13 @@ class AssignmentStorageChecks:
         model = self.catalog.get("helmet", "1.0.0")
         values = self.profiles.default_profile(model, "server")
         values["detection"]["confidenceThreshold"] = .4
-        self.profiles.save(model, "server", values, "owner", 0, self.project_id)
+        self.profiles.save(model, "server", values, "admin", 0)
         self.assertEqual(snapshot, reopened.snapshot(self.project_id, "helmet", "1.0.0", "server"))
-        with self.assertRaises(AssignmentConflict):
-            self.save(expected=1)
-        updated = self.save(parameter=1, expected=1)
-        self.assertIsNotNone(updated["parameterProfileKey"])
+        self.profiles.publish(model, "server", "admin", 1, 0)
+        self.assertEqual(1, reopened.list(self.project_id)[0]["revision"])
+        updated = self.save(parameter=999, expected=1)
+        self.assertEqual(1, updated["parameterRevision"])
+        self.assertIsNone(updated["parameterProfileKey"])
         self.assertEqual(.4, self.store.snapshot(self.project_id, "helmet", "1.0.0", "server")["detection"]["confidenceThreshold"])
 
     def test_active_stream_and_inactive_project_guards(self):
@@ -89,18 +92,15 @@ class AssignmentStorageChecks:
             self.save(version="2.0.0", expected=2)
         self.assertEqual(403, error.exception.status_code)
 
-    def test_zero_revision_parameter_update_between_read_and_save_is_rejected(self):
-        original = self.profiles.get
+    def test_assignment_cannot_pin_old_or_forged_parameter_revision(self):
         model = self.catalog.get("helmet", "1.0.0")
-        def race(model, platform, project_id=None):
-            profile = original(model, platform, project_id)
-            if project_id == self.project_id:
-                self.profiles.save(model, platform, profile, "racing-owner", 0, project_id)
-            return profile
-        with patch.object(self.profiles, "get", side_effect=race):
-            with self.assertRaises(AssignmentConflict):
-                self.save()
-        self.assertEqual([], self.store.list(self.project_id))
+        profile = self.profiles.get(model, "server")
+        profile["detection"]["confidenceThreshold"] = .21
+        self.profiles.save(model, "server", profile, "admin", 0)
+        self.profiles.publish(model, "server", "admin", 1, 0)
+        assigned = self.save(parameter=999)
+        self.assertEqual(1, assigned["parameterRevision"])
+        self.assertEqual(.21, self.store.snapshot(self.project_id, "helmet", "1.0.0", "server")["detection"]["confidenceThreshold"])
 
 
 class AssignmentSqliteTests(AssignmentStorageChecks, unittest.TestCase):
@@ -109,14 +109,11 @@ class AssignmentSqliteTests(AssignmentStorageChecks, unittest.TestCase):
 
 @unittest.skipUnless(os.environ.get("RUN_POSTGRES_TESTS") == "1", "requires isolated PostgreSQL schema")
 class AssignmentPostgreSqlTests(AssignmentStorageChecks, unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        cls.postgres = isolated_postgresql_url("m33_assignment")
-        cls.database_url = cls.postgres.__enter__()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.postgres.__exit__(None, None, None)
+    def setUp(self):
+        scope = isolated_postgresql_url("m33_assignment")
+        self.database_url = scope.__enter__()
+        self.addCleanup(lambda: scope.__exit__(None, None, None))
+        super().setUp()
 
     def test_independent_assignment_stores_serialize_first_insert_and_update(self):
         for revision in (0, 1):

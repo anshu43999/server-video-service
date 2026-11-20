@@ -6,6 +6,8 @@ const modelStatusLabels: Record<string, string> = {
   DEPRECATED: '已弃用',
   REVOKED: '已撤回',
   UNINSTALLED: '已卸载',
+  MISSING: '版本不存在',
+  UNKNOWN: '状态待核实',
 }
 
 /** Display only; callers must retain exact modelId/version for every action. */

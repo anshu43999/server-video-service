@@ -22,59 +22,44 @@ from test_project_scenes import SceneApiTests, SceneSqliteTests
 
 
 class SceneExecutionApiTests(SceneApiTests):
-    def test_scene_only_profile_edit_is_version_target_scoped_and_needs_reapproval(self):
+    def test_project_and_scene_parameter_writes_are_retired(self):
         scene = self.mobile_scene()
-        member = scene['models'][0]
-        profile_url = f"{self.scenes}/safety/members/{member['memberId']}/parameter-profile?sceneRevision=2"
-        before = self.client.get(member['parameterUrl'], headers=self.user).json()
-        response = self.client.get(profile_url, headers=self.owner)
-        self.assertEqual(200, response.status_code, response.text)
-        profile = response.json()
-        self.assertEqual((self.project_id, 'helmet', '1.0.0', 'android'), tuple(profile[key] for key in ('projectId','modelId','modelVersion','platform')))
-        profile['detection']['confidenceThreshold'] = 0.21
-        body = {key: profile[key] for key in ('schemaVersion','detection','alertRules')} | {'expectedRevision':profile['revision']}
-        saved = self.client.put(profile_url, headers=self.owner, json=body)
-        self.assertEqual(200, saved.status_code, saved.text)
-        self.assertEqual(1, saved.json()['revision'])
-        self.assertIn(self.client.get(member['parameterUrl'], headers=self.user).status_code, (404, 409))
-        self.assertEqual(0, main.project_model_assignments.snapshot(self.project_id, 'helmet', '1.0.0', 'android')['revision'])
-        self.assertEqual(5, len(main.project_model_assignments.list(self.project_id)))
-        self.assertEqual(409, self.client.put(profile_url, headers=self.owner, json=body).status_code)
-        self.assertEqual(3, saved.json()['sceneRevision'])
-        self.assertFalse(main.project_scenes.get(self.project_id, 'safety')['approved'])
-        self.approve(3)
-        self.assertEqual(409, self.client.get(profile_url, headers=self.owner).status_code)
-        current = self.client.get(self.scenes+'/safety',headers=self.user).json()['models'][0]
-        approved = self.client.get(current['parameterUrl'],headers=self.user).json()
-        self.assertEqual((1,0.21),(approved['revision'],approved['detection']['confidenceThreshold']))
-
-    def test_scene_category_override_does_not_change_other_scene_or_inventory_and_retires_grant(self):
-        scene = self.mobile_scene()
-        second = {**self.scene, 'sceneId':'second', 'models':[self.member('helmet', target='mobile')]}
-        self.assertEqual(201, self.create(second).status_code)
-        self.assertEqual(200, self.client.post(self.scenes+'/second/approval', headers=self.owner,
-            json={'approved':True,'expectedRevision':1,'reason':'review'}).status_code)
-        runtime = self.scenes+'/safety/plans/default/runtime-grants'
-        payload = {'planId':'default','expectedRevision':2,'target':'mobile','inputType':'image','clientContractVersion':2}
-        started = self.client.post(runtime, headers=self.user, json=payload)
-        self.assertEqual(200, started.status_code, started.text)
-        member = scene['models'][0]
+        member = scene["models"][0]
         url = f"{self.scenes}/safety/members/{member['memberId']}/parameter-profile?sceneRevision=2"
         profile = self.client.get(url, headers=self.owner).json()
-        for rule in profile['alertRules']:
-            rule['enabled'] = False
-        body = {key:profile[key] for key in ('schemaVersion','detection','alertRules')} | {'expectedRevision':profile['revision']}
-        saved = self.client.put(url, headers=self.owner, json=body)
-        self.assertEqual(200, saved.status_code, saved.text)
-        self.assertIn(self.client.post(runtime, headers=self.user,
-            json={**payload,'operation':'heartbeat','grantToken':started.json()['runtimeGrant']}).status_code, (404,409))
-        other = main.project_scenes.get(self.project_id,'second')['models'][0]['parameterSnapshot']
-        self.assertTrue(any(rule['enabled'] for rule in other['alertRules']))
-        self.approve(3)
-        current = self.client.post(self.scenes+'/safety/plans/default/resolve', headers=self.user,
-            json={**payload,'expectedRevision':4}).json()
-        self.assertFalse(any(rule['enabled'] for rule in current['members'][0]['parameterSnapshot']['alertRules']))
-        self.assertEqual(scene['models'][0]['artifacts'][0]['sha256'], current['members'][0]['artifacts'][0]['sha256'])
+        body = {key: profile[key] for key in ("schemaVersion", "detection", "alertRules")} | {"expectedRevision": 0}
+        before = main.project_scenes.get(self.project_id, "safety")
+        self.assertEqual(410, self.client.put(url, headers=self.owner, json=body).status_code)
+        project_url = self.project_path + "/models/helmet/parameters?platform=android&version=1.0.0"
+        self.assertEqual(410, self.client.put(project_url, headers=self.owner, json=body).status_code)
+        self.assertEqual(410, self.client.delete(project_url + "&expectedRevision=0", headers=self.owner).status_code)
+        self.assertEqual(before, main.project_scenes.get(self.project_id, "safety"))
+        self.assertEqual("platform", self.client.get(project_url, headers=self.user).json()["source"])
+
+
+    def test_platform_publication_preserves_running_grant_and_updates_new_start(self):
+        scene = self.mobile_scene()
+        runtime = self.scenes + "/safety/plans/default/runtime-grants"
+        payload = {"planId": "default", "expectedRevision": 2, "target": "mobile", "inputType": "image", "clientContractVersion": 2}
+        started = self.client.post(runtime, headers=self.user, json=payload)
+        self.assertEqual(200, started.status_code, started.text)
+        model = main.model_catalog.get("helmet", "1.0.0")
+        store = main.model_parameter_store
+        profile = store.get(model, "android")
+        profile["alertRules"][0]["enabled"] = False
+        store.save(model, "android", profile, "admin", 0)
+        store.publish(model, "android", "admin", 1, 0)
+        heartbeat = self.client.post(runtime, headers=self.user,
+            json={**payload, "operation": "heartbeat", "grantToken": started.json()["runtimeGrant"]})
+        self.assertEqual(200, heartbeat.status_code, heartbeat.text)
+        self.assertEqual(started.json()["scope"]["members"], heartbeat.json()["scope"]["members"])
+        fresh = self.client.post(runtime, headers=self.user, json=payload).json()
+        self.assertEqual(1, fresh["scope"]["members"][0]["parameterRevision"])
+        self.assertNotEqual(started.json()["scope"]["members"][0]["parameterSha256"], fresh["scope"]["members"][0]["parameterSha256"])
+        resolved = self.client.post(runtime.replace("runtime-grants", "resolve"), headers=self.user, json=payload).json()
+        self.assertFalse(resolved["members"][0]["parameterSnapshot"]["alertRules"][0]["enabled"])
+        self.assertEqual(scene["models"][0]["artifacts"][0]["sha256"], resolved["members"][0]["artifacts"][0]["sha256"])
+
 
     def test_scene_profile_rejects_user_foreign_project_member_stale_and_injected_identity(self):
         scene = self.mobile_scene()
@@ -87,11 +72,11 @@ class SceneExecutionApiTests(SceneApiTests):
             call=getattr(self.client,method)
             self.assertEqual(403,call(url,headers=self.user,**kwargs).status_code)
             self.assertEqual(404,call(url.replace(self.project_id,self.other_id),headers=self.owner,**kwargs).status_code)
-            self.assertEqual(404,call(url.replace(member['memberId'],'missing'),headers=self.owner,**kwargs).status_code)
-            self.assertEqual(409,call(url.replace('sceneRevision=2','sceneRevision=1'),headers=self.owner,**kwargs).status_code)
+            self.assertEqual(410 if method == "put" else 404,call(url.replace(member['memberId'],'missing'),headers=self.owner,**kwargs).status_code)
+            self.assertEqual(410 if method == 'put' else 409,call(url.replace('sceneRevision=2','sceneRevision=1'),headers=self.owner,**kwargs).status_code)
         self.assertEqual(422,self.client.put(url,headers=self.owner,json={**body,'modelId':'secret'}).status_code)
         registry=main.model_catalog._load();registry['models'][0]['status']='REVOKED';main.model_catalog._save(registry)
-        self.assertEqual(409,self.client.put(url,headers=self.owner,json=body).status_code)
+        self.assertEqual(410,self.client.put(url,headers=self.owner,json=body).status_code)
 
     def approve(self, expected=1, approved=True):
         response = self.client.post(self.scenes + "/safety/approval", headers=self.owner,
@@ -115,7 +100,7 @@ class SceneExecutionApiTests(SceneApiTests):
             profile.json()[key] for key in ("projectId", "sceneId", "sceneRevision", "modelId", "modelVersion", "platform")))
         self.assertNotIn("audit", profile.json())
         self.assertNotIn("updatedBy", profile.json())
-        self.assertEqual((2, "inherited"), tuple(profile.json()[key] for key in ("schemaVersion", "source")))
+        self.assertEqual((2, "platform"), tuple(profile.json()[key] for key in ("schemaVersion", "source")))
         release = member["executionModel"]
         self.assertEqual(("helmet", "1.0.0", "PUBLISHED"), tuple(release[key] for key in ("modelId", "version", "status")))
         self.assertNotIn("downloadUrl", release)
@@ -180,31 +165,23 @@ class SceneExecutionApiTests(SceneApiTests):
             json={**payload, "operation": "renew", "grantToken": grant})
         self.assertIn(renewed.status_code, (404, 409))
 
-    def test_parameters_frozen_until_explicit_reapproval_old_urls_rejected(self):
+    def test_publication_updates_parameters_without_changing_scene_or_weight_urls(self):
         scene = self.mobile_scene()
         member = scene["models"][0]
         before = self.client.get(member["parameterUrl"], headers=self.user).json()
         model = main.model_catalog.get("helmet", "1.0.0")
         store = main.model_parameter_store
-        current = store.get(model, "android", self.project_id)
-        current["detection"]["confidenceThreshold"] = 0.22
-        store.save(model, "android", current, "test", current["revision"], self.project_id)
+        draft = store.get(model, "android")
+        draft["detection"]["confidenceThreshold"] = .22
+        store.save(model, "android", draft, "admin", 0)
         self.assertEqual(before, self.client.get(member["parameterUrl"], headers=self.user).json())
-        refreshed = self._assign({**self.body, "target": "mobile", "parameterRevision": 1,
-                                  "expectedRevision": 1})
-        self.assertEqual(200, refreshed.status_code, refreshed.text)
-        confirmed = self.client.put(self.scenes + "/safety/models", headers=self.owner,
-            json={"expectedRevision": 2, "models": [self.member("helmet", target="mobile")]})
-        self.assertEqual(200, confirmed.status_code, confirmed.text)
-        self.approve(3)
-        new_scene = self.client.get(self.scenes + "/safety", headers=self.user).json()
-        new_member = new_scene["models"][0]
-        after = self.client.get(new_member["parameterUrl"], headers=self.user).json()
-        self.assertEqual(1, after["revision"])
-        self.assertEqual(0.22, after["detection"]["confidenceThreshold"])
-        self.assertEqual(409, self.client.get(member["parameterUrl"], headers=self.user).status_code)
-        self.assertEqual(409, self.client.get(member["executionModel"]["artifacts"][0]["url"], headers=self.user).status_code)
+        store.publish(model, "android", "admin", 1, 0)
+        after = self.client.get(member["parameterUrl"], headers=self.user).json()
+        self.assertEqual((1, .22), (after["revision"], after["detection"]["confidenceThreshold"]))
+        self.assertEqual(200, self.client.get(member["executionModel"]["artifacts"][0]["url"], headers=self.user).status_code)
+        self.assertEqual(2, main.project_scenes.get(self.project_id, "safety")["revision"])
         self.assertEqual(0, scene["models"][0]["parameterSnapshot"]["revision"])
+
 
     def test_edit_revoke_cross_project_target_version_and_member_checks(self):
         scene = self.mobile_scene()
@@ -234,22 +211,21 @@ class SceneExecutionApiTests(SceneApiTests):
         for url in (new_member["parameterUrl"], new_member["executionModel"]["artifacts"][0]["url"]):
             self.assertEqual(404, self.client.get(url, headers=self.user).status_code)
 
-    def test_old_approved_scene_without_snapshot_and_client_supplied_snapshot_fail_closed(self):
+    def test_legacy_scene_snapshot_is_not_authority_and_client_cannot_inject_one(self):
         scene = self.mobile_scene()
         self.scene_store._memory[(self.project_id, "safety")]["models"][0].pop("parameterSnapshot")
         visible = self.client.get(self.scenes + "/safety", headers=self.user).json()
-        self.assertTrue(visible["available"])
-        self.assertFalse(visible["models"][0]["executionReady"])
-        self.assertNotIn("executionModel", visible["models"][0])
-        self.assertEqual(409, self.client.get(scene["models"][0]["parameterUrl"], headers=self.user).status_code)
-        resolved = self.client.post(self.scenes + "/safety/resolve", headers=self.user,
-            json={"expectedRevision": 2, "target": "mobile", "inputType": "image"})
-        self.assertEqual("scene_parameters_not_approved", resolved.json()["detail"]["code"])
+        self.assertTrue(visible["models"][0]["executionReady"])
+        self.assertEqual("platform", visible["models"][0]["parameterSnapshot"]["source"])
         injected = {**self.scene, "sceneId": "injection", "models": [
             {**self.member("helmet"), "parameterSnapshot": scene["models"][0]["parameterSnapshot"]}]}
         self.assertEqual(422, self.create(injected).status_code)
-        self.approve(2)
-        self.assertTrue(self.client.get(self.scenes + "/safety", headers=self.user).json()["models"][0]["executionReady"])
+        from app.model_parameters import ModelParameterError
+        with patch.object(main.model_parameter_store, "published", side_effect=ModelParameterError("platform_parameters_unpublished", "unpublished")):
+            response = self.client.post(self.scenes + "/safety/resolve", headers=self.user,
+                json={"expectedRevision": 2, "target": "mobile", "inputType": "image"})
+            self.assertIn(response.status_code, (404, 409))
+
 
     def test_model_revoke_and_multi_model_remain_fail_closed(self):
         scene = self.mobile_scene()
@@ -270,36 +246,22 @@ class SceneExecutionApiTests(SceneApiTests):
 
 
 class SceneParameterSqliteTests(SceneSqliteTests):
-    def test_scene_override_survives_reopen_repeated_save_and_approval(self):
-        from types import SimpleNamespace
-        from app.auth import Principal
-        from app.database import ProjectModelAssignmentRecord
-        with self.db.session() as session:
-            session.add(AccountRecord(account_id='category-admin', username='category-admin',
-                password_hash='not-a-login', role='admin', platform_role='PLATFORM_ADMIN', enabled=True))
-            # The fixture has deliberately incomplete parameters for unrelated tests.
-            row = session.scalar(select(ProjectModelAssignmentRecord).where(
-                ProjectModelAssignmentRecord.assignment_id == 'pm-p1-helmet'))
-            row.parameter_snapshot = {**self.assignments.parameters.default_profile(self.catalog.get('helmet','1.0.0'),'server'), 'projectId':'p1'}
-        context=SimpleNamespace(project_id='p1',project_role=None,
-            principal=Principal('category-admin','category-admin','admin','PLATFORM_ADMIN'))
-        scene=self.store.save('p1','safety',{**self.changes,'models':[self.member('helmet')]},0,creating=True)
-        member_id=scene['models'][0]['memberId']
-        profile=self.store.member_profile('p1','safety',member_id,1)
-        profile['alertRules'][0]['enabled']=False
-        saved=self.store.save_member_profile('p1','safety',member_id,1,profile,
-            expected_revision=0,actor='category-admin',context=context)
+    def test_platform_publication_survives_reopen_without_mutating_scene_history(self):
+        self.store.save("p1", "safety", self.changes, 0, creating=True)
+        approved = self.store.save("p1", "safety", {"approved": True}, 1, approval_reason="review")
+        model = self.catalog.get("helmet", "1.0.0")
+        parameters = self.assignments.parameters
+        draft = parameters.get(model, "server")
+        draft["alertRules"][0]["enabled"] = False
+        parameters.save(model, "server", draft, "admin", 0)
+        parameters.publish(model, "server", "admin", 1, 0)
         self.db.close()
-        reopened=ProjectScenes(self.db,self.catalog,self.assignments)
-        self.assertEqual(saved,reopened.member_profile('p1','safety',member_id,2))
-        saved=reopened.save_member_profile('p1','safety',member_id,2,saved,
-            expected_revision=1,actor='category-admin',context=context)
-        approved=reopened.save('p1','safety',{'approved':True},3,approval_reason='review')
-        self.assertEqual(2,saved['revision'])
-        self.assertFalse(approved['models'][0]['parameterSnapshot']['alertRules'][0]['enabled'])
-        self.assertEqual(approved['models'][0]['parameterSnapshot'],approved['plans'][0]['parameterSources'][0]['parameterSnapshot'])
-        revised=reopened.save('p1','safety',{'models':[{**self.member('helmet'), 'memberId':member_id,'parameterRevision':0}]},4)
-        self.assertFalse(revised['models'][0]['parameterSnapshot']['alertRules'][0]['enabled'])
+        reopened = ProjectScenes(self.db, self.catalog, self.assignments)
+        self.assertEqual(approved, reopened.get("p1", "safety"))
+        profile = reopened.reviewed_parameters(approved, approved["models"][0])
+        self.assertEqual(1, profile["revision"])
+        self.assertFalse(profile["alertRules"][0]["enabled"])
+
 
     def test_runtime_grant_digest_persists_and_is_atomically_consumed(self):
         from app.project_scenes import SceneRuntimeGrant
@@ -364,39 +326,15 @@ class SceneParameterSqliteTests(SceneSqliteTests):
             outcomes = list(pool.map(consume, range(2)))
         self.assertEqual(["consumed", "rejected"], sorted(outcomes))
 
-    def test_member_profile_transaction_rechecks_scene_and_revoked_authority(self):
-        from types import SimpleNamespace
-        from app.auth import Principal
-        from app.database import AccountRecord, ProjectMembershipRecord
-        with self.db.session() as session:
-            session.add(AccountRecord(account_id="profile-owner", username="profile-owner",
-                password_hash="not-a-login", role="operator", platform_role="NORMAL_USER", enabled=True))
-            session.flush()
-            session.add(ProjectMembershipRecord(project_id="p1", account_id="profile-owner",
-                project_role="PROJECT_OWNER", enabled=True, revision=1))
-        context = SimpleNamespace(project_id="p1", project_role="PROJECT_OWNER",
-            principal=Principal("profile-owner", "profile-owner", "operator", "NORMAL_USER"))
-        scene = self.store.save("p1", "safety", self.changes, 0, creating=True)
-        member = scene["models"][0]
-        model = self.catalog.get(member["modelId"], member["version"])
+    def test_project_parameter_writer_rejected_even_with_internal_context(self):
+        from app.model_parameters import ModelParameterError
+        model = self.catalog.get("helmet", "1.0.0")
         parameters = self.assignments.parameters
-        profile = parameters.get(model, "server", "p1")
-        def write(revision, expected):
-            return parameters.save(model, "server", profile, "profile-owner", expected, "p1",
-                context=context, request_id="profile-lock-test",
-                before_write=lambda session: self.store.guard_member_profile_write(
-                    session, context, "safety", member["memberId"], revision))
-        self.assertEqual(1, write(1, 0)["revision"])
-        self.store.save("p1", "safety", {"name": "changed after preflight"}, 1)
-        with self.assertRaises(HTTPException) as stale:
-            write(1, 1)
-        self.assertEqual(409, stale.exception.status_code)
-        with self.db.session() as session:
-            session.get(ProjectMembershipRecord, ("p1", "profile-owner")).enabled = False
-        with self.assertRaises(HTTPException) as revoked:
-            write(2, 1)
-        self.assertEqual(403, revoked.exception.status_code)
-        self.assertEqual(1, parameters.get(model, "server", "p1")["revision"])
+        before = parameters.get(model, "server", "p1")
+        with self.assertRaises(ModelParameterError):
+            parameters.save(model, "server", before, "owner", 0, "p1")
+        self.assertEqual(before, parameters.get(model, "server", "p1"))
+
 
     def test_approved_multimember_plan_parameter_sources_persist_after_reopen(self):
         created = self.store.save("p1", "safety", self.changes, 0, creating=True)
@@ -454,7 +392,7 @@ class SceneParameterPostgresTests(SceneParameterSqliteTests):
         barrier = Barrier(2)
         def edit():
             barrier.wait(timeout=10)
-            return writer.save(model, "server", changed, "test", 0, "p1")
+            return writer.save(model, "server", changed, "test", 0)
         def approve():
             barrier.wait(timeout=10)
             return self.store.save("p1", "safety", {"approved": True}, 1, approval_reason="review")
@@ -463,7 +401,7 @@ class SceneParameterPostgresTests(SceneParameterSqliteTests):
             edit_future.result(timeout=30)
             snapshot = approval_future.result(timeout=30)["models"][0]["parameterSnapshot"]
         self.assertEqual(0, snapshot["revision"])
-        self.assertEqual({}, snapshot["detection"])
+        self.assertEqual(initial["detection"], snapshot["detection"])
 
     def test_concurrent_inherited_platform_edit_does_not_change_inventory_snapshot(self):
         self.store.save("p1", "safety", self.changes, 0, creating=True)
@@ -487,7 +425,7 @@ class SceneParameterPostgresTests(SceneParameterSqliteTests):
             snapshot = approval_future.result(timeout=30)["models"][0]["parameterSnapshot"]
         self.assertEqual(0, snapshot["revision"])
         self.assertNotIn("inheritedRevision", snapshot)
-        self.assertEqual({}, snapshot["detection"])
+        self.assertEqual(initial["detection"], snapshot["detection"])
 
 
 class SceneParameterMigrationTests(unittest.TestCase):
