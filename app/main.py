@@ -1914,31 +1914,32 @@ async def ingest_mobile_alert(
     project_id: str | None = None,
 ):
     """Human inspection or explicitly capability-scoped machine ingestion."""
+    def unsafe_evidence(value):
+        if isinstance(value, dict):
+            return any(key.lower() in {"snapshotdataurl", "localpath", "objectkey", "objectstorage", "base64"}
+                       or unsafe_evidence(child) for key, child in value.items())
+        if isinstance(value, list):
+            return any(unsafe_evidence(child) for child in value)
+        return isinstance(value, str) and (value.strip().lower().startswith(("data:", "file:"))
+            or (not value.startswith("/aiyoloapi/projects/")
+                and bool(re.match(r"^(?:[A-Za-z]:[\\/]|/|\\\\)", value))))
+
+    service = isinstance(context.principal, ServicePrincipal)
     contract = http_request.headers.get("X-Mobile-Alert-Contract")
+    if (not service or contract is not None) and (unsafe_evidence(request.evidence) or
+            (request.disposition and unsafe_evidence(request.disposition.screenshot))):
+        raise HTTPException(422, detail={"code": "invalid_evidence", "message": "use the thumbnail upload endpoint"})
     if contract is not None:
         if contract != "1.0":
             raise HTTPException(400, detail={"code": "invalid_event", "message": "unsupported alert contract"})
         if request.disposition is not None:
             raise HTTPException(422, detail={"code": "invalid_event", "message": "v1 disposition requires the delta route"})
 
-        def unsafe_evidence(value):
-            if isinstance(value, dict):
-                return any(key.lower() in {"snapshotdataurl", "localpath", "objectkey", "objectstorage", "base64"}
-                           or unsafe_evidence(child) for key, child in value.items())
-            if isinstance(value, list):
-                return any(unsafe_evidence(child) for child in value)
-            return isinstance(value, str) and (value.strip().lower().startswith(("data:", "file:"))
-                or (not value.startswith("/aiyoloapi/projects/")
-                    and bool(re.match(r"^(?:[A-Za-z]:[\\/]|/|\\\\)", value))))
-
-        if unsafe_evidence(request.evidence):
-            raise HTTPException(422, detail={"code": "invalid_evidence", "message": "v1 evidence must not contain image bytes, local paths or object keys"})
     try:
         assert_ingest_envelope(request, context)
     except HTTPException as exc:
         audit_ingest(context, http_request, request.eventId, error=exc)
         raise
-    service = isinstance(context.principal, ServicePrincipal)
     service_digest = hashlib.sha256(json.dumps(
         request.model_dump(exclude={"projectId"}), sort_keys=True, separators=(",", ":"),
         ensure_ascii=False,
@@ -1967,7 +1968,7 @@ async def ingest_mobile_alert(
 
     evidence = dict(request.evidence)
     snapshot_data_url = evidence.pop("snapshotDataUrl", None)
-    if snapshot_data_url is not None:
+    if service and snapshot_data_url is not None:
         if not isinstance(snapshot_data_url, str) or not re.match(
             r"^data:image/(?:png|jpeg|jpg|webp);base64,[A-Za-z0-9+/=\r\n]+$",
             snapshot_data_url,
@@ -2259,9 +2260,11 @@ async def upload_alert_evidence(
         uuid.UUID(idempotency_key)
     except (ValueError, AttributeError):
         raise HTTPException(400, detail={"code": "invalid_evidence", "message": "Idempotency-Key must be a UUID"})
-    if evidence_type not in {"thumbnail", "original"}:
-        raise HTTPException(422, detail={"code": "invalid_evidence", "message": "evidenceType must be thumbnail or original"})
-    max_bytes = 128 * 1024 if evidence_type == "thumbnail" else 5 * 1024 * 1024
+    if evidence_type == "original":
+        raise HTTPException(410, detail={"code": "original_upload_retired", "retryable": False})
+    if evidence_type != "thumbnail":
+        raise HTTPException(422, detail={"code": "invalid_evidence", "message": "only compressed alert thumbnails are accepted"})
+    max_bytes = 128 * 1024
     try:
         alert_disposition_store.get(event_id, context.project_id)
     except KeyError:

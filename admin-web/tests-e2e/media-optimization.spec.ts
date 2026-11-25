@@ -146,6 +146,25 @@ test('detail shares the three-read budget and preserves capture overlays and ori
   await record(state,'detail-budget-overlay-original')
 })
 
+test('mobile capture detail places the compressed image beside facts and stacks them on narrow screens', async ({ context, page }) => {
+  const state = await service(context, page)
+  state.events[0]!.origin = 'MOBILE_CAMERA'
+  await page.goto('/admin-next/alerts?project=' + fixtureProject.projectId)
+  await page.locator('.alert-event-row').filter({ hasText: '证据事件 0' }).click()
+  const dialog = page.getByRole('dialog')
+  const evidence = dialog.getByRole('region', { name: '事件证据图片' })
+  const facts = dialog.getByRole('region', { name: '事件事实' })
+  await expect(evidence.getByRole('heading', { name: '压缩告警图' })).toBeVisible()
+  await expect(evidence.getByRole('img')).toBeVisible()
+  await expect(evidence.getByRole('button')).toHaveCount(0)
+  const desktop = (await evidence.boundingBox())!
+  expect((await facts.boundingBox())!.x).toBeGreaterThanOrEqual(desktop.x + desktop.width)
+  await page.setViewportSize({ width: 390, height: 844 })
+  const narrow = (await evidence.boundingBox())!
+  expect((await facts.boundingBox())!.y).toBeGreaterThanOrEqual(narrow.y + narrow.height)
+  expect(await dialog.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true)
+})
+
 test('failed and undecodable preview frames recover without manual reconnect or stale live labels',async({context,page})=>{
   const state=await service(context,page);state.previewStatus=503
   await page.goto('/admin-next/streams?project='+fixtureProject.projectId);await expect(page.locator('.preview-state')).toContainText('预览不可用')

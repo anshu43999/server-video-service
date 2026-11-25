@@ -87,16 +87,11 @@ describe('alert API contract', () => {
     await expect(alertsApi.list()).rejects.toMatchObject({ code: 'invalid_alert_event' })
   })
 
-  it('carries CAS revision and an independent original request identity', async () => {
+  it('carries the disposition CAS revision', async () => {
     const fetch = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json(majorEvent))
     vi.stubGlobal('fetch', fetch)
     await alertsApi.disposition(majorEvent.eventId, 'ACKNOWLEDGED', '', 7)
     expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ expectedRevision: 7 })
-    const id = crypto.randomUUID()
-    await alertsApi.requestOriginal(majorEvent.eventId, 7, id)
-    expect(String(fetch.mock.calls[1][0])).toContain('/original-requests')
-    expect(JSON.parse(String(fetch.mock.calls[1][1]?.body))).toEqual({ expectedRevision: 7, operationId: id })
-    expect(new Headers(fetch.mock.calls[1][1]?.headers).get('Idempotency-Key')).toBe(id)
   })
 
   it('loads evidence as a blob through the authenticated event endpoint', async () => {

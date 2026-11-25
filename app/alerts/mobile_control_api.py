@@ -1,6 +1,4 @@
 """Project-scoped backend requests and original-capture reconciliation."""
-import hashlib
-import json
 from typing import Literal
 from uuid import UUID
 
@@ -9,7 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from ..project_auth import (PROJECT_ALERTS_DISPOSE, PROJECT_ALERTS_READ,
                             PROJECT_INSPECTION_USE, ProjectContext, require_project_capability)
-from .disposition import public_alert_event
 
 
 class CaptureIdentity(BaseModel):
@@ -35,7 +32,7 @@ class OriginalReceipt(BaseModel):
     status: Literal["UPLOADED", "UNAVAILABLE"]
     contentVersion: StrictInt | None = Field(default=None, ge=1)
     sha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
-    reason: Literal["no_local_capture", "local_file_missing", "local_media_purged", "invalid_local_evidence"] | None = None
+    reason: Literal["no_local_capture", "local_file_missing", "local_media_purged", "invalid_local_evidence", "original_upload_retired"] | None = None
 
     @model_validator(mode="after")
     def outcome(self):
@@ -67,14 +64,7 @@ def create_mobile_control_router(store):
     @router.post("/{event_id}/original-requests")
     def request_original(project_id: str, event_id: str, body: OriginalRequest, request: Request,
                          context: ProjectContext = Depends(require_project_capability(PROJECT_ALERTS_DISPOSE))):
-        if request.headers.get("Idempotency-Key") != str(body.operationId):
-            raise HTTPException(422, detail={"code": "idempotency_key_mismatch"})
-        digest = hashlib.sha256(json.dumps(body.model_dump(mode="json"), sort_keys=True).encode()).hexdigest()
-        try:
-            return public_alert_event(store.request_original(event_id, context.project_id,
-                context.principal.account_id, body.expectedRevision, str(body.operationId), digest))
-        except (ValueError, KeyError) as error:
-            raise control_error(error) from error
+        raise HTTPException(410, detail={"code": "original_upload_retired", "retryable": False})
 
     @router.post("/{event_id}/original-requests/{request_id}/receipt")
     def receipt(project_id: str, event_id: str, request_id: UUID, body: OriginalReceipt,

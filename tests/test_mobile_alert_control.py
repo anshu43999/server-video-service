@@ -37,10 +37,10 @@ class MobileControlStoreTests(unittest.TestCase):
     def test_backend_false_positive_is_atomic_and_producer_is_private(self):
         result = self.dispose()
         public = public_alert_event(result)
-        self.assertEqual("PENDING", public["originalRequest"]["status"])
+        self.assertNotIn("originalRequest", public)
         self.assertNotIn("mobileProducer", public)
         self.assertNotIn("_originalRequests", public)
-        self.assertEqual(public["originalRequest"]["requestId"], self.sync()[0]["requests"][0]["requestId"])
+        self.assertEqual([], self.sync()[0]["requests"])
         self.assertEqual([], self.sync(account="another-account"))
         self.assertEqual([], self.sync(producer=str(uuid4())))
         self.assertEqual([], self.sync(project="another-project"))
@@ -54,9 +54,16 @@ class MobileControlStoreTests(unittest.TestCase):
         self.assertEqual(1, len(result["disposition"]["history"]))
         self.assertNotIn("_originalRequests", result)
 
+    def legacy_request(self):
+        item = self.dispose()
+        request_id = str(uuid4())
+        item["_originalRequests"] = {request_id: {"requestId": request_id, "status": "PENDING"}}
+        self.store.register(item)
+        self.assertEqual([], self.sync()[0]["requests"])
+        return request_id
+
     def test_receipt_replay_missing_file_and_conflicting_terminal_result(self):
-        request = self.dispose()["_originalRequests"]
-        request_id = next(iter(request))
+        request_id = self.legacy_request()
         receipt = {"producerId": PRODUCER, "status": "UNAVAILABLE", "reason": "local_file_missing"}
         first = self.store.original_receipt("local:control:1", DEFAULT_PROJECT_ID, "capture-account", request_id, receipt)
         self.assertEqual(first, self.store.original_receipt("local:control:1", DEFAULT_PROJECT_ID,
@@ -67,7 +74,7 @@ class MobileControlStoreTests(unittest.TestCase):
         self.assertEqual("FALSE_POSITIVE", self.store.get("local:control:1")["disposition"]["status"])
 
     def test_uploaded_receipt_requires_real_canonical_reference(self):
-        request_id = next(iter(self.dispose()["_originalRequests"]))
+        request_id = self.legacy_request()
         receipt = {"producerId": PRODUCER, "status": "UPLOADED", "contentVersion": 1, "sha256": "a" * 64}
         with self.assertRaisesRegex(ValueError, "original_not_uploaded"):
             self.store.original_receipt("local:control:1", DEFAULT_PROJECT_ID, "capture-account", request_id, receipt)
@@ -76,39 +83,10 @@ class MobileControlStoreTests(unittest.TestCase):
         self.assertEqual("UPLOADED", self.store.original_receipt("local:control:1", DEFAULT_PROJECT_ID,
                                          "capture-account", request_id, receipt)["status"])
 
-    def test_request_idempotency_cas_and_coalescing(self):
-        op = str(uuid4())
-        first = self.store.request_original("local:control:1", DEFAULT_PROJECT_ID, "backend", 0, op, "same")
-        self.dispose("ACKNOWLEDGED")
-        replay = self.store.request_original("local:control:1", DEFAULT_PROJECT_ID, "backend", 0, op, "same")
-        self.assertEqual(first["_originalRequests"], replay["_originalRequests"])
-        with self.assertRaisesRegex(ValueError, "idempotency_conflict"):
-            self.store.request_original("local:control:1", DEFAULT_PROJECT_ID, "backend", 0, op, "changed")
-        self.store.request_original("local:control:1", DEFAULT_PROJECT_ID, "backend", 1, str(uuid4()), "new")
-        self.assertEqual(1, len(self.store.get("local:control:1")["_originalRequests"]))
-
-    def test_existing_original_satisfies_request_and_cannot_be_regressed(self):
-        self.store.register_evidence("local:control:1", DEFAULT_PROJECT_ID, "original", 1,
-                                    {"sha256": "a" * 64, "objectStorage": {"provider": "minio"}})
-        request = public_alert_event(self.dispose())["originalRequest"]
-        self.assertEqual("UPLOADED", request["status"])
-        with self.assertRaisesRegex(ValueError, "receipt_conflict"):
-            self.store.original_receipt("local:control:1", DEFAULT_PROJECT_ID, "capture-account", request["requestId"],
-                {"producerId": PRODUCER, "status": "UNAVAILABLE", "reason": "no_local_capture"})
-
-    def test_sync_is_bounded_after_repeated_terminal_requests(self):
-        for _ in range(4):
-            event = self.store.request_original("local:control:1", DEFAULT_PROJECT_ID, "backend", 0, str(uuid4()), "new")
-            request_id = list(event["_originalRequests"])[-1]
-            self.store.original_receipt("local:control:1", DEFAULT_PROJECT_ID, "capture-account", request_id,
-                {"producerId": PRODUCER, "status": "UNAVAILABLE", "reason": "local_file_missing"})
-        self.assertEqual(1, len(self.sync()[0]["requests"]))
-        self.assertEqual(request_id, self.sync()[0]["requests"][0]["requestId"])
-
     def test_unknown_legacy_capture_is_not_claimed(self):
         self.store.register_mobile_fact(fact("local:legacy:1", producer=False), DEFAULT_PROJECT_ID)
         result = self.store.dispose("local:legacy:1", "FALSE_POSITIVE", "backend")
-        self.assertEqual("producer_unregistered", public_alert_event(result)["originalRequest"]["unavailableReason"])
+        self.assertNotIn("originalRequest", public_alert_event(result))
         with self.assertRaisesRegex(ValueError, "producer_identity_conflict"):
             self.store.register_mobile_fact(fact("local:legacy:1"), DEFAULT_PROJECT_ID)
 
@@ -117,7 +95,7 @@ class MobileControlStoreTests(unittest.TestCase):
         self.dispose(operation_id=op, request_digest="same")
         replay = self.dispose(operation_id=op, request_digest="same")
         self.assertEqual(1, len(replay["disposition"]["history"]))
-        self.assertEqual(1, len(replay["_originalRequests"]))
+        self.assertNotIn("_originalRequests", replay)
 
 
 class MobileControlSqliteTests(unittest.TestCase):
@@ -150,7 +128,7 @@ class MobileControlSqliteTests(unittest.TestCase):
         result = reopened.get("local:control:1")
         self.assertEqual("FALSE_POSITIVE", result["disposition"]["status"])
         self.assertEqual(2, result["dispositionRevision"])
-        self.assertEqual(1, len(result["_originalRequests"]))
+        self.assertNotIn("_originalRequests", result)
         with self.assertRaisesRegex(ValueError, "disposition_revision_conflict"):
             reopened.dispose("local:control:1", "ACKNOWLEDGED", "mobile", expected_revision=0)
 
@@ -179,4 +157,4 @@ class MobileControlPostgresqlTests(unittest.TestCase):
             self.assertEqual(3, outcomes.count("disposition_revision_conflict"))
             reopened = AlertDispositionStore(database).get("local:control:1")
             self.assertEqual(1, reopened["dispositionRevision"])
-            self.assertEqual(1, len(reopened["_originalRequests"]))
+            self.assertNotIn("_originalRequests", reopened)

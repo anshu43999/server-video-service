@@ -21,6 +21,24 @@ beforeEach(() => {
 const event = { eventId: 'event-1', projectId: 'project-a', ruleId: 'PPE_NO_HELMET', label: 'HEAD', disposition: { status: 'OPEN' } }
 const generated = { contractVersion: '1.0', generationId: 'g-1', projectId: 'project-a', eventId: 'event-1', requestedBy: 'operator', idempotencyKey: crypto.randomUUID(), status: 'GENERATED', matchKey: { alertTypeId: 'PPE_NO_HELMET', recognitionCategoryId: 'HEAD' }, advice: { title: '安全帽处置建议', steps: [{ stepId: 'stop', order: 1, title: '暂停作业', instruction: '先撤离风险区' }], cautions: [] }, references: [{ referenceId: 'r', documentTitle: '安全制度', documentVersion: 'v1', clauseId: 'PPE-1', excerpt: '应佩戴安全帽', sourceName: '模拟库', sourceType: 'MOCK_KNOWLEDGE_BASE' }], knowledgeRevision: 1, retrievalProvider: 'SIMULATED_KNOWLEDGE_BASE', generationProvider: 'SIMULATED_LLM', sourceNotice: '模拟结果', error: null, createdAt: '2026-01-01T00:00:00Z', completedAt: '2026-01-01T00:00:01Z' }
 describe('alert advice detail interaction', () => {
+  it('keeps facts and disposition available when a mobile image fails or is missing', async () => {
+    const read = vi.spyOn(alertsApi, 'evidence').mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new ApiError({ status: 404, code: 'NOT_FOUND' }))
+    const wrapper = mount(AlertDetailDialog, { attachTo: document.body, global: { components: { UiButton, UiInput } },
+      props: { open: true, event: { ...event, origin: 'MOBILE_IMAGE' } as never, detailPhase: 'ready' } })
+    try {
+      const evidence = document.body.querySelector('.evidence-section')!
+      await vi.waitFor(() => expect(evidence.textContent).toContain('证据读取失败'))
+      evidence.querySelector('button')!.click()
+      await vi.waitFor(() => expect(evidence.textContent).toContain('没有可用证据'))
+      expect(read).toHaveBeenCalledTimes(2)
+      expect(evidence.textContent).not.toContain('原图')
+      expect(document.body.querySelector('.event-facts')?.textContent).toContain(event.eventId)
+      document.body.querySelector<HTMLButtonElement>('.alert-detail-actions .primary-button')!.click()
+      expect(wrapper.emitted('dispose')).toEqual([['ACKNOWLEDGED', '']])
+    } finally { wrapper.unmount() }
+  })
+
   it('reloads changed thumbnail metadata without clearing notes or replacing a selected original', async () => {
     const evidence = vi.spyOn(alertsApi, 'evidence').mockResolvedValue(new Blob(['thumbnail']))
     const original = vi.spyOn(alertsApi, 'originalEvidence').mockResolvedValue(new Blob(['original']))
@@ -43,6 +61,11 @@ describe('alert advice detail interaction', () => {
       await wrapper.setProps({ event: { ...current, evidence: { snapshotUri: 'third-thumbnail' } } as never })
       expect(evidence).toHaveBeenCalledTimes(2)
       expect(document.body.querySelector('.alert-detail-dialog img')).toBe(image)
+      expect(note.value).toBe('保留备注')
+      expect(document.body.querySelector('.evidence-heading h3')?.textContent).toBe('历史原图')
+      ;[...document.body.querySelectorAll('button')].find(node => node.textContent?.includes('返回压缩告警图'))!.click()
+      await vi.waitFor(() => expect(evidence).toHaveBeenCalledTimes(3))
+      expect(document.body.querySelector('.evidence-heading h3')?.textContent).toBe('压缩告警图')
       expect(note.value).toBe('保留备注')
     } finally { wrapper.unmount() }
   })

@@ -39,7 +39,7 @@ from ..database import (
 
 STATUSES = {"ACKNOWLEDGED", "FALSE_POSITIVE", "CLOSED"}
 from .mobile_control import (MobileAlertControlStore, check_disposition_revision,
-                             disposition_committed, disposition_revision, latest_original_requests)
+                             disposition_revision, latest_original_requests)
 _ABSOLUTE_PATH = re.compile(r"^(?:[A-Za-z]:[\\/]|[\\/]{2}|/)")
 _SECRET_KEY = re.compile(r"(?:token|secret|password|authorization|credential|api[-_]?key|cookie)", re.I)
 
@@ -676,16 +676,7 @@ class AlertDispositionStore(MobileAlertControlStore):
                 if note:
                     action_mapping["note"] = str(note)[:1000]
                 item["disposition"] = action_mapping
-                previous_requests = len(item.get("_originalRequests", {}))
-                disposition_committed(item, revision, actor, status)
-                if len(item.get("_originalRequests", {})) > previous_requests:
-                    from uuid import uuid4
-                    session.add(PlatformAuditEventRecord(
-                        audit_id=str(uuid4()), occurred_at=datetime.now(timezone.utc),
-                        action="alert.evidence.request", target_type="alert_event", target_id=event_id,
-                        outcome="SUCCESS", change_summary={"projectId": project_id, "actor": actor,
-                                                            "reason": "FALSE_POSITIVE"},
-                        request_id=str(uuid4())))
+                item["dispositionRevision"] = revision + 1
                 if status == "FALSE_POSITIVE":
                     item["state"] = "ENDED"
                     entry_id = "fp-" + hashlib.sha256(f"{event_id}\0{action_time}".encode()).hexdigest()[:24]
@@ -750,7 +741,7 @@ class AlertDispositionStore(MobileAlertControlStore):
             history.append(action)
             disposition.update({"status": status, "actor": actor, "actedAtUs": action_time, "history": history})
             item["disposition"] = disposition
-            disposition_committed(item, revision, actor, status)
+            item["dispositionRevision"] = revision + 1
             # False positives are terminal for the current event and produce
             # one deterministic feedback entry per action.
             if status == "FALSE_POSITIVE":

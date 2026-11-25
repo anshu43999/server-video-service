@@ -36,12 +36,9 @@ const note = ref('')
 const evidencePhase = ref<'idle' | 'loading' | 'ready' | 'empty' | 'error'>('idle')
 const evidenceUrl = ref('')
 const evidenceElement = ref<HTMLElement>(), evidenceVisible = useVisibleElement(evidenceElement)
-const requestingOriginal = ref(false)
-const originalMessage = ref('')
-let originalOperation: { eventId: string; revision: number; id: string } | undefined
 let returnFocus: HTMLElement | null = null
 let evidenceController: AbortController | undefined
-let showingOriginalVersion: number | undefined
+const showingOriginalVersion = ref<number>()
 let evidenceDisposed = false
 let viewGeneration = 0
 const advicePhase = ref<'idle' | 'reading' | 'read-error' | 'loading' | 'ready' | 'error'>('idle')
@@ -70,7 +67,7 @@ function releaseEvidence() {
 
 async function loadEvidence(eventId: string, originalVersion?: number) {
   releaseEvidence()
-  showingOriginalVersion = originalVersion
+  showingOriginalVersion.value = originalVersion
   if (evidenceDisposed || !evidenceVisible.value || !props.open) { evidencePhase.value = 'idle'; return }
   const controller = new AbortController()
   evidenceController = controller
@@ -90,54 +87,17 @@ async function loadEvidence(eventId: string, originalVersion?: number) {
 }
 
 const mobileCapture = computed(() => ['MOBILE_CAMERA', 'MOBILE_IMAGE'].includes(props.event?.origin ?? ''))
-const serverOriginalVersion = computed(() => {
+const availableOriginalVersion = computed(() => {
+  if (mobileCapture.value && props.event?.originalRequest?.status === 'UPLOADED') {
+    return props.event.originalRequest.contentVersion
+  }
   if (props.event?.origin !== 'SERVER_STREAM') return undefined
   const originals = props.event.evidence?.original
   if (!originals || typeof originals !== 'object' || Array.isArray(originals)) return undefined
   const versions = Object.keys(originals).map(Number).filter(Number.isInteger).filter(value => value > 0)
   return versions.length ? Math.max(...versions) : undefined
 })
-const originalStatus = computed(() => {
-  const request = props.event?.originalRequest
-  if (!request) return '默认展示缩略图；需要细节时可请求原采集设备补传原图。'
-  if (request.status === 'PENDING') return '原图待补传：等待原采集设备联网并验证项目权限，无需现场用户再次确认。'
-  if (request.status === 'UPLOADED') return '原图已上传，可通过受鉴权接口查看。'
-  const reasons: Record<string, string> = {
-    producer_unregistered: '旧告警未登记原采集归属，无法自动派发补传请求',
-    no_local_capture: '原采集设备没有保存图片', local_file_missing: '本地原图已丢失',
-    local_media_purged: '用户已明确清理本地原图', invalid_local_evidence: '本地图片无法上传',
-  }
-  return `原图不可用：${reasons[request.unavailableReason ?? ''] ?? '原采集设备无法提供图片'}。告警处置仍有效。`
-})
-
-async function requestOriginal() {
-  const event = props.event
-  if (!event || requestingOriginal.value) return
-  const revision = event.dispositionRevision ?? 0
-  if (!originalOperation || originalOperation.eventId !== event.eventId || originalOperation.revision !== revision) {
-    originalOperation = { eventId: event.eventId, revision, id: crypto.randomUUID() }
-  }
-  const operation = originalOperation
-  const generation = viewGeneration
-  requestingOriginal.value = true
-  originalMessage.value = ''
-  try {
-    await alertsApi.requestOriginal(event.eventId, revision, operation.id)
-    if (generation !== viewGeneration || !props.open || props.event?.eventId !== event.eventId) return
-    originalOperation = undefined
-    originalMessage.value = '原图请求已保存；手机离线时会等待恢复，不代表图片已经上传。'
-    emit('retry', event.eventId)
-  } catch (error) {
-    if (generation !== viewGeneration || !props.open || props.event?.eventId !== event.eventId) return
-    originalMessage.value = isApiError(error) && error.status === 409
-      ? '事件已更新，请刷新详情后重新请求。'
-      : error instanceof Error ? error.message : '原图请求失败，请重试'
-    if (isApiError(error) && error.status === 409) { originalOperation = undefined; emit('retry', event.eventId) }
-  } finally {
-    if (generation === viewGeneration && props.event?.eventId === event.eventId) requestingOriginal.value = false
-  }
-}
-
+const previewLabel = computed(() => mobileCapture.value ? '压缩告警图' : availableOriginalVersion.value ? '告警缩略图' : '告警截图')
 function resetAdvice() {
   latestAdviceController?.abort(); latestAdviceController = undefined
   adviceController?.abort(); adviceController = undefined
@@ -211,11 +171,8 @@ async function loadAdviceHistory() {
 watch([() => props.open, () => props.event?.projectId, () => props.event?.eventId], async ([open, , eventId], previous) => {
   const generation = ++viewGeneration
   note.value = ''
-  originalMessage.value = ''
-  requestingOriginal.value = false
-  originalOperation = undefined
   resetAdvice()
-  showingOriginalVersion = undefined
+  showingOriginalVersion.value = undefined
   releaseEvidence()
   evidencePhase.value = 'idle'
   if (!open || !eventId) return
@@ -228,7 +185,7 @@ watch([() => props.open, () => props.event?.projectId, () => props.event?.eventI
 }, { immediate: true })
 watch(evidenceVisible, visible => {
   if (visible && props.open && props.event && evidencePhase.value === 'idle') {
-    void loadEvidence(props.event.eventId, showingOriginalVersion)
+    void loadEvidence(props.event.eventId, showingOriginalVersion.value)
   } else if (!visible && evidencePhase.value === 'loading') {
     releaseEvidence()
     evidencePhase.value = 'idle'
@@ -241,7 +198,7 @@ watch([() => props.open, () => props.event?.projectId, () => props.event?.eventI
   () => JSON.stringify([props.event?.evidence?.snapshotUri, props.event?.evidence?.thumbnail])],
 ([open, projectId, eventId, evidence], previous) => {
   if (open && eventId && previous && previous[0] && previous[1] === projectId && previous[2] === eventId &&
-    previous[3] !== evidence && showingOriginalVersion === undefined) void loadEvidence(eventId)
+    previous[3] !== evidence && showingOriginalVersion.value === undefined) void loadEvidence(eventId)
 })
 
 function requestClose() {
@@ -270,7 +227,7 @@ onBeforeUnmount(() => { evidenceDisposed = true; releaseScope(); ++viewGeneratio
       <section ref="dialog" class="alert-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="alert-detail-title" @keydown="onKeydown">
         <header class="alert-detail-header">
           <div>
-            <p class="eyebrow">EVENT EVIDENCE / {{ event?.eventId }}</p>
+            <p class="eyebrow">事件详情</p>
             <h2 id="alert-detail-title">{{ title }}</h2>
             <div class="alert-detail-badges"><span :class="`severity-badge is-${priority.key}`">通知 {{ priority.label }}</span><span :class="`disposition-badge is-${disposition.tone}`">{{ disposition.label }}</span></div>
           </div>
@@ -281,32 +238,28 @@ onBeforeUnmount(() => { evidenceDisposed = true; releaseScope(); ++viewGeneratio
 
         <div v-if="event" class="alert-detail-body" :aria-busy="detailPhase === 'loading'">
           <section ref="evidenceElement" class="evidence-section" aria-label="事件证据图片">
-            <EvidenceImage v-if="evidencePhase === 'ready'" :key="`${event.projectId}:${event.eventId}:${evidenceUrl}`"
-              :src="evidenceUrl" :event="event" :alt="`${title}事件证据`" @error="evidencePhase = 'error'" />
-            <div v-else class="evidence-placeholder" :class="`is-${evidencePhase}`">
-              <LoaderCircle v-if="evidencePhase === 'loading'" class="spinning" :size="26" aria-hidden="true" />
-              <ImageOff v-else :size="27" aria-hidden="true" />
-              <strong>{{ evidencePhase === 'idle' ? '待显示时读取证据' : evidencePhase === 'loading' ? '正在读取证据' : evidencePhase === 'error' ? '证据读取失败' : '没有可用证据' }}</strong>
-              <span>{{ evidencePhase === 'error' ? '图片服务暂时不可用，事件事实仍可处置。' : evidencePhase === 'empty' ? '服务端未保存该事件的证据图片。' : '通过受鉴权的证据接口加载。' }}</span>
+            <header class="evidence-heading">
+              <h3>{{ showingOriginalVersion ? (mobileCapture ? '历史原图' : '告警原图') : previewLabel }}</h3>
+              <UiButton v-if="showingOriginalVersion" class="secondary-button" type="button"
+                @click="loadEvidence(event.eventId)">返回{{ previewLabel }}</UiButton>
+              <UiButton v-else-if="availableOriginalVersion" class="secondary-button" type="button"
+                @click="loadEvidence(event.eventId, availableOriginalVersion)">{{ mobileCapture ? '查看已上传原图' : '查看原图' }}</UiButton>
+            </header>
+            <div class="evidence-viewport" :class="{ 'is-compact': evidencePhase === 'empty' || evidencePhase === 'error' }">
+              <EvidenceImage v-if="evidencePhase === 'ready'" :key="`${event.projectId}:${event.eventId}:${evidenceUrl}`"
+                :src="evidenceUrl" :event="event" :alt="`${title}事件证据`" @error="evidencePhase = 'error'" />
+              <div v-else class="evidence-placeholder" role="status">
+                <LoaderCircle v-if="evidencePhase === 'loading'" class="spinning" :size="26" aria-hidden="true" />
+                <ImageOff v-else :size="27" aria-hidden="true" />
+                <strong>{{ evidencePhase === 'idle' ? '待显示时读取证据' : evidencePhase === 'loading' ? '正在读取证据' : evidencePhase === 'error' ? '证据读取失败' : '没有可用证据' }}</strong>
+                <UiButton v-if="evidencePhase === 'error'" class="secondary-button" type="button"
+                  @click="loadEvidence(event.eventId, showingOriginalVersion)">重新读取图片</UiButton>
+              </div>
             </div>
           </section>
 
-          <section v-if="mobileCapture" class="event-facts" aria-label="原图补传状态">
-            <p role="status">{{ originalStatus }}</p>
-            <p v-if="originalMessage" role="status">{{ originalMessage }}</p>
-            <UiButton v-if="canDispose && event.originalRequest?.status !== 'UPLOADED'" class="secondary-button" type="button"
-              :disabled="busy || requestingOriginal || detailPhase !== 'ready' || event.originalRequest?.status === 'PENDING'"
-              @click="requestOriginal">{{ requestingOriginal ? '正在保存请求…' : event.originalRequest?.status === 'PENDING' ? '等待设备补传' : '请求上传原图' }}</UiButton>
-            <UiButton v-if="event.originalRequest?.status === 'UPLOADED' && event.originalRequest.contentVersion" class="secondary-button"
-              type="button" @click="loadEvidence(event.eventId, event.originalRequest.contentVersion)">查看已上传原图</UiButton>
-          </section>
-          <section v-else-if="event.origin === 'SERVER_STREAM'" class="event-facts" aria-label="视频流两级证据状态">
-            <p role="status">{{ serverOriginalVersion ? '当前展示告警缩略图；服务端已保存同一告警帧的原图。' : '这是历史单级视频流证据，系统不会伪造原图。' }}</p>
-            <UiButton v-if="serverOriginalVersion" class="secondary-button" type="button"
-              @click="loadEvidence(event.eventId, serverOriginalVersion)">查看原图</UiButton>
-          </section>
-
           <section class="event-facts" aria-label="事件事实">
+            <h3>事件信息</h3>
             <dl>
               <div><dt>事实级别</dt><dd>{{ factSeverity.label }}</dd></div>
               <div><dt>通知级别</dt><dd>{{ priority.label }}<small v-if="factSeverity.key !== priority.key">已提级</small></dd></div>

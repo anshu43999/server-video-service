@@ -37,19 +37,12 @@ class MobileControlApiTests(ProjectApiSupport, unittest.TestCase):
         response = self.client.post(self.event_path + "/false-positive", headers=self.headers,
                                     json={"expectedRevision": 0})
         self.assertEqual(200, response.status_code, response.text)
-        self.assertEqual("PENDING", response.json()["originalRequest"]["status"])
+        self.assertNotIn("originalRequest", response.json())
         state = self.sync().json()["events"][0]
         self.assertEqual(1, state["dispositionRevision"])
         self.assertEqual("FALSE_POSITIVE", state["disposition"]["status"])
+        self.assertEqual([], state["requests"])
         self.assertEqual([], self.sync(str(uuid4())).json()["events"])
-        path = self.event_path + "/original-requests/" + state["requests"][0]["requestId"] + "/receipt"
-        body = {"producerId": PRODUCER, "status": "UNAVAILABLE", "reason": "local_file_missing"}
-        first = self.client.post(path, headers=self.headers, json=body)
-        self.assertEqual(200, first.status_code, first.text)
-        self.assertEqual(first.json(), self.client.post(path, headers=self.headers, json=body).json())
-        denied = self.client.post(path, headers=self.headers, json={**body, "producerId": str(uuid4())})
-        self.assertEqual(404, denied.status_code)
-        self.assertEqual("local_file_missing", self.client.get(self.event_path, headers=self.headers).json()["originalRequest"]["unavailableReason"])
 
     def test_confirm_no_original_explicit_request_and_stale_l2(self):
         confirmed = self.client.post(self.event_path + "/acknowledge", headers=self.headers, json={"expectedRevision": 0})
@@ -59,11 +52,8 @@ class MobileControlApiTests(ProjectApiSupport, unittest.TestCase):
         headers = {**self.headers, "Idempotency-Key": op}
         first = self.client.post(self.event_path + "/original-requests", headers=headers,
                                  json={"operationId": op, "expectedRevision": 1})
-        self.assertEqual(200, first.status_code, first.text)
-        self.assertEqual("PENDING", first.json()["originalRequest"]["status"])
-        replay = self.client.post(self.event_path + "/original-requests", headers=headers,
-                                  json={"operationId": op, "expectedRevision": 1})
-        self.assertEqual(first.json(), replay.json())
+        self.assertEqual(410, first.status_code, first.text)
+        self.assertEqual("original_upload_retired", first.json()["detail"]["code"])
         conflict = self.client.put(self.event_path + "/disposition", headers=headers,
             json={"operationId": op, "expectedRevision": 0, "status": "FALSE_POSITIVE", "actedAtUs": 2})
         self.assertEqual(409, conflict.status_code, conflict.text)

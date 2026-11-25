@@ -45,18 +45,18 @@ class MobileAlertIngestApiTests(ProjectApiSupport, unittest.TestCase):
             "lastSeenAtUs": 1000,
             "effectiveThresholds": {"minimumConfidence": 0.8},
             "detectionResults": [{"label": "head", "confidence": 0.91}],
-            "evidence": {"snapshotDataUrl": "data:image/png;base64,AAAA"},
+            "evidence": {},
         }
         value.update(overrides)
         return value
 
-    def upload_tiered(self, *, content=b"\xff\xd8\xfftiered-jpeg", version=1, event_id=None, headers=None):
+    def upload_tiered(self, *, content=b"\xff\xd8\xfftiered-jpeg", version=1, event_id=None, headers=None, kind="thumbnail"):
         event_id = event_id or self.payload()["eventId"]
         path = f"{self.alerts_path}/{quote(event_id, safe='')}/evidence"
         upload_headers = {**self.headers, "X-Mobile-Alert-Contract": "1.0",
                           "Idempotency-Key": str(uuid.uuid4()), **(headers or {})}
         return self.client.post(path, headers=upload_headers, data={
-            "evidenceType": "thumbnail", "contentVersion": str(version),
+            "evidenceType": kind, "contentVersion": str(version),
             "sha256": hashlib.sha256(content).hexdigest(),
         }, files={"file": ("image.jpg", content, "image/jpeg")})
 
@@ -340,19 +340,6 @@ class MobileAlertIngestApiTests(ProjectApiSupport, unittest.TestCase):
         # also starts the lifespan, which must use the same isolated storage fixture.
         self.addCleanup(setattr, alert_evidence_store, "enabled", alert_evidence_store.enabled)
         alert_evidence_store.enabled = True
-        store_data_url.return_value = {
-            "snapshotUri": (
-                f"{self.alerts_path}/local%3Auploaded-helmet%3APPE_NO_HELMET%3A123/evidence"
-            ),
-            "objectStorage": {
-                "provider": "minio",
-                "bucket": "aiyolo-alerts",
-                "objectKey": "alerts/ab/event.png",
-                "contentType": "image/png",
-                "sizeBytes": 3,
-                "sha256": "abc",
-            },
-        }
         with TestClient(app) as anonymous:
             denied = anonymous.post(
                 f"{self.alerts_path}/mobile-ingest", json=self.payload()
@@ -368,38 +355,16 @@ class MobileAlertIngestApiTests(ProjectApiSupport, unittest.TestCase):
         event = response.json()["event"]
         self.assertEqual(event["eventId"], "local:uploaded-helmet:PPE_NO_HELMET:123")
         self.assertEqual(event["origin"], "MOBILE_IMAGE")
-        self.assertTrue(event["evidence"]["snapshotUri"].endswith("/evidence"))
-        self.assertEqual(event["evidence"]["objectStorage"]["provider"], "minio")
-        self.assertNotIn("snapshotDataUrl", event["evidence"])
-        self.assertNotIn("data:image", str(event))
-        store_data_url.assert_called_once()
-        with patch.object(
-            alert_evidence_store, "read", return_value=EvidenceBody(b"png-bytes", "image/png")
-        ) as read:
-            image = self.client.get(
-                event["evidence"]["snapshotUri"],
-                headers=self.headers,
-            )
-        self.assertEqual(image.status_code, 200)
-        self.assertEqual(image.content, b"png-bytes")
-        self.assertEqual(image.headers["content-type"], "image/png")
-        read.assert_called_once()
-
-    @patch.object(
-        alert_evidence_store,
-        "store_data_url",
-        side_effect=EvidenceStorageError("MinIO unavailable"),
-    )
-    def test_mobile_ingest_does_not_fall_back_to_database_when_minio_fails(self, _):
-        self.addCleanup(setattr, alert_evidence_store, "enabled", alert_evidence_store.enabled)
-        alert_evidence_store.enabled = True
-        response = self.client.post(
-            f"{self.alerts_path}/mobile-ingest",
-            headers=self.headers,
-            json=self.payload(),
-        )
-        self.assertEqual(response.status_code, 503)
-        self.assertEqual(alert_disposition_store.list(project_id=self.project_id), [])
+        self.assertEqual({}, event["evidence"])
+        for inline in ({"snapshotDataUrl": "data:image/png;base64,AAAA"}, {"image": "data:image/png;base64,AAAA"}):
+            rejected = self.client.post(f"{self.alerts_path}/mobile-ingest", headers=self.headers,
+                                        json=self.payload(evidence=inline))
+            self.assertEqual(422, rejected.status_code)
+        with patch.object(alert_evidence_store, "store_tiered_bytes") as write:
+            rejected = self.upload_tiered(kind="original")
+            self.assertEqual(410, rejected.status_code)
+            write.assert_not_called()
+        store_data_url.assert_not_called()
 
     def test_legacy_mobile_payload_infers_origin_from_source(self):
         payload = self.payload(sourceId="camera:back")
@@ -415,13 +380,8 @@ class MobileAlertIngestApiTests(ProjectApiSupport, unittest.TestCase):
     def test_local_inline_evidence_is_readable_from_admin_evidence_endpoint(self):
         self.addCleanup(setattr, alert_evidence_store, "enabled", alert_evidence_store.enabled)
         alert_evidence_store.enabled = False
-        response = self.client.post(
-            f"{self.alerts_path}/mobile-ingest",
-            headers=self.headers,
-            json=self.payload(),
-        )
-        self.assertEqual(response.status_code, 202)
-        event = response.json()["event"]
+        event = self.payload(evidence={"snapshotUri": "data:image/png;base64,AAAA"})
+        alert_disposition_store.register(event, project_id=self.project_id)
 
         image = self.client.get(
             f"{self.alerts_path}/{event['eventId']}/evidence",

@@ -31,11 +31,6 @@ export const alertsApi = {
   evidence(eventId: string, signal?: AbortSignal) {
     return apiClient.request<Blob>(eventPath(eventId, '/evidence'), { response: 'blob', signal, timeoutMs: 20_000 })
   },
-  requestOriginal(eventId: string, expectedRevision: number, operationId: string) {
-    return apiClient.request<AlertEvent>(eventPath(eventId, '/original-requests'), {
-      method: 'POST', json: { operationId, expectedRevision }, headers: { 'Idempotency-Key': operationId },
-    }).then(parseEvent)
-  },
   latestAdvice(eventId: string, signal?: AbortSignal) {
     return apiClient.request<AdviceGeneration>(eventPath(eventId, '/advice-generations/latest'), { signal })
   },
