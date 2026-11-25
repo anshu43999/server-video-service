@@ -32,55 +32,6 @@ async function service(context:BrowserContext,options:{conflict?:boolean;reject?
   await context.route('**/healthz',route=>route.fulfill({status:options.healthFailure?503:200,contentType:'application/json',body:JSON.stringify({status:options.healthFailure?'degraded':'ok',streams:1,database:{configured:false,status:'fallback'}})}))
   return {writes,state}
 }
-test('rules persist complete fields and validate actual capabilities before binding',async({context,page})=>{
-  const {writes}=await service(context);await page.goto(adminPath('/rules'));await expect(page.locator('.model-card')).toHaveCount(1)
-  await page.getByRole('button',{name:'编辑规则'}).click();await page.getByLabel('规则名称').fill('入口安全帽告警')
-  await page.getByLabel('阈值 JSON',{exact:true}).fill('{"minimumConfidence":0.6}')
-  await page.getByRole('button',{name:'保存规则',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0)
-  expect(writes.find(w=>w.method==='PUT')?.body.thresholds).toEqual({minimumConfidence:.6})
-  await page.getByRole('button',{name:'校验与绑定'}).click();await selectElementOption(page, '实际来源', 'gate / helmet')
-  await expect(page.getByRole('button',{name:'保存绑定'})).toBeDisabled()
-  await page.getByRole('button',{name:'校验能力'}).click();await expect(page.getByRole('dialog')).toContainText('能力满足，可提交绑定')
-  await page.getByRole('button',{name:'保存绑定'}).click();await expect(page.getByRole('dialog')).toContainText('gate · 已接受')
-  expect(writes.find(w=>w.path.endsWith('/bindings'))?.body).toEqual({sourceId:'gate',modelId:'helmet',capabilities:['BOX','TRACK'],expectedRevision:3})
-  await page.keyboard.press('Escape');await page.getByRole('button',{name:'删除规则',exact:true}).click();await page.getByRole('button',{name:'取消',exact:true}).click()
-  expect(writes.filter(w=>w.method==='DELETE')).toHaveLength(0)
-  await page.screenshot({path:'../evidence/M32/M32-T08-rules-desktop.png',fullPage:true})
-})
-test('rule version conflict and rejected capability retain truthful state',async({context,page})=>{
-  const {writes}=await service(context,{conflict:true,reject:true});await page.goto(adminPath('/rules'))
-  await page.getByRole('button',{name:'编辑规则'}).click();await page.getByLabel('规则名称').fill('未保存名称');await page.getByRole('button',{name:'保存规则',exact:true}).click()
-  await expect(page.getByRole('dialog')).toContainText('规则版本已变化');await expect(page.getByLabel('规则名称')).toHaveValue('未保存名称');expect(writes.filter(w=>w.method==='PUT')).toHaveLength(1)
-  await page.keyboard.press('Escape');await page.getByRole('button',{name:'刷新规则'}).click();await page.getByRole('button',{name:'校验与绑定'}).click();await selectElementOption(page, '实际来源', 'gate / helmet');await page.getByRole('button',{name:'校验能力'}).click()
-  await expect(page.getByRole('dialog')).toContainText('算子尚未实现');await expect(page.getByRole('button',{name:'保存绑定'})).toBeDisabled()
-})
-
-test('binding refresh failure locks further mutations until reconciled',async({context,page})=>{
-  await service(context)
-  let reads=0
-  const errors:string[]=[]
-  page.on('pageerror',error=>errors.push(error.message))
-  await context.route('**/rules/helmet-rule/bindings',async route=>{
-    if(route.request().method()==='GET' && ++reads===2)return route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({detail:'绑定读取失败'})})
-    return route.fallback()
-  })
-  await page.goto(adminPath('/rules'));await page.getByRole('button',{name:'校验与绑定'}).click()
-  await selectElementOption(page,'实际来源','gate / helmet');await page.getByRole('button',{name:'校验能力'}).click()
-  await page.getByRole('button',{name:'保存绑定'}).click()
-  await expect(page.getByRole('dialog')).toContainText('绑定读取失败')
-  await expect(page.getByRole('button',{name:'保存绑定'})).toBeDisabled()
-  await page.keyboard.press('Escape');await page.getByRole('button',{name:'刷新规则'}).click()
-  await page.getByRole('button',{name:'校验与绑定'}).click()
-  await expect(page.getByRole('button',{name:'解除绑定'})).toBeEnabled()
-  expect(errors).toEqual([])
-})
-test('rule creation validates JSON and cancels without creating rules',async({context,page})=>{
-  const {writes}=await service(context);await page.goto(adminPath('/rules'));await page.getByRole('button',{name:'新增规则'}).click()
-  await page.getByLabel('规则 ID',{exact:true}).fill('new-rule');await page.getByLabel('规则名称').fill('新规则');await page.getByLabel('阈值 JSON',{exact:true}).fill('[]')
-  await page.getByRole('button',{name:'保存规则',exact:true}).click();await expect(page.getByRole('dialog')).toContainText('JSON 类型不正确');expect(writes).toEqual([])
-  await page.getByLabel('阈值 JSON',{exact:true}).fill('{"minimumConfidence":0.5}');await page.getByRole('button',{name:'保存规则',exact:true}).click()
-  await expect(page.getByRole('dialog')).toHaveCount(0);expect(writes[0]?.body.ruleId).toBe('new-rule')
-})
 test('verification restores persisted config and requires consent for image egress',async({context,page})=>{
   const {writes}=await service(context);await page.goto(adminPath('/verification'))
   await expect(page.getByLabel('复核模型 ID')).toHaveValue('review-v1')
@@ -112,6 +63,5 @@ test('narrow operations remain readable and operator cannot enter configuration'
   await service(context);await page.setViewportSize({width:390,height:844});await page.goto(adminPath('/verification'));await expect(page.getByLabel('复核模型 ID')).toBeVisible()
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
   await page.screenshot({path:'../evidence/M32/M32-T08-verification-mobile.png',fullPage:true})
-  await page.goto(adminPath('/rules'));await page.getByRole('button',{name:'编辑规则'}).click();await expect(page.getByLabel('规则名称')).toBeVisible();expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true)
   await context.unroute('**/aiyoloapi/**');const {writes}=await service(context,{role:'operator'});await page.goto(adminPath('/push'));await expect(page).toHaveURL(/projects/);expect(writes).toEqual([])
 })

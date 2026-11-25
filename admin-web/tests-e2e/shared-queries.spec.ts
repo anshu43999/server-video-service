@@ -58,17 +58,17 @@ test('overview and dashboard reuse ten-second reads while period changes fetch o
   const state=await service(context);await clock(page);await page.goto('/admin-next/overview?project='+project.projectId)
   await expect(page.locator('.board-kpis')).toContainText('12')
   await expect.poll(()=>count(state,'/alerts?limit=20')).toBe(1)
-  await navigate(page,'dashboard?project='+project.projectId);await expect(page.getByRole('region',{name:'数据看板工作区'})).toBeVisible()
+  await navigate(page,'dashboard?project='+project.projectId);await expect(page.getByRole('region',{name:'总览工作区'})).toBeVisible()
   await expect(page.locator('.board-kpis')).toContainText('12')
   expect(count(state,'/dashboard/stats?range=today')).toBe(1);expect(count(state,'/streams')).toBe(1)
   await navigate(page,'dashboard?project='+project.projectId+'&range=7d')
   await expect.poll(()=>count(state,'/dashboard/stats?range=7d')).toBe(1)
-  await expect(page.getByRole('button',{name:'刷新看板',exact:true})).toBeEnabled()
+  await expect(page.getByRole('button',{name:'刷新总览',exact:true})).toBeEnabled()
   expect(count(state,'/streams')).toBe(1);expect(count(state,'/alerts?limit=20')).toBe(1)
   await navigate(page,'overview?project='+project.projectId);await expect(page.getByRole('region',{name:'总览工作区'})).toBeVisible()
   await expect(page.locator('.board-kpis')).toContainText('12');expect(count(state,'/dashboard/stats?range=today')).toBe(1)
-  await page.getByRole('button',{name:'刷新看板',exact:true}).click();await expect.poll(()=>count(state,'/streams')).toBe(2)
-  await expect(page.getByRole('button',{name:'刷新看板',exact:true})).toBeEnabled()
+  await page.getByRole('button',{name:'刷新总览',exact:true}).click();await expect.poll(()=>count(state,'/streams')).toBe(2)
+  await expect(page.getByRole('button',{name:'刷新总览',exact:true})).toBeEnabled()
   expect(count(state,'/alerts?limit=20')).toBe(2);expect(count(state,'/dashboard/stats?range=today')).toBe(2)
   await record(page,state,'shared-dashboard-period-navigation')
 })
@@ -107,12 +107,10 @@ test('members show required names without fetching account candidates before add
   await record(page,state,'lazy-member-accounts')
 })
 
-test('rules keep visible audit but load source candidates only in binding dialog',async({context,page})=>{
+test('retired rules page makes no registry requests',async({context,page})=>{
   const state=await service(context);await page.goto('/admin-next/rules?project='+project.projectId)
-  await expect(page.getByRole('heading',{name:'测试规则',exact:true})).toBeVisible();expect(count(state,'/capabilities/sources')).toBe(0)
-  await page.getByRole('button',{name:'校验与绑定',exact:true}).click()
-  await expect.poll(()=>count(state,'/capabilities/sources')).toBe(1);await expect(page.getByRole('dialog')).toContainText('实际来源')
-  expect(count(state,'/rules/audit')).toBe(1);expect(state.writes).toEqual([]);await record(page,state,'lazy-rule-sources')
+  await expect(page.getByRole('heading',{name:'页面不存在',level:1})).toBeVisible()
+  expect(state.reads.some(path=>path.includes('/rules'))).toBe(false)
 })
 
 test('scene lists and empty inventory avoid models until editors need them',async({context,page})=>{
@@ -179,4 +177,24 @@ test('cross-project dashboard navigation rejects a late old snapshot and does no
   release();state.gatePath='';state.gate=undefined;await expect(page.locator('.board-kpis')).not.toContainText('12')
   state.statsTotal=66;await navigate(page,'overview?project=a');await expect(page.locator('.board-kpis')).toContainText('66')
   expect(count(state,'/projects/a/dashboard/stats?range=today')).toBe(2);await record(page,state,'cache-cross-project-late-response')
+})
+
+
+test('project cards stay mounted and focused during routine permission checks', async ({ context, page }) => {
+  await service(context)
+  await page.goto('/admin-next/projects')
+  const card = page.locator('.project-card button').first()
+  await expect(card).toBeVisible()
+  await card.focus()
+  let resume!: () => void
+  const gate = new Promise<void>(resolve => { resume = resolve })
+  await context.route('**/auth/me', async route => { await gate; await route.fulfill({ json: fixtureUser() }) })
+  const pending = page.waitForRequest('**/auth/me')
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await pending
+  try {
+    await expect(card).toBeVisible()
+    await expect(card).toBeFocused()
+    await expect(page.locator('body')).not.toHaveClass(/permission-verifying/)
+  } finally { resume() }
 })

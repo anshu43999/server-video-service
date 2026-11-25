@@ -7,7 +7,7 @@ from pathlib import Path
 
 from sqlalchemy import delete
 
-from app.alerts.rules import RuleRegistry
+from legacy_rule_fixture import RuleRegistry
 from app.config import settings
 from app.database import (
     AlertRuleAuditRecord,

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { ShieldCheck } from '@lucide/vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSessionStore } from '../../stores/session'
 
@@ -35,13 +36,11 @@ async function submit() {
 <template>
   <main class="auth-page">
     <section class="auth-identity" aria-label="产品标识">
-      <span class="brand-mark" aria-hidden="true">⌘</span>
+      <span class="brand-symbol" aria-hidden="true"><ShieldCheck :size="22" /></span>
       <div><strong>智慧巡检平台</strong><span>AI 移动巡检 · 运维管理台</span></div>
     </section>
     <form class="auth-form" @submit.prevent="submit">
-      <p class="eyebrow">ACCOUNT SESSION</p>
       <h1>{{ heading }}</h1>
-      <p class="auth-intro">使用服务器账号建立受保护的管理会话。</p>
       <label><span>账号</span><UiInput v-model.trim="username" name="username" autocomplete="username" minlength="3" maxlength="128" required autofocus /></label>
       <label><span>密码</span><UiInput v-model="password" name="password" type="password" :autocomplete="session.setupRequired ? 'new-password' : 'current-password'" minlength="8" maxlength="256" required /></label>
       <p v-if="session.setupRequired" class="setup-note">此账号将成为首个管理员。初始化完成后，入口不会再次开放。</p>

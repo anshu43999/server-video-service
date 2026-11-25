@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "server-video-service",
-  "updatedAt": "2026-11-18T16:23:47+08:00",
+  "updatedAt": "2026-11-24T18:10:42+08:00",
   "executionPolicy": {
     "deploymentTaskIds": [
       "M00-T06",
@@ -600,6 +600,17 @@
           "owner": "codex",
           "startedAt": "2026-11-12T15:20:10+08:00",
           "completedAt": "2026-11-12T15:27:39+08:00"
+        },
+        {
+          "id": "M05-T10",
+          "title": "修复Windows本地启动的IOCP接收连接失败",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "Windows启动脚本与run.py使用Selector事件循环，保留非Windows默认循环；验证实际Uvicorn配置选中循环、HTTP/WebSocket连接突断后继续接收、退出释放监听和启动参数。仅运行隔离测试，不启动或重启业务服务，不连接业务数据库与MinIO；报告明确512套接字及异步子进程限制。",
+          "record": "harness/records/M05/M05-T10.md",
+          "owner": "codex",
+          "startedAt": "2026-11-23T11:23:59+08:00",
+          "completedAt": "2026-11-23T11:29:23+08:00"
         }
       ],
       "startedAt": "2026-09-28T10:27:25+08:00"
@@ -3201,6 +3212,28 @@
           "owner": "codex",
           "startedAt": "2026-11-12T10:00:17+08:00",
           "completedAt": "2026-11-12T10:09:39+08:00"
+        },
+        {
+          "id": "M32-T36",
+          "title": "合并管理总览、退役独立规则配置并对齐蓝色主题与后台刷新",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "核验规则消费者并退役旧管理入口，保留运行模型参数；合并总览与旧链接；应用蓝色主题；常规刷新保持已验证页面，权限异常仍阻断；验证构建及相关前后端回归。",
+          "record": "harness/records/M32/M32-T36.md",
+          "owner": "codex",
+          "startedAt": "2026-11-24T17:36:07+08:00",
+          "completedAt": "2026-11-24T18:03:17+08:00"
+        },
+        {
+          "id": "M32-T37",
+          "title": "统一后台剩余绿色和滚动条样式",
+          "status": "completed",
+          "dependsOn": [],
+          "acceptance": "清理内容和组件成功状态的旧绿色，统一浅色及侧栏滚动条，验证生产构建、桌面与窄屏横纵滚动。",
+          "record": "harness/records/M32/M32-T37.md",
+          "owner": "codex",
+          "startedAt": "2026-11-24T18:08:06+08:00",
+          "completedAt": "2026-11-24T18:10:42+08:00"
         }
       ],
       "startedAt": "2026-10-08T17:33:16+08:00"

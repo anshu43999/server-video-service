@@ -23,7 +23,6 @@ from .observation import (
 )
 from .engine import run_vector
 from .lifecycle import EventRecord, EventStateMachine
-from .rules import RuleRegistry, RuleValidationError, rule_registry
 from .disposition import (AlertDispositionStore, DispositionStore, DispositionAction,
                           alert_disposition_store, sanitise_training_entry, sanitize_training_entry)
 from .delivery import (
@@ -45,7 +44,7 @@ __all__ = [
     "SPEC_VERSION", "Classification", "Mask", "Scalar", "Observation", "ObservationEnvelope",
     "ObservationError", "NonMonotonicTimestampError", "ObservationIngestor", "Rejection",
     "ingest_observation", "validate_operator_compatibility", "check_operator_compatibility",
-    "run_vector", "EventRecord", "EventStateMachine", "RuleRegistry", "RuleValidationError", "rule_registry",
+    "run_vector", "EventRecord", "EventStateMachine",
     "AlertDispositionStore", "DispositionStore", "DispositionAction", "alert_disposition_store",
     "sanitise_training_entry", "sanitize_training_entry",
     "AlertDeliveryService", "AlertDispatcher", "AppNotificationChannel", "DeliveryError",

@@ -37,7 +37,7 @@ if (-not (Test-Path -LiteralPath $venvPython)) {
 $dependencyMarker = Join-Path $projectRoot ".venv\.server-video-service-deps"
 $dependenciesReady = $false
 if (Test-Path -LiteralPath $dependencyMarker) {
-    & $venvPython -c "import fastapi, cv2, pydantic_settings, sqlalchemy, alembic, psycopg; assert int(cv2.__version__.split('.')[0]) < 5, f'unsupported OpenCV {cv2.__version__}'" 2>$null
+    & $venvPython -c "import fastapi, cv2, pydantic_settings, sqlalchemy, alembic, psycopg, uvicorn; assert hasattr(uvicorn.Config, 'get_loop_factory'), 'uvicorn >= 0.36 required'; assert int(cv2.__version__.split('.')[0]) < 5, f'unsupported OpenCV {cv2.__version__}'" 2>$null
     $dependenciesReady = $LASTEXITCODE -eq 0
 }
 if (-not $dependenciesReady) {
@@ -86,8 +86,8 @@ Write-Step "PC 同源预览及 YOLO 分析可用；不启动媒体分发进程"
 Write-Step "按 Ctrl+C 停止服务"
 
 if ($Reload) {
-    & $venvPython -m uvicorn app.main:app --host 0.0.0.0 --port $Port --reload
+    & $venvPython -m uvicorn app.main:app --host 0.0.0.0 --port $Port --loop app.local_event_loop:create_windows_loop --reload
 } else {
-    & $venvPython -m uvicorn app.main:app --host 0.0.0.0 --port $Port
+    & $venvPython -m uvicorn app.main:app --host 0.0.0.0 --port $Port --loop app.local_event_loop:create_windows_loop
 }
 exit $LASTEXITCODE

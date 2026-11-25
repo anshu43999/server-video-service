@@ -125,7 +125,7 @@ test('real-clock overview dashboard overview returns within five seconds without
   await expect.poll(() => observed.count('initial', '/alerts?limit=20')).toBe(1)
   await page.waitForTimeout(100)
   observed.setPhase('A-B-A'); const start = Date.now()
-  await navigate(page, 'dashboard'); await expect(page.getByRole('region', { name: '数据看板工作区' })).toBeVisible()
+  await navigate(page, 'dashboard'); await expect(page.getByRole('region', { name: '总览工作区' })).toBeVisible()
   await navigate(page, 'overview'); await expect(page.getByRole('region', { name: '总览工作区' })).toBeVisible()
   await expect(page.locator('.board-kpis')).toContainText('12')
   const elapsedMs = Date.now() - start

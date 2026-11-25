@@ -64,6 +64,11 @@ class InMemoryTieredEvidenceStore(CaptureEvidenceStore):
 
 
 class ServerAlertRuntimeTests(unittest.TestCase):
+    def published_parameters(self, temp):
+        store = ModelParameterStore(Path(temp) / "profiles.json")
+        store.publish(MODEL, "server", "admin", 0, None)
+        return store
+
     def test_local_evidence_path_rejects_non_server_event_ids(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "evidence"
@@ -124,7 +129,7 @@ class ServerAlertRuntimeTests(unittest.TestCase):
             events = AlertDispositionStore()
             evidence = InMemoryTieredEvidenceStore()
             runtime = ServerAlertRuntime(lambda model_id: MODEL,
-                ModelParameterStore(Path(temp) / "profiles.json"), events, CaptureDelivery(),
+                self.published_parameters(temp), events, CaptureDelivery(),
                 Path(temp) / "evidence", evidence_store=evidence)
             result = InferenceResult(detections=(Detection(0, "head", .9),),
                 model_id="runtime-model", class_names=("head", "helmet"), provides=("BOX",))
@@ -149,7 +154,7 @@ class ServerAlertRuntimeTests(unittest.TestCase):
             delivery = CaptureDelivery()
             runtime = ServerAlertRuntime(
                 model_provider=lambda model_id: MODEL,
-                parameter_store=ModelParameterStore(Path(temp) / "profiles.json"),
+                parameter_store=self.published_parameters(temp),
                 event_store=events,
                 delivery_service=delivery,
                 evidence_root=Path(temp) / "evidence",
@@ -191,7 +196,7 @@ class ServerAlertRuntimeTests(unittest.TestCase):
 
     def test_disabled_category_never_creates_event(self):
         with tempfile.TemporaryDirectory() as temp:
-            store = ModelParameterStore(Path(temp) / "profiles.json")
+            store = self.published_parameters(temp)
             delivery = CaptureDelivery()
             runtime = ServerAlertRuntime(
                 model_provider=lambda model_id: MODEL,

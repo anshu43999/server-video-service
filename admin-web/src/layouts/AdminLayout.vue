@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import {
-  Activity, BellRing, Boxes, ChartNoAxesCombined, ChevronRight, CircleGauge,
+  Activity, BellRing, Boxes, ChevronRight, CircleGauge,
   LogOut, Menu, Radio, Send, ShieldCheck, UserRound, Workflow, X, UsersRound, ClipboardList, FolderKanban, BookOpenCheck,
 } from '@lucide/vue'
 import { platformNavigationItems, projectNavigationItems, type NavigationIcon } from '../app/router'
@@ -25,11 +25,10 @@ const sidebar = ref<HTMLElement>()
 
 const iconMap: Record<NavigationIcon, Component> = {
   overview: CircleGauge,
-  dashboard: ChartNoAxesCombined,
   streams: Radio,
   alerts: BellRing,
   push: Send,
-  rules: Workflow,
+  scenes: Workflow,
   models: Boxes,
   diagnostics: Activity,
   knowledge: BookOpenCheck,
@@ -148,21 +147,21 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="account-area">
-          <span class="service-state"><i aria-hidden="true"></i>{{ projects.verifying ? '正在复核权限' : '会话已验证' }}</span>
+          <span class="service-state"><i aria-hidden="true"></i>{{ projects.permissionBlocking ? '正在复核权限' : '会话已验证' }}</span>
           <span class="account-identity"><UserRound :size="17" aria-hidden="true" /><span><strong>{{ session.user?.username }}</strong><small>{{ platformRoleLabel(session.user?.platformRole) }}</small></span></span>
           <UiButton class="icon-button" type="button" :disabled="loggingOut" :title="loggingOut ? '正在退出' : '退出登录'" aria-label="退出登录" @click="logout"><LogOut :size="18" /></UiButton>
         </div>
       </header>
       <section class="project-context-bar" aria-label="当前项目上下文" aria-live="polite">
         <div><span class="eyebrow">{{ route.meta.platformOnly ? 'PLATFORM / 平台管理区' : 'CURRENT PROJECT / 当前项目' }}</span><strong>{{ projects.current?.displayName ?? (route.meta.platformOnly ? '全局平台资源' : '尚未进入项目') }}</strong><small v-if="projects.current">{{ projectRoleLabel(projects.current) }} · {{ projects.current.projectCode }}</small></div>
-        <UiButton class="secondary-button" :disabled="projects.busy" @click="chooseProject">切换项目</UiButton>
+        <UiButton class="secondary-button" :disabled="projects.permissionBlocking" @click="chooseProject">切换项目</UiButton>
       </section>
       <p v-if="projects.current && projects.current.lifecycleState !== 'ACTIVE'" class="shell-alert" role="status">{{ projects.current.lifecycleState === 'SUSPENDED' ? '项目已停用：可查询历史与维护获准配置，实时播放和业务写入已停止。' : '项目已归档：仅显示获准历史数据，所有维护操作均已关闭。' }}</p>
 
       <p v-if="session.logoutUnconfirmed" class="shell-alert" role="alert">{{ session.message }}</p>
       <AlertNotifications />
       <p v-if="projects.permissionBlocking" class="shell-alert permission-status" role="status">正在验证账号与项目…</p>
-      <main id="main-content" class="page-content" tabindex="-1" :inert="projects.permissionBlocking" :aria-busy="projects.verifying">
+      <main id="main-content" class="page-content" tabindex="-1" :inert="projects.permissionBlocking" :aria-busy="projects.permissionBlocking">
         <RouterView v-if="showPage" v-slot="{ Component }"><component :is="Component" :key="`${projects.epoch}:${route.path}`" /></RouterView>
         <section v-else-if="projects.current && projects.current.lifecycleState !== 'ACTIVE'" class="project-picker" role="status"><h2>项目业务已暂停</h2><p>已停止该项目的实时连接、媒体预览和业务操作。可切换到其他项目，或联系平台超级管理员处理项目状态。</p><UiButton class="secondary-button" @click="chooseProject">返回项目空间</UiButton></section>
         <ProjectsView v-else />

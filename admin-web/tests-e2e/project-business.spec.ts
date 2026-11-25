@@ -10,9 +10,7 @@ for(const width of [1440,390]){
     test.setTimeout(90_000)
     const projects=await login(context,`business-owner-${width}`),id=projects[0].projectId,base=`/aiyoloapi/projects/${id}`
     await page.setViewportSize({width,height:960})
-    await page.goto(`/admin/rules?project=${id}`);await page.getByRole('button',{name:'编辑规则'}).click()
-    await page.getByLabel('规则名称').fill('项目专属安全帽规则');await page.getByRole('button',{name:'保存规则',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0)
-    expect((await (await context.request.get(base+'/rules/helmet-rule')).json()).ruleVersion).toBe(2)
+    await page.goto(`/admin/rules?project=${id}`);await expect(page.getByRole('heading',{name:'页面不存在',level:1})).toBeVisible()
     await page.goto(`/admin/verification?project=${id}`);await page.getByLabel('每日调用限额').fill('47');await page.getByRole('button',{name:'保存复核配置'}).click()
     await expect(page.getByRole('status')).toContainText('复核配置已保存')
     expect((await (await context.request.get(base+'/verification/config')).json()).dailyLimit).toBe(47)
@@ -44,7 +42,7 @@ for(const width of [1440,390]){
       user.on('request',req=>{if(/models\/available|rules\/audit|alerts\/delivery\/status|\/healthz|\/aiyoloapi\/metrics$/.test(req.url()))forbiddenReads.push(req.url())})
       await user.goto(`/admin/streams?project=${id}&create=1`);await expect(user.locator('.stream-list-item')).toHaveCount(1)
       await expect(user.getByRole('button',{name:'新增视频流'})).toHaveCount(0);await expect(user.getByRole('button',{name:'保存设置'})).toHaveCount(0)
-      await user.goto(`/admin/rules?project=${id}`);await expect(user.locator('.model-card')).toContainText('项目专属安全帽规则');await expect(user.getByRole('button',{name:'编辑规则'})).toHaveCount(0)
+      await user.goto(`/admin/rules?project=${id}`);await expect(user.getByRole('heading',{name:'页面不存在',level:1})).toBeVisible();await expect(user.getByRole('button',{name:'编辑规则'})).toHaveCount(0)
       await user.goto(`/admin/verification?project=${id}`);await expect(user.getByLabel('每日调用限额')).toHaveValue('47');await expect(user.getByLabel('每日调用限额')).toBeDisabled();await expect(user.getByRole('button',{name:'保存复核配置'})).toHaveCount(0)
       await user.goto(`/admin/push?project=${id}`);await expect(user.getByRole('heading',{name:'项目推送策略'})).toBeVisible();await expect(user.getByRole('button',{name:'保存推送策略'})).toHaveCount(0)
       await user.goto(`/admin/project-models?project=${id}&pane=upload`);await expect(user.getByRole('button',{name:'添加 PC 模型',exact:true})).toHaveCount(0);await expect(user.getByRole('button',{name:'添加移动端模型',exact:true})).toHaveCount(0)
@@ -56,7 +54,7 @@ for(const width of [1440,390]){
       expect((await (await userContext.request.get(base+'/alerts/business-alert')).json()).disposition.status).toBe('ACKNOWLEDGED')
       await user.keyboard.press('Escape');expect(forbiddenReads).toEqual([])
       await user.screenshot({path:`../evidence/M36/M36-T08-user-regression-${width}.png`,fullPage:true,animations:'disabled'})
-      expect((await userContext.request.post(base+'/rules',{data:{ruleId:'attack',name:'attack',operator:'PRESENCE',expectedRevision:0}})).status()).toBe(403)
+      expect((await userContext.request.post(base+'/rules',{data:{ruleId:'attack',name:'attack',operator:'PRESENCE',expectedRevision:0}})).status()).toBe(404)
       expect((await userContext.request.put(base+'/model-assignments',{data:{modelId:assignment.modelId,modelVersion:assignment.modelVersion,target:assignment.target,parameterRevision:assignment.parameterRevision,enabled:true,expectedRevision:assignment.revision}})).status()).toBe(403)
       await user.goto('/admin/models');await expect(user).toHaveURL(/projects/);await expect(user.getByRole('button',{name:'登记 Manifest'})).toHaveCount(0)
     }finally{await userContext.close()}
@@ -85,7 +83,7 @@ test('real conflicts, lifecycle read-only, revoked access and cross-project isol
     await page.goto(`/admin/verification?project=${id}`);await expect(page.getByLabel('每日调用限额')).toBeDisabled();await expect(page.getByRole('button',{name:'保存复核配置'})).toHaveCount(0)
     const archived=await (await admin.request.get(base)).json()
     expect((await admin.request.post(base+'/restore',{data:{expectedRevision:archived.revision}})).ok()).toBe(true)
-    await page.goto(`/admin/rules?project=${id}`);await expect(page.getByRole('button',{name:'编辑规则'})).toBeVisible()
+    await page.goto(`/admin/rules?project=${id}`);await expect(page.getByRole('heading',{name:'页面不存在',level:1})).toBeVisible()
     const me=await (await context.request.get('/aiyoloapi/auth/me')).json()
     const members=(await (await admin.request.get(base+'/members')).json()).members
     // Add another owner first so last-owner protection stays enabled.

@@ -31,7 +31,6 @@ import app.main as main
 from app.alert_evidence import AlertEvidenceStore, EvidenceStorageError
 from app.alerts.delivery import AlertDeliveryService
 from app.alerts.disposition import AlertDispositionStore
-from app.alerts.rules import RuleRegistry
 from app.alerts.verification import AlertVerificationStore
 from app.config import settings
 from app.model_catalog import ModelCatalog
@@ -97,7 +96,7 @@ class CrossProjectGoldenMatrix(ProjectApiSupport, unittest.TestCase):
             ("project_scenes", ProjectScenes(None, catalog, assignments)),
             ("alert_disposition_store", AlertDispositionStore(None)),
             ("alert_verification_store", AlertVerificationStore()),
-            ("alert_delivery", AlertDeliveryService()), ("rule_registry", RuleRegistry()),
+            ("alert_delivery", AlertDeliveryService()),
             ("alert_evidence_store", evidence),
         ):
             self.patches.enter_context(patch.object(main, name, value))

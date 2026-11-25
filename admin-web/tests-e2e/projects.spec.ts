@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 
 const prefix = () => test.info().project.name === 'production-chromium' ? '/admin' : '/admin-next'
 const member = { accountId: 'member', username: 'project-user', role: 'operator', platformRole: 'NORMAL_USER', contractVersion: 'm33-v1' }
-const project = (id: string) => ({ projectId: id, projectCode: id, displayName: `项目 ${id.toUpperCase()}`, lifecycleState: 'ACTIVE', revision: 1, membershipRevision: 1, projectRole: 'PROJECT_OWNER', platformEntry: false, capabilities: ['project.read', 'project.streams.view', 'project.alerts.read', 'project.rules.manage', 'project.settings.manage'] })
+const project = (id: string) => ({ projectId: id, projectCode: id, displayName: `项目 ${id.toUpperCase()}`, lifecycleState: 'ACTIVE', revision: 1, membershipRevision: 1, projectRole: 'PROJECT_OWNER', platformEntry: false, capabilities: ['project.read', 'project.streams.view', 'project.alerts.read', 'project.settings.manage'] })
 const png = readFileSync(resolve(process.cwd(), 'tests-e2e/fixtures/evidence_helmet_violation.png'))
 async function service(context: BrowserContext) {
   const state = { user: { ...member }, projects: [project('a'), project('b')], authenticated: true, projectsStatus: 200, requests: [] as string[], sockets: [] as string[] }

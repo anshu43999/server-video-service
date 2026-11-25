@@ -1,6 +1,6 @@
 import unittest
 
-from app.alerts.rules import RuleRegistry, RuleValidationError
+from legacy_rule_fixture import RuleRegistry, RuleValidationError
 
 
 class RuleRegistryTests(unittest.TestCase):

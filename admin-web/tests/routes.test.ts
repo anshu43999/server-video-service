@@ -4,11 +4,9 @@ import { consoleRoutes, createAdminRouter, visibleNavigationItems, projectNaviga
 
 const expectedRoutes = [
   ['overview', '总览'],
-  ['dashboard', '数据看板'],
   ['streams', '视频流'],
   ['alerts', '告警中心'],
   ['push', '报警推送'],
-  ['rules', '规则配置'],
   ['models', '模型资产'],
   ['diagnostics', '系统诊断'],
 ]
@@ -32,14 +30,14 @@ describe('admin route map', () => {
   })
 
   it('derives permission-aware navigation from the route definitions', () => {
-    expect(visibleNavigationItems('admin')).toHaveLength(8)
+    expect(visibleNavigationItems('admin')).toHaveLength(6)
     expect(visibleNavigationItems('operator')).toHaveLength(0)
     expect(visibleNavigationItems()).toHaveLength(0)
   })
 
   it('resolves direct and unknown deep links inside the admin shell', () => {
     const router = createAdminRouter()
-    expect(router.resolve('/rules').name).toBe('rules')
+    expect(router.resolve('/rules').name).toBe('unavailable')
     expect(router.resolve('/verification').name).toBe('unavailable')
     expect(router.resolve('/missing-page').name).toBe('unavailable')
   })

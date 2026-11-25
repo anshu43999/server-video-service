@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 
 from app.alerts.delivery import AlertDeliveryService, DeliveryError, LocalExternalAdapter
 from app.alerts.verification import AlertVerificationStore, VerificationConfigConflict
-from app.alerts.rules import RuleRegistry, RuleConflict
+from legacy_rule_fixture import RuleRegistry, RuleConflict
 from app.alerts.disposition import AlertDispositionStore
 from app.alerts.runtime import ServerAlertRuntime
 from app.detection import Detection, InferenceResult, NormalizedBox
@@ -301,7 +301,6 @@ class ProjectBusinessApiTests(ProjectApiSupport, unittest.TestCase):
         self.patches.enter_context(patch.object(
             main_module, "model_parameter_store", ModelParameterStore(models / "profiles.json")))
         self.patches.enter_context(patch.dict(_memory_model_assignments, {}, clear=True))
-        self.patches.enter_context(patch.object(main_module, "rule_registry", RuleRegistry()))
         self.patches.enter_context(patch.object(main_module, "stream_config_store", StreamConfigStore(None)))
         self.patches.enter_context(patch.object(main_module, "project_model_assignments",
             ProjectModelAssignments(None, main_module.model_catalog, main_module.model_parameter_store,
@@ -352,26 +351,6 @@ class ProjectBusinessApiTests(ProjectApiSupport, unittest.TestCase):
         self.assertEqual(self.client.get(
             f"/aiyoloapi/projects/{other}/models/business-model/parameters?platform=server",
             headers=self.headers).status_code, 404)
-
-    def test_rule_sources_are_server_derived_and_project_scoped(self):
-        main_module.stream_config_store.create(StreamConfiguration(
-            stream_id="stored-source", display_name="Stored", source_type="websocket", source_url=None,
-            model_id=MODEL["modelId"], yolo_enabled=True, confidence=.5, max_fps=10,
-            overlay_enabled=True, enabled=False, project_id=self.project_id))
-        main_module.streams[("another-project", "foreign-source")] = SimpleNamespace(
-            close=AsyncMock(), model_metadata=lambda: {"modelId": MODEL["modelId"], "provides": ["BOX", "TRACK"]})
-        sources = self.client.get(self.project_path + "/capabilities/sources", headers=self.headers)
-        self.assertEqual(["stored-source"], [item["sourceId"] for item in sources.json()["sources"]])
-        rule = {"ruleId": "line", "name": "Line crossing", "operator": "LINE_CROSS", "requires": ["BOX"]}
-        self.assertEqual(201, self.client.post(self.project_path + "/rules", headers=self.headers, json=rule).status_code)
-        target = self.project_path + "/rules/line/validate"
-        foreign = self.client.post(target, headers=self.headers, json={"sourceId": "foreign-source", "capabilities": ["BOX", "TRACK"]})
-        self.assertEqual(404, foreign.status_code)
-        mismatch = self.client.post(target, headers=self.headers, json={"sourceId": "stored-source", "modelId": "forged"})
-        self.assertEqual(409, mismatch.status_code)
-        forged = self.client.post(target, headers=self.headers, json={"sourceId": "stored-source", "capabilities": ["BOX", "TRACK"]})
-        self.assertFalse(forged.json()["accepted"])
-        self.assertIn("TRACK", forged.json()["missing"])
 
     def test_metrics_aggregate_only_selected_project_and_hide_platform_details(self):
         main_module.streams[(self.project_id, "local")] = SimpleNamespace(

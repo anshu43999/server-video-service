@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterator
 from uuid import uuid4
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, String, Text, UniqueConstraint, create_engine, event, func, inspect, text
+from sqlalchemy import LargeBinary, BigInteger, Boolean, CheckConstraint, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, String, Text, UniqueConstraint, create_engine, event, func, inspect, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
@@ -106,6 +106,19 @@ class ProjectMembershipRecord(Base):
         ),
         Index("ix_project_memberships_account_enabled", "account_id", "enabled"),
     )
+
+
+class MobileClipRecord(Base):
+    __tablename__ = "mobile_alert_clips"
+    project_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    account_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(64), primary_key=True)
+    receipt_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
+    received_ms: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
+    __table_args__ = (ForeignKeyConstraint(["project_id", "event_id"],
+        ["alert_events.project_id", "alert_events.event_id"], ondelete="CASCADE"),)
 
 
 class AlertEventRecord(Base):

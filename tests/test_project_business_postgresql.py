@@ -10,7 +10,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
 from app.database import DatabaseManager, DEFAULT_PROJECT_ID, ModelParameterProfileRecord, ProjectRecord, AlertEventRecord
-from app.alerts.rules import RuleRegistry, RuleConflict
+from legacy_rule_fixture import RuleRegistry, RuleConflict
 from app.alerts.verification import AlertVerificationStore, VerificationConfigConflict
 from app.alerts.verification_provider import VerificationProviderResult
 from app.model_parameters import ModelParameterConflict, ModelParameterStore

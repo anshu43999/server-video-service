@@ -82,7 +82,7 @@ export const useProjectsStore = defineStore('projects', () => {
   // every old request and prevents late responses from restoring old access.
   function revalidate(hard = false, background = false): Promise<boolean> {
     if (hard) projectScope.clear()
-    const trusted = verifiedAt !== undefined && (platformReady.value || (phase.value === 'ready' && current.value !== null))
+    const trusted = verifiedAt !== undefined && (platformReady.value || ['choosing', 'empty'].includes(phase.value) || (phase.value === 'ready' && current.value !== null))
     // Upgrade before coalescing; a later routine event cannot undo a denial.
     if (verification) {
       if (!background || !trusted) permissionBlocking.value = true

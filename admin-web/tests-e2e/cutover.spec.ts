@@ -15,8 +15,7 @@ async function business(context: BrowserContext) {
     if (path.endsWith('/streams')) return reply([])
     if (path.endsWith('/alerts')) return reply({ events: [] })
     if (path.endsWith('/models')) return reply({ models: [] })
-    if (path.endsWith('/rules')) return reply({ rules: [] })
-    if (path.endsWith('/rules/audit')) return reply({ audit: [] })
+    if (path.endsWith('/scenes')) return reply({ scenes: [] })
     if (path.endsWith('/capabilities/sources')) return reply({ sources: [] })
     if (path.endsWith('/alerts/delivery/status')) return reply({ channels: {}, pending: 0, recent: [] })
     if (path.endsWith('/delivery/policy')) return reply({revision:0,enabled:true,channels:['management'],minimumSeverity:'MINOR'})
@@ -32,7 +31,7 @@ async function business(context: BrowserContext) {
   return unexpected
 }
 
-const menus = [['overview', '总览'], ['dashboard', '数据看板'], ['streams', '视频流'], ['alerts', '告警中心'], ['push', '报警推送'], ['rules', '规则配置'], ['models', '模型资产'], ['diagnostics', '系统诊断'], ['verification', '智能复核']]
+const menus = [['overview', '总览'], ['streams', '视频流'], ['alerts', '告警中心'], ['push', '报警推送'], ['scenes', '识别场景'], ['models', '模型资产'], ['diagnostics', '系统诊断'], ['project-diagnostics', '项目诊断']]
 
 for (const width of [1440, 390]) {
   test(`production admin cookie login, all nine menus and refresh at ${width}px`, async ({ context, page }) => {
@@ -41,13 +40,13 @@ for (const width of [1440, 390]) {
     page.on('pageerror', error => errors.push(error.message))
     page.on('request', req => { if (new URL(req.url()).pathname.includes('/assets/')) assets.push(new URL(req.url()).pathname) })
     await page.setViewportSize({ width, height: 960 })
-    await page.goto('/admin/rules')
+    await page.goto('/admin/scenes')
     await expect(page).toHaveURL(/\/admin\/login\?redirect=/)
     await page.getByLabel('账号', { exact: true }).fill('cutover-admin')
     await page.getByLabel('密码', { exact: true }).fill('cutover-test-password')
     await page.getByRole('button', { name: '登录', exact: true }).click()
     await page.getByRole('button', { name: '进入 验收项目' }).click()
-    await expect(page.getByRole('heading', { level: 1, name: '规则配置' })).toBeVisible()
+    await expect(page.getByRole('heading', { level: 1, name: '识别场景' })).toBeVisible()
     const projectId = new URL(page.url()).searchParams.get('project')!
     expect(projectId).toBeTruthy()
     const cookie = (await context.cookies()).find(cookie => cookie.name === 'aiyolo_session')
@@ -60,7 +59,7 @@ for (const width of [1440, 390]) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
       await expect(page.locator('body')).not.toContainText('业务操作仍以旧版')
       await expect(page.getByRole('link', { name: /旧版/ })).toHaveCount(0)
-      if (['overview', 'models', 'verification'].includes(path!)) {
+      if (['overview', 'models', 'project-diagnostics'].includes(path!)) {
         await page.screenshot({ path: `../evidence/M32/M32-T10-${path}-${width}.png`, fullPage: true })
       }
     }
@@ -86,7 +85,7 @@ for (const width of [1440, 390]) {
 test('real operator and anonymous sessions cannot read admin-only APIs or enter menus', async ({ context, page }) => {
   const requests: string[] = []
   page.on('request', request => requests.push(new URL(request.url()).pathname))
-  const denied = await context.request.get('/aiyoloapi/rules')
+  const denied = await context.request.get('/aiyoloapi/alerts')
   expect(denied.status()).toBe(401)
   await page.goto('/admin/models?pane=upload')
   await expect(page).toHaveURL(/\/admin\/login/)
@@ -100,7 +99,7 @@ test('real operator and anonymous sessions cannot read admin-only APIs or enter 
     await page.goto(`/admin/${path}`)
     await expect(page).toHaveURL(/\/admin\/projects/)
   }
-  expect((await context.request.get('/aiyoloapi/rules')).status()).toBe(403)
+  expect((await context.request.get('/aiyoloapi/alerts')).status()).toBe(403)
   expect((await context.request.get('/aiyoloapi/auth/me')).status()).toBe(200)
   expect(requests.filter(path => path.startsWith('/aiyoloapi/') && !path.includes('/auth/'))).toEqual([])
   await page.getByRole('button', { name: '退出登录' }).click()

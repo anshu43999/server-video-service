@@ -4,7 +4,7 @@ import unittest
 import uuid
 from pathlib import Path
 
-from app.alerts.rules import RuleRegistry
+from legacy_rule_fixture import RuleRegistry
 from app.database import Base, DatabaseManager
 from app.model_parameters import ModelParameterConflict, ModelParameterStore
 

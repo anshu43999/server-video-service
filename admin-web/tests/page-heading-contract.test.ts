@@ -24,7 +24,6 @@ describe('page heading ownership', () => {
       ['features/management/MembersView.vue', '项目成员管理'],
       ['features/management/PlatformProjectsView.vue', '平台项目管理'],
       ['features/management/AuditView.vue', '项目审计'],
-      ['features/operations/RulesView.vue', '规则配置'],
       ['features/operations/PushView.vue', '报警推送'],
       ['features/operations/DiagnosticsView.vue', '系统诊断'],
       ['features/operations/ProjectDiagnosticsView.vue', '项目诊断'],

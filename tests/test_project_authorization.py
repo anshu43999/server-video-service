@@ -33,7 +33,6 @@ from app.project_auth import (
     PROJECT_OWNER,
     PROJECT_OWNER_CAPABILITIES,
     PROJECT_READ,
-    PROJECT_RULES_MANAGE,
     PROJECT_SETTINGS_MANAGE,
     PROJECT_SERVICE_PRINCIPALS_MANAGE,
     PROJECT_STREAMS_MANAGE,
@@ -70,10 +69,6 @@ def create_test_app() -> FastAPI:
 
     @app.post("/projects/{project_id}/streams")
     async def project_streams(context=Depends(require_project_capability(PROJECT_STREAMS_MANAGE))):
-        return _context_payload(context)
-
-    @app.post("/projects/{project_id}/rules")
-    async def project_rules(context=Depends(require_project_capability(PROJECT_RULES_MANAGE))):
         return _context_payload(context)
 
     @app.post("/projects/{project_id}/alerts/dispose")
@@ -255,14 +250,14 @@ class DatabaseProjectAuthorizationTests(unittest.TestCase):
         self._set_membership("project-a", account_id, PROJECT_OWNER, revision=1)
         self._set_membership("project-b", account_id, PROJECT_USER, revision=3)
 
-        owner = self.client.post("/projects/project-a/rules", headers=user_headers)
+        owner = self.client.post("/projects/project-a/streams", headers=user_headers)
         self.assertEqual(200, owner.status_code)
         self.assertEqual("PROJECT_OWNER", owner.json()["projectRole"])
-        self.assertEqual(403, self.client.post("/projects/project-b/rules", headers=user_headers).status_code)
+        self.assertEqual(403, self.client.post("/projects/project-b/streams", headers=user_headers).status_code)
         self.assertEqual(200, self.client.post("/projects/project-b/alerts/dispose", headers=user_headers).status_code)
 
         self._set_membership("project-a", account_id, PROJECT_USER, revision=2)
-        self.assertEqual(403, self.client.post("/projects/project-a/rules", headers=user_headers).status_code)
+        self.assertEqual(403, self.client.post("/projects/project-a/streams", headers=user_headers).status_code)
         self._set_membership("project-a", account_id, PROJECT_USER, enabled=False, revision=3)
         self.assertEqual(404, self.client.get("/projects/project-a/read", headers=user_headers).status_code)
 
@@ -421,7 +416,6 @@ class CapabilityMatrixTests(unittest.TestCase):
                 *PROJECT_USER_CAPABILITIES,
                 PROJECT_MEMBERS_MANAGE,
                 PROJECT_STREAMS_MANAGE,
-                PROJECT_RULES_MANAGE,
                 PROJECT_MODELS_ASSIGN,
                 "project.scenes.manage",
                 "project.scenes.approve",

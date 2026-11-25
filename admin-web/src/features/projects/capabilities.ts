@@ -11,7 +11,6 @@ export function useProjectCapabilities() {
     streams: computed(() => can('project.streams.manage')),
     dispose: computed(() => can('project.alerts.dispose')),
     exports: computed(() => can('project.exports.create')),
-    rules: computed(() => can('project.rules.manage')),
     models: computed(() => can('project.models.assign')),
     settings: computed(() => can('project.settings.manage')),
     audit: computed(() => can('project.audit.read')),

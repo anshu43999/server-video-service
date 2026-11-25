@@ -6,7 +6,6 @@ import NotFoundView from '../features/navigation/NotFoundView.vue'
 import AlertsView from '../features/alerts/AlertsView.vue'
 import StreamsView from '../features/streams/StreamsView.vue'
 import ModelsView from '../features/models/ModelsView.vue'
-import RulesView from '../features/operations/RulesView.vue'
 import PushView from '../features/operations/PushView.vue'
 import DiagnosticsView from '../features/operations/DiagnosticsView.vue'
 import DashboardView from '../features/dashboard/DashboardView.vue'
@@ -27,7 +26,7 @@ import { adminHistoryBase } from './deploymentPaths'
 
 type SessionStore = ReturnType<typeof useSessionStore>
 
-export type NavigationIcon = 'overview' | 'dashboard' | 'streams' | 'alerts' | 'push' | 'rules' | 'models' | 'diagnostics' | 'knowledge' | 'platformProjects' | 'accounts' | 'members' | 'audit' | 'appUpdates'
+export type NavigationIcon = 'overview' | 'streams' | 'alerts' | 'push' | 'scenes' | 'models' | 'diagnostics' | 'knowledge' | 'platformProjects' | 'accounts' | 'members' | 'audit' | 'appUpdates'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -47,16 +46,14 @@ declare module 'vue-router' {
 }
 
 export const consoleRoutes: RouteRecordRaw[] = [
-  { path: 'overview', name: 'overview', component: DashboardView, props: { dashboard: false }, meta: { title: '总览', eyebrow: 'SITE PULSE / 01', description: '现场运行摘要、关键指标与待关注事项。', icon: 'overview', roles: ['admin'], navigation: true } },
-  { path: 'dashboard', name: 'dashboard', component: DashboardView, props: { dashboard: true }, meta: { title: '数据看板', eyebrow: 'OPERATIONS BOARD / 07', description: '巡检指标、告警趋势、流状态与资源负载。', icon: 'dashboard', roles: ['admin'], navigation: true } },
+  { path: 'overview', name: 'overview', component: DashboardView, meta: { title: '总览', eyebrow: 'SITE PULSE / 01', description: '查看项目告警处置、巡检趋势和视频流运行情况。', icon: 'overview', roles: ['admin'], navigation: true } },
   { path: 'streams', name: 'streams', component: StreamsView, meta: { title: '视频流', eyebrow: 'STREAM REGISTRY / 02', description: '视频流会话、模型绑定、诊断预览与实时检测。', icon: 'streams', roles: ['admin'], navigation: true } },
   { path: 'alerts', name: 'alerts', component: AlertsView, meta: { title: '告警中心', eyebrow: 'ALERT CENTER / 03', description: '告警查询、证据查看与处置。', icon: 'alerts', roles: ['admin'], navigation: true } },
   { path: 'push', name: 'push', component: PushView, meta: { title: '报警推送', eyebrow: 'DELIVERY CHANNELS / 08', description: '报警推送渠道、投递状态与历史记录。', icon: 'push', roles: ['admin'], navigation: true } },
-  { path: 'rules', name: 'rules', component: RulesView, meta: { title: '规则配置', eyebrow: 'RULE STUDIO / 04', description: '识别规则、模型结果组合、绑定关系与审计记录。', icon: 'rules', roles: ['admin'], navigation: true } },
   { path: 'models', name: 'models', component: ModelsView, meta: { title: '模型资产', eyebrow: 'MODEL CATALOG / 05', description: '模型版本、转换任务、参数档案与校准集。', icon: 'models', roles: ['admin'], navigation: true } },
   { path: 'diagnostics', name: 'diagnostics', component: DiagnosticsView, meta: { title: '系统诊断', eyebrow: 'SYSTEM HEALTH / 06', description: '服务健康、依赖状态与运行资源诊断。', icon: 'diagnostics', roles: ['admin'], navigation: true } },
 ]
-const routeCapabilities: Record<string, string> = { overview: 'project.read', dashboard: 'project.read', streams: 'project.streams.view', alerts: 'project.alerts.read', push: 'project.read', rules: 'project.read' }
+const routeCapabilities: Record<string, string> = { overview: 'project.read', streams: 'project.streams.view', alerts: 'project.alerts.read', push: 'project.read' }
 for (const route of consoleRoutes) {
   route.meta = { ...route.meta, requiresProject: Boolean(routeCapabilities[String(route.name)]), platformOnly: ['models', 'diagnostics'].includes(String(route.name)), capability: routeCapabilities[String(route.name)] }
 }
@@ -64,7 +61,7 @@ for (const route of consoleRoutes) {
 export const managementRoutes: RouteRecordRaw[] = [
   { path: 'platform/alert-knowledge', name: 'system-alert-knowledge', component: KnowledgeView, props: { system: true }, meta: { title: '系统 AI 知识资料', description: '统一维护和发布系统知识资料，所有项目只读使用。', icon: 'knowledge', platformOnly: true, navigation: true } },
   { path: 'platform/app-updates', name: 'app-updates', component: AppUpdatesView, meta: { title: 'App 版本管理', description: '登记、核验、发布和回退移动端安装包。', icon: 'appUpdates', platformOnly: true, navigation: true } },
-  { path: 'scenes', name: 'scenes', component: ScenesView, meta: { title: '识别场景', description: '从项目模型中选择成员，配置可复用方案并管理审批状态。', icon: 'rules', requiresProject: true, capability: 'project.read', navigation: true } },
+  { path: 'scenes', name: 'scenes', component: ScenesView, meta: { title: '识别场景', description: '从项目模型中选择成员，配置可复用方案并管理审批状态。', icon: 'scenes', requiresProject: true, capability: 'project.read', navigation: true } },
   { path: 'project-models', name: 'project-models', component: ProjectModelsView, meta: { title: '项目模型', description: '管理当前项目可用的精确模型版本，PC 与移动端清单相互独立。', icon: 'models', requiresProject: true, capability: 'project.read', navigation: true } },
   { path: 'project-diagnostics', name: 'project-diagnostics', component: ProjectDiagnosticsView, meta: { title: '项目诊断', description: '查看当前项目的运行会话、处理帧数与服务状态。', icon: 'diagnostics', requiresProject: true, capability: 'project.read', navigation: true } },
   { path: 'alert-knowledge', name: 'alert-knowledge', component: KnowledgeView, meta: { title: 'AI 知识资料', description: '只读查询系统统一发布的告警处置参考资料。', icon: 'knowledge', requiresProject: true, capability: 'project.alert_knowledge.read', navigation: true } },
@@ -99,6 +96,7 @@ export function createAdminRouter() {
         children: [
           { path: '', redirect: { name: 'overview' } },
           { path: 'projects', name: 'projects', component: ProjectsView, meta: { title: '项目空间', description: '选择已授权项目并验证进入权限。' } },
+          { path: 'dashboard', redirect: to => ({ name: 'overview', query: to.query, hash: to.hash }) },
           ...consoleRoutes,
           ...managementRoutes,
           { path: 'engineering', redirect: { name: 'overview' } },

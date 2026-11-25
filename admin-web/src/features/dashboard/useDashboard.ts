@@ -30,14 +30,17 @@ export function useDashboard(range: Ref<StatsRange>) {
       if (!disposed && !signal.aborted && identity === context()) { target.value = value; error.value = '' }
     } catch (reason) {
       if (reason instanceof ApiError && reason.kind === 'cancelled') return
-      if (!disposed && !signal.aborted && identity === context()) { target.value = null; error.value = message(reason) }
+      if (!disposed && !signal.aborted && identity === context()) {
+        if (reason instanceof ApiError && [401, 403, 404].includes(reason.status ?? 0)) target.value = null
+        error.value = message(reason)
+      }
     }
   }
-  async function refreshStats() {
+  async function refreshStats(showProgress = true) {
     const run = ++sequence
     statsController?.abort(); statsController = new AbortController()
     const requestedRange = range.value
-    loading.value = true
+    loading.value = showProgress || stats.value === null
     await read('stats', requestedRange, signal => dashboardApi.stats(requestedRange, signal), statsController.signal, stats, statsError)
     if (!disposed && run === sequence) loading.value = false
   }
@@ -47,7 +50,7 @@ export function useDashboard(range: Ref<StatsRange>) {
     await Promise.all([
       can('project.streams.view') ? read('streams', '', streamsApi.list, signal, streams, streamsError) : (streams.value = []),
       // The WS store is not a complete recent window; retain the authoritative query.
-      read('recent', 'limit=20', signal => alertsApi.recent(signal).then(result => result.events), signal, events, eventsError),
+      can('project.alerts.read') ? read('recent', 'limit=20', signal => alertsApi.recent(signal).then(result => result.events), signal, events, eventsError) : (events.value = []),
     ])
   }
   async function refresh(force = true) {
@@ -55,7 +58,7 @@ export function useDashboard(range: Ref<StatsRange>) {
     const run = ++refreshSequence
     if (timer) clearTimeout(timer)
     if (force) dashboardReads.invalidate(['stats', 'streams', 'recent'])
-    await Promise.all([refreshStats(), refreshSources()])
+    await Promise.all([refreshStats(force), refreshSources()])
     if (!disposed && run === refreshSequence) {
       // A layout switch must not extend a nearly expired snapshot another 10s.
       const deadlines = [['stats', range.value], ['streams', ''], ['recent', 'limit=20']] as const

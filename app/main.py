@@ -48,7 +48,6 @@ from .project_auth import (
     PLATFORM_MODELS_MANAGE,
     PROJECT_READ,
     PROJECT_AUDIT_READ,
-    PROJECT_RULES_MANAGE,
     PROJECT_INSPECTION_USE,
     PROJECT_ALERTS_DISPOSE,
     PROJECT_ALERTS_READ,
@@ -98,7 +97,6 @@ from .model_parameters import ModelParameterConflict, ModelParameterError, Model
 from .conversion import ConversionService
 from .conversion_api import create_conversion_router
 from .calibration import CalibrationDatasetCatalog
-from .alerts.rules import RuleConflict, RuleValidationError, rule_registry
 from .alerts.disposition import alert_disposition_store, public_alert_event as _public_alert_event
 from .alerts.verification import AlertVerificationStore, alert_verification_store
 from .project_delivery_policy import DeliveryPolicyConflict
@@ -349,30 +347,6 @@ class ModelParameterRequest(BaseModel):
     alertRules: list[AlertRuleParameterRequest]
 
 
-class RuleRequest(BaseModel):
-    expectedRevision: int | None = Field(default=None, ge=0)
-    ruleId: str = Field(min_length=1, max_length=64)
-    name: str = Field(min_length=1, max_length=256)
-    enabled: bool = True
-    subjectKind: str = "track"
-    operator: str
-    requires: list[str] = Field(default_factory=list)
-    targetLabels: list[str] = Field(default_factory=list)
-    roiId: str | None = None
-    roi: dict | None = None
-    thresholds: dict = Field(default_factory=dict)
-    severityBands: list[dict] = Field(default_factory=list)
-    escalation: dict | None = None
-    scope: dict | None = None
-
-
-class RuleBindingRequest(BaseModel):
-    expectedRevision: int | None = Field(default=None, ge=1)
-    sourceId: str = Field(min_length=1, max_length=64)
-    capabilities: list[str] = Field(default_factory=list)
-    modelId: str | None = None
-
-
 class AlertDispositionRequest(BaseModel):
     """Human disposition payload; actor is derived from the authenticated principal."""
     actedAtUs: int | None = Field(default=None, ge=0)
@@ -477,28 +451,6 @@ class DeliveryPolicyRequest(BaseModel):
     minimumSeverity: Literal["MINOR", "MAJOR", "CRITICAL"] = "MINOR"
 
 
-class RuleValidationRequest(BaseModel):
-    sourceId: str = Field(min_length=1, max_length=64)
-    capabilities: list[str] = Field(default_factory=list)
-    modelId: str | None = None
-
-
-class RulePatchRequest(BaseModel):
-    expectedRevision: int | None = Field(default=None, ge=1)
-    name: str | None = None
-    enabled: bool | None = None
-    subjectKind: str | None = None
-    operator: str | None = None
-    requires: list[str] | None = None
-    targetLabels: list[str] | None = None
-    roiId: str | None = None
-    roi: dict | None = None
-    thresholds: dict | None = None
-    severityBands: list[dict] | None = None
-    escalation: dict | None = None
-    scope: dict | None = None
-
-
 class AlertDeliveryRequest(BaseModel):
     event: dict
     channels: list[str] | None = None
@@ -574,6 +526,8 @@ def _app_updates():
     return _app_update_service
 
 
+from .mobile_clip_api import create_mobile_clip_router
+app.include_router(create_mobile_clip_router(lambda: database))
 app.include_router(create_auth_router())
 app.include_router(create_update_router(_app_updates))
 app.include_router(create_external_router(_apk_external))
@@ -1748,146 +1702,13 @@ async def register_models(request: RegisterManifestRequest, _: None = Depends(re
     return {"models": models}
 
 
-# --- Runtime alert rule management (M11-T07) -------------------------------
 def _expected_revision(value: int | None) -> int:
     if value is None:
         raise HTTPException(status_code=422, detail={"code": "expected_revision_required", "message": "expectedRevision is required"})
     return value
 
 
-def _rule_error(exc):
-    if isinstance(exc, KeyError):
-        return HTTPException(status_code=404, detail={"code": "rule_not_found", "message": "rule not found"})
-    return HTTPException(status_code=409 if isinstance(exc, RuleConflict) else 422,
-                         detail={"code": exc.code, "message": str(exc)})
-
-
-def _mutation_identity(context, request):
-    return {"project_id": context.project_id, "actor": context.principal.account_id,
-            "context": context, "request_id": request.headers.get("x-request-id", "")[:128] or None}
-
-
-@app.get("/aiyoloapi/projects/{project_id}/rules")
-@app.get("/aiyoloapi/rules", include_in_schema=False)
-async def list_rules(context: ProjectContext = Depends(require_project_capability(PROJECT_READ)), project_id: str | None = None):
-    return {"projectId": context.project_id, "rules": rule_registry.list(context.project_id)}
-
-
-@app.get("/aiyoloapi/projects/{project_id}/rules/audit")
-@app.get("/aiyoloapi/rules/audit", include_in_schema=False)
-async def list_rule_audit(rule_id: str | None = Query(default=None), context: ProjectContext = Depends(require_project_capability(PROJECT_AUDIT_READ)), project_id: str | None = None):
-    return {"projectId": context.project_id, "audit": rule_registry.audits(rule_id, context.project_id)}
-
-
-@app.get("/aiyoloapi/projects/{project_id}/rules/{rule_id}")
-@app.get("/aiyoloapi/rules/{rule_id}", include_in_schema=False)
-async def get_rule(rule_id: str, context: ProjectContext = Depends(require_project_capability(PROJECT_READ)), project_id: str | None = None):
-    try:
-        return rule_registry.get(rule_id, context.project_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail={"code": "rule_not_found", "message": "rule not found"})
-
-
-@app.post("/aiyoloapi/projects/{project_id}/rules", status_code=201)
-@app.post("/aiyoloapi/rules", status_code=201, include_in_schema=False)
-async def create_rule(request: RuleRequest, http_request: Request, context: ProjectContext = Depends(require_project_capability(PROJECT_RULES_MANAGE)), project_id: str | None = None):
-    try:
-        try:
-            rule_registry.get(request.ruleId, context.project_id)
-            raise HTTPException(status_code=409, detail={"code": "rule_already_exists", "message": "rule already exists"})
-        except KeyError:
-            pass
-        return rule_registry.upsert(request.model_dump(exclude={"expectedRevision"}, exclude_none=True), expected_revision=0, **_mutation_identity(context, http_request))
-    except RuleValidationError as exc:
-        raise _rule_error(exc)
-
-
-@app.put("/aiyoloapi/projects/{project_id}/rules/{rule_id}")
-@app.put("/aiyoloapi/rules/{rule_id}", include_in_schema=False)
-async def update_rule(rule_id: str, request: RuleRequest, http_request: Request, context: ProjectContext = Depends(require_project_capability(PROJECT_RULES_MANAGE)), project_id: str | None = None):
-    if request.ruleId != rule_id:
-        raise HTTPException(status_code=400, detail={"code": "RULE_ID_MISMATCH", "message": "ruleId does not match path"})
-    try:
-        rule_registry.get(rule_id, context.project_id)
-        return rule_registry.upsert(request.model_dump(exclude={"expectedRevision"}, exclude_none=True), expected_revision=_expected_revision(request.expectedRevision), **_mutation_identity(context, http_request))
-    except (KeyError, RuleValidationError) as exc:
-        raise _rule_error(exc)
-
-
-@app.patch("/aiyoloapi/projects/{project_id}/rules/{rule_id}")
-@app.patch("/aiyoloapi/rules/{rule_id}", include_in_schema=False)
-async def patch_rule(rule_id: str, request: RulePatchRequest, http_request: Request, context: ProjectContext = Depends(require_project_capability(PROJECT_RULES_MANAGE)), project_id: str | None = None):
-    try:
-        current = rule_registry.get(rule_id, context.project_id)
-        current.pop("bindings", None)
-        current.update(request.model_dump(exclude={"expectedRevision"}, exclude_none=True))
-        current["ruleId"] = rule_id
-        return rule_registry.upsert(current, expected_revision=_expected_revision(request.expectedRevision), **_mutation_identity(context, http_request))
-    except KeyError:
-        raise HTTPException(status_code=404, detail={"code": "rule_not_found", "message": "rule not found"})
-    except RuleValidationError as exc:
-        raise _rule_error(exc)
-
-
-@app.delete("/aiyoloapi/projects/{project_id}/rules/{rule_id}", status_code=204)
-@app.delete("/aiyoloapi/rules/{rule_id}", status_code=204, include_in_schema=False)
-async def delete_rule(rule_id: str, http_request: Request, expectedRevision: int = Query(ge=1), context: ProjectContext = Depends(require_project_capability(PROJECT_RULES_MANAGE)), project_id: str | None = None):
-    try:
-        rule_registry.delete(rule_id, expected_revision=expectedRevision, **_mutation_identity(context, http_request))
-    except KeyError:
-        raise HTTPException(status_code=404, detail={"code": "rule_not_found", "message": "rule not found"})
-    except RuleConflict as exc:
-        raise _rule_error(exc)
-
-
-@app.get("/aiyoloapi/projects/{project_id}/rules/{rule_id}/bindings")
-@app.get("/aiyoloapi/rules/{rule_id}/bindings", include_in_schema=False)
-async def list_rule_bindings(rule_id: str, context: ProjectContext = Depends(require_project_capability(PROJECT_READ)), project_id: str | None = None):
-    try:
-        return {"projectId": context.project_id, "bindings": rule_registry.bindings(rule_id, context.project_id)}
-    except KeyError:
-        raise HTTPException(status_code=404, detail={"code": "rule_not_found", "message": "rule not found"})
-
-
-@app.post("/aiyoloapi/projects/{project_id}/rules/{rule_id}/bindings")
-@app.post("/aiyoloapi/rules/{rule_id}/bindings", include_in_schema=False)
-async def bind_rule(rule_id: str, request: RuleBindingRequest, http_request: Request, context: ProjectContext = Depends(require_project_capability(PROJECT_RULES_MANAGE)), project_id: str | None = None):
-    try:
-        model_id, capabilities = _rule_source(context, request.sourceId, request.modelId)
-        result = rule_registry.bind(rule_id, request.sourceId, capabilities, model_id=model_id, expected_revision=_expected_revision(request.expectedRevision), **_mutation_identity(context, http_request))
-    except KeyError:
-        raise HTTPException(status_code=404, detail={"code": "rule_not_found", "message": "rule not found"})
-    except RuleValidationError as exc:
-        raise _rule_error(exc)
-    if not result.get("accepted", False):
-        raise HTTPException(status_code=409, detail=result)
-    return result
-
-
-@app.post("/aiyoloapi/projects/{project_id}/rules/{rule_id}/validate")
-@app.post("/aiyoloapi/rules/{rule_id}/validate", include_in_schema=False)
-async def validate_rule_binding(rule_id: str, request: RuleValidationRequest, context: ProjectContext = Depends(require_project_capability(PROJECT_RULES_MANAGE)), project_id: str | None = None):
-    """Dry-run a binding; unlike evaluation, incompatibility is never silent."""
-    try:
-        model_id, capabilities = _rule_source(context, request.sourceId, request.modelId)
-        return rule_registry.check(rule_id, request.sourceId, capabilities, model_id=model_id, project_id=context.project_id)
-    except KeyError:
-        raise HTTPException(status_code=404, detail={"code": "rule_not_found", "message": "rule not found"})
-    except RuleValidationError as exc:
-        raise HTTPException(status_code=422, detail={"code": exc.code, "message": str(exc)})
-
-
-@app.delete("/aiyoloapi/projects/{project_id}/rules/{rule_id}/bindings/{source_id}")
-async def unbind_rule(project_id: str, rule_id: str, source_id: str, http_request: Request,
-    expectedRevision: int = Query(ge=1), context: ProjectContext = Depends(require_project_capability(PROJECT_RULES_MANAGE))):
-    try:
-        return rule_registry.unbind(rule_id, source_id, expected_revision=expectedRevision,
-                                    **_mutation_identity(context, http_request))
-    except (KeyError, RuleValidationError) as exc:
-        raise _rule_error(exc)
-
-
-def _rule_source(context, source_id, requested_model=None):
+def _stream_capabilities(context, source_id, requested_model=None):
     stream = streams.get((context.project_id, source_id))
     config = stream_config_store.get(source_id, context.project_id)
     if stream is None and config is None:
@@ -1914,7 +1735,7 @@ async def list_capability_sources(
     source_ids = {item.stream_id for item in stream_config_store.list(context.project_id)}
     source_ids.update(sid for (pid, sid) in streams if pid == context.project_id)
     for stream_id in sorted(source_ids):
-        model_id, caps = _rule_source(context, stream_id)
+        model_id, caps = _stream_capabilities(context, stream_id)
         result.append({"projectId": context.project_id, "sourceId": stream_id,
                        "modelId": model_id, "capabilities": sorted(caps)})
     return {"sources": result}

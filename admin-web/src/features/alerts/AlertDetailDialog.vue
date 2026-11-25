@@ -227,8 +227,12 @@ watch([() => props.open, () => props.event?.projectId, () => props.event?.eventI
   void loadLatestAdvice()
 }, { immediate: true })
 watch(evidenceVisible, visible => {
-  if (visible && props.open && props.event) void loadEvidence(props.event.eventId, showingOriginalVersion)
-  else { releaseEvidence(); evidencePhase.value = 'idle' }
+  if (visible && props.open && props.event && evidencePhase.value === 'idle') {
+    void loadEvidence(props.event.eventId, showingOriginalVersion)
+  } else if (!visible && evidencePhase.value === 'loading') {
+    releaseEvidence()
+    evidencePhase.value = 'idle'
+  }
 })
 const releaseScope = projectScope.onClear(() => { evidenceDisposed = true; releaseEvidence(); evidencePhase.value = 'idle' })
 

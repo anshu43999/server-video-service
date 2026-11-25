@@ -197,7 +197,7 @@ for (const width of [1440, 390]) {
     await expect(note).toHaveValue('现场核验中，请保留这段备注')
     await expect.poll(() => detail.evaluate(element => element.scrollTop)).toBe(y)
     expect(evidenceRequests).toBe(initialEvidence)
-    await page.screenshot({ path: `../evidence/M29/M29-T20/stable-detail-${width}.png` })
+    await page.screenshot({ path: test.info().outputPath(`stable-detail-${width}.png`) })
     await detail.getByRole('button', { name: '关闭告警详情' }).click()
     await page.locator('.alert-event-row').click()
     await expect(detail.getByPlaceholder('记录判断依据或现场处理情况')).toHaveValue('')

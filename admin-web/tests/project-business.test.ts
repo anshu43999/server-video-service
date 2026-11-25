@@ -16,7 +16,7 @@ it('reads capabilities rather than platform or legacy role, and fails closed whi
   const caps=useProjectCapabilities()
   expect(caps.dispose.value).toBe(true);expect(caps.streams.value).toBe(false);expect(caps.models.value).toBe(false)
   const names=projectNavigationItems(projects.current!.capabilities,false).map(r=>r.name)
-  expect(names).toContain('project-models');expect(names).toContain('rules');expect(names).toContain('project-diagnostics');expect(names).not.toContain('models');expect(names).not.toContain('diagnostics')
+  expect(names).toContain('project-models');expect(names).not.toContain('rules');expect(names).toContain('project-diagnostics');expect(names).not.toContain('models');expect(names).not.toContain('diagnostics')
   projects.phase='choosing';expect(caps.dispose.value).toBe(false)
 })
 it('pins parameter operations and assignment approvals to a project, version and revision',async()=>{

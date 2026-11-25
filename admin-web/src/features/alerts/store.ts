@@ -1,3 +1,4 @@
+import { ApiError } from '../../api/errors'
 import { computed, onScopeDispose, ref } from 'vue'
 import { projectScope } from '../../api/projectScope'
 import { defineStore } from 'pinia'
@@ -73,7 +74,7 @@ export const useAlertsStore = defineStore('alerts', () => {
     if (refreshing) return refreshing
     const sequence = ++listSequence
     const versionAtStart = realtimeVersion
-    if (!options.background || phase.value === 'idle') phase.value = 'loading'
+    if (!baselineReady) phase.value = 'loading'
     error.value = ''
     refreshing = (async () => {
       try {
@@ -90,7 +91,7 @@ export const useAlertsStore = defineStore('alerts', () => {
         phase.value = 'ready'
       } catch (reason) {
         if (sequence !== listSequence) return
-        phase.value = events.value.length && options.background ? 'ready' : 'error'
+        phase.value = baselineReady && !(reason instanceof ApiError && [401, 403, 404].includes(reason.status ?? 0)) ? 'ready' : 'error'
         error.value = reason instanceof Error ? reason.message : '无法读取告警事件'
       }
     })().finally(() => { if (sequence === listSequence) refreshing = undefined })

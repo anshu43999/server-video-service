@@ -21,9 +21,9 @@ async function select(project: AccessibleProject) {
 </script>
 
 <template>
-  <section class="project-picker" aria-label="项目空间" :aria-busy="projects.busy">
+  <section class="project-picker" aria-label="项目空间" :aria-busy="(projects.phase === 'loading' || projects.permissionBlocking)">
     <p v-if="projects.message" role="alert" class="shell-alert">{{ projects.message }}</p>
-    <p v-if="projects.busy" role="status">正在验证账号与项目…</p>
+    <p v-if="(projects.phase === 'loading' || projects.permissionBlocking)" role="status">正在验证账号与项目…</p>
     <div v-else-if="projects.projects.length" class="project-grid">
       <article v-for="project in projects.projects" :key="project.projectId" class="project-card">
         <p class="eyebrow">{{ project.projectCode }}</p>
@@ -35,6 +35,6 @@ async function select(project: AccessibleProject) {
       </article>
     </div>
     <p v-else-if="projects.phase === 'empty'" role="status">请联系平台超级管理员或项目负责人分配项目成员权限。账号登录成功不代表已拥有项目权限。</p>
-    <UiButton v-if="!projects.busy" class="secondary-button" @click="projects.enter(undefined, true)">重新验证项目</UiButton>
+    <UiButton v-if="!(projects.phase === 'loading' || projects.permissionBlocking)" class="secondary-button" @click="projects.enter(undefined, true)">重新验证项目</UiButton>
   </section>
 </template>

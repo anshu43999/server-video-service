@@ -44,6 +44,15 @@ npm run build:preview  # /admin-next/ 产物写入 dist-preview/
 .\start-server.ps1 -Reload
 ```
 
+Windows 本地启动脚本（含 `-Reload`）及 `python run.py` 显式使用
+Selector 事件循环，规避 CPython Proactor 在接收连接时遇到
+`WinError 64` 后关闭监听套接字的问题。需要 Uvicorn 0.36+；
+已有旧虚拟环境可执行 `.venv\Scripts\python.exe -m pip install -r requirements.txt`。
+直接运行 Uvicorn CLI 时需追加 `--loop app.local_event_loop:create_windows_loop`。
+此选择只适用于 Windows 本地运行：最多 512 个套接字（包括输入、数据库等连接），
+不支持 asyncio 子进程/管道接口；高并发部署继续使用 Linux 默认循环。
+本改动不跳过数据库或 MinIO 启动校验。
+
 首次安装需要联网；无模型时 PC 可以看原画面预览，YOLO 分析和告警要求可用、已授权模型。脚本不再启动分发进程；旧 `-WithMediaMtx` / `-Media*` 参数会被拒绝，旧输出环境变量被忽略。
 
 本地真实 RTSP 验收可以使用既有的摄像机地址；若使用工作区的文件循环测试源，在工作区根目录单独运行 `tools/rtsp/start_rtsp_video.ps1 -NoAdbReverse`，再在本工程执行 `start-server.ps1 -NoInstall`。测试源作为输入，不是后台的输出分发服务；不要误停共享的摄像机源，也不要打开 Android 直播。

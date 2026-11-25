@@ -123,9 +123,6 @@ def mount_business(app, admin):
         main.stream_config_store.create(StreamConfiguration(stream_id="gate", display_name="现场入口",
             source_type="websocket", source_url=None, model_id=None, yolo_enabled=False, confidence=0.25,
             max_fps=20, overlay_enabled=True, enabled=False, project_id=pid))
-        main.rule_registry.upsert({"ruleId":"helmet-rule","name":"未戴安全帽告警","enabled":True,
-            "operator":"PRESENCE","subjectKind":"track","requires":[],"targetLabels":["head"],
-            "thresholds":{"minimumConfidence":0.5}}, expected_revision=0, project_id=pid)
         now = time.time_ns() // 1000
         main.alert_disposition_store.register({"eventId":"business-alert","ruleId":"helmet-rule",
             "sourceId":"gate","label":"head","state":"CONFIRMED","severity":"MAJOR",

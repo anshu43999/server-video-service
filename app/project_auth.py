@@ -36,7 +36,6 @@ PLATFORM_ALERT_KNOWLEDGE_MANAGE = "platform.alert_knowledge.manage"
 PROJECT_READ = "project.read"
 PROJECT_MEMBERS_MANAGE = "project.members.manage"
 PROJECT_STREAMS_MANAGE = "project.streams.manage"
-PROJECT_RULES_MANAGE = "project.rules.manage"
 PROJECT_MODELS_ASSIGN = "project.models.assign"
 PROJECT_SCENES_MANAGE = "project.scenes.manage"
 PROJECT_SCENES_APPROVE = "project.scenes.approve"
@@ -84,7 +83,6 @@ PROJECT_OWNER_CAPABILITIES = frozenset(
         *PROJECT_USER_CAPABILITIES,
         PROJECT_MEMBERS_MANAGE,
         PROJECT_STREAMS_MANAGE,
-        PROJECT_RULES_MANAGE,
         PROJECT_MODELS_ASSIGN,
         PROJECT_SCENES_MANAGE,
         PROJECT_SCENES_APPROVE,

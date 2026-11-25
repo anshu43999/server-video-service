@@ -116,7 +116,8 @@ export class ApiClient {
         const error = await this.responseError(response.status, payload, response.headers.get('retry-after'), options.skipSessionCheck)
         assertCurrent()
         // A handled 401 already awaited the shared permission verification.
-        if (scoped && ([403, 404].includes(response.status) || (response.status === 401 && !this.unauthorized))) projectScope.onDenied?.()
+        const missingAttachment = response.status === 404 && ['evidence_not_found', 'ADVICE_GENERATION_NOT_FOUND'].includes(error.code)
+        if (scoped && !missingAttachment && ([403, 404].includes(response.status) || (response.status === 401 && !this.unauthorized))) projectScope.onDenied?.()
         throw error
       }
       const kind = options.response ?? 'json'
