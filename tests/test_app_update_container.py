@@ -82,6 +82,12 @@ class AppUpdateContainerTests(unittest.TestCase):
                 self.assertIn(name, self.failed(self.result()))
                 self.env[name] = "true"
 
+    def test_optional_obs_configuration_uses_worker_rules(self):
+        self.env["APP_APK_OBS_BUCKET_HOST"] = "worsoftx.obs.cn-north-9.myhuaweicloud.com"
+        self.assertIn("obs_gateway_configuration", self.failed(self.result()))
+        self.env["APP_APK_OBS_GATEWAY_IPS"] = "100.125.96.30,100.125.96.158"
+        self.assertTrue(self.result()["ok"])
+
     def test_tools_only_does_not_require_signing_or_business_configuration(self):
         env = {k: v for k, v in self.env.items() if k in ("APP_APK_AAPT2_PATH", "APP_APK_JAVA_PATH", "APP_APK_APKSIGNER_JAR_PATH")}
         result = check(env, tools_only=True, run=self.runner)

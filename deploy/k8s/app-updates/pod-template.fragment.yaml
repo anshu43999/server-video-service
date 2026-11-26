@@ -28,6 +28,12 @@ containers:
     env:
       - {name: APP_UPDATES_ENABLED, value: 'true'}
       - {name: APP_APK_EXTERNAL_ENABLED, value: 'true'}
+      - name: APP_APK_OBS_BUCKET_HOST
+        valueFrom:
+          configMapKeyRef: {name: aiyolo-app-update-runtime, key: APP_APK_OBS_BUCKET_HOST, optional: true}
+      - name: APP_APK_OBS_GATEWAY_IPS
+        valueFrom:
+          configMapKeyRef: {name: aiyolo-app-update-runtime, key: APP_APK_OBS_GATEWAY_IPS, optional: true}
       - {name: APP_APK_WORKER_ENABLED, value: 'false'}
       - name: APP_UPDATE_KEY_ID
         valueFrom:

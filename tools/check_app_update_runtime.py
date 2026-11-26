@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 TRUE = {"1", "true", "yes", "on"}
 ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\Z")
@@ -62,6 +63,11 @@ def check(env, *, tools_only=False, run=subprocess.run):
                 raise ValueError("mandatory_feature_disabled")
         for name in ("APP_UPDATES_ENABLED", "APP_APK_EXTERNAL_ENABLED"):
             probe(name, lambda name=name: required_flag(name))
+
+        def obs_gateway():
+            from app.app_updates.external_fetch import ObsGateway
+            ObsGateway.from_config(env.get("APP_APK_OBS_BUCKET_HOST", ""), env.get("APP_APK_OBS_GATEWAY_IPS", ""))
+        probe("obs_gateway_configuration", obs_gateway)
 
         def scopes():
             values = _json(env, "APP_UPDATE_SCOPES_PATH")
@@ -142,4 +148,6 @@ def main():
 
 
 if __name__ == "__main__":
+    # Direct execution from /app/tools uses the same package as the worker.
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     raise SystemExit(main())

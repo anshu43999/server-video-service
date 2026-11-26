@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     app_apk_external_enabled: bool = False
     app_apk_external_root: str = ".tmp/app-apk-external"
     app_apk_external_seconds: int = 300
+    app_apk_obs_bucket_host: str = ""
+    app_apk_obs_gateway_ips: str = ""
     # App metadata signing is independent of model/APK signing identities.
     app_updates_enabled: bool = False
     app_update_key_id: str | None = None

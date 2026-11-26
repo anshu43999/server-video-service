@@ -111,12 +111,36 @@ class FetchedApk:
     evidence: dict
 
 
+@dataclass(frozen=True)
+class ObsGateway:
+    host: str
+    ips: frozenset[str]
+
+    @classmethod
+    def from_config(cls, host, ip_list):
+        if not host and not ip_list:
+            return None
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,61}[a-z0-9]\.obs\.[a-z0-9-]{1,63}\.myhuaweicloud\.com", host):
+            raise ValueError("expected exact regional OBS bucket hostname")
+        pins = [ipaddress.IPv4Address(item.strip()) for item in ip_list.split(",")]
+        if not 1 <= len(pins) <= 32 or any(ip not in ipaddress.IPv4Network("100.64.0.0/10") for ip in pins):
+            raise ValueError("expected individual OBS shared-space IPv4 addresses")
+        return cls(host, frozenset(map(str, pins)))
+
+    def permits(self, parsed, addresses):
+        return (parsed.hostname == self.host and not parsed.query
+                and re.fullmatch(r"/apk/[A-Za-z0-9][A-Za-z0-9._-]*\.apk", parsed.path) is not None
+                and all(ip in self.ips for ip in addresses))
+
+
 class ExternalFetcher:
-    def __init__(self, *, max_bytes=8 * 1024**3, seconds=300, resolver=resolve, connection=PinnedHTTPS):
+    def __init__(self, *, max_bytes=8 * 1024**3, seconds=300, resolver=resolve, connection=PinnedHTTPS,
+                 obs_gateway=None):
         if not 0 < max_bytes <= 8 * 1024**3 or not 0 < seconds <= 1200:
             raise ValueError("invalid external fetch limits")
         self.max_bytes, self.seconds = max_bytes, seconds
         self.resolver, self.connection = resolver, connection
+        self.obs_gateway = obs_gateway
 
     def fetch(self, url, allowed_hosts, output):
         deadline, hops = time.monotonic() + self.seconds, []
@@ -129,7 +153,10 @@ class ExternalFetcher:
             for hop in range(4):
                 parsed = validate_url(url, allowed_hosts)
                 addresses = self.resolver(parsed.hostname, min(5, remaining()))
-                if not addresses or len(addresses) > 32 or not all(public_address(ip) for ip in addresses):
+                if not addresses or len(addresses) > 32:
+                    raise FetchError("external_address_forbidden")
+                via_gateway = not all(public_address(ip) for ip in addresses)
+                if via_gateway and (hop != 0 or not self.obs_gateway or not self.obs_gateway.permits(parsed, addresses)):
                     raise FetchError("external_address_forbidden")
                 # Connect directly to the validated IP; SNI/cert/Host retain
                 # the approved DNS name. No second DNS lookup or env proxy.
@@ -164,6 +191,8 @@ class ExternalFetcher:
                     hops.append({"host": parsed.hostname, "addresses": list(addresses), "status": response.status,
                         "urlSha256": hashlib.sha256(url.encode()).hexdigest()})
                     if response.status in (301, 302, 303, 307, 308):
+                        if via_gateway:
+                            raise FetchError("external_obs_redirect_forbidden")
                         location = response.getheader("Location")
                         if hop == 3 or not location:
                             raise FetchError("external_redirect_limit")

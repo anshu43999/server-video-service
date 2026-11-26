@@ -18,7 +18,7 @@ from sqlalchemy import select
 from app import auth
 from app.app_updates.contract import ExternalArtifactRequest, SourceRequest
 from app.app_updates.external_api import create_external_router
-from app.app_updates.external_fetch import ExternalFetcher, FetchError, public_address
+from app.app_updates.external_fetch import ExternalFetcher, FetchError, ObsGateway, public_address
 from app.app_updates.external_jobs import ExternalJobs
 from app.app_updates.models import AppArtifact, AppArtifactSource, AppIdentity, AppUpload
 from app.app_updates.uploads import now
@@ -80,6 +80,61 @@ def request(key="test", url="https://apk.example.com/file.apk", **extra):
 
 
 class FetchTests(unittest.TestCase):
+    obs_host = "worsoftx.obs.cn-north-9.myhuaweicloud.com"
+    obs_ips = ("100.125.96.30", "100.125.96.158")
+
+    def obs_fetcher(self, responses, ips, *, enabled=True):
+        gateway = ObsGateway.from_config(self.obs_host, ",".join(self.obs_ips)) if enabled else None
+        transport = Transport(responses)
+        return ExternalFetcher(resolver=lambda *_: ips, connection=transport, obs_gateway=gateway), transport
+
+    def test_obs_direct_apk_uses_approved_address_and_original_host(self):
+        fetch, transport = self.obs_fetcher([Response()], self.obs_ips)
+        path = "/apk/aiyolo-0.1.14-vc15-production.apk"
+        output = io.BytesIO()
+        result = fetch.fetch(f"https://{self.obs_host}{path}", [self.obs_host], output)
+        self.assertEqual(RAW, output.getvalue())
+        self.assertEqual(transport.calls[0][:4], (self.obs_host, self.obs_ips[0], "GET", path))
+        self.assertEqual(result.evidence["hops"][0]["addresses"], list(self.obs_ips))
+
+    def test_obs_scope_rejected_before_connect(self):
+        other = "other.obs.cn-north-9.myhuaweicloud.com"
+        for enabled, host, path, ips, hosts in [
+            (False, self.obs_host, "/apk/a.apk", self.obs_ips, [self.obs_host]),
+            (True, other, "/apk/a.apk", self.obs_ips, [other]),
+            (True, self.obs_host, "/apk/a.apk", self.obs_ips, [other]),
+            (True, self.obs_host, "/other/a.apk", self.obs_ips, [self.obs_host]),
+            (True, self.obs_host, "/apk/a.apk?x=1", self.obs_ips, [self.obs_host]),
+            (True, self.obs_host, "/apk/a.apk", (*self.obs_ips, "100.125.96.31"), [self.obs_host]),
+            (True, self.obs_host, "/apk/a.apk", (*self.obs_ips, "8.8.8.8"), [self.obs_host]),
+        ]:
+            with self.subTest(host=host, path=path, ips=ips, hosts=hosts, enabled=enabled):
+                fetch, transport = self.obs_fetcher([], ips, enabled=enabled)
+                with self.assertRaises(FetchError):
+                    fetch.fetch(f"https://{host}{path}", hosts, io.BytesIO())
+                self.assertEqual(transport.calls, [])
+
+    def test_obs_exception_never_follows_or_accepts_a_redirect(self):
+        url = f"https://{self.obs_host}/apk/a.apk"
+        hosts = [self.obs_host, "apk.example.com"]
+        fetch, transport = self.obs_fetcher([Response(status=302, Location="/apk/b.apk")], self.obs_ips)
+        with self.assertRaisesRegex(FetchError, "external_obs_redirect_forbidden"):
+            fetch.fetch(url, hosts, io.BytesIO())
+        self.assertEqual(len(transport.calls), 1)
+        fetch, transport = self.obs_fetcher([Response(status=302, Location=url)], self.obs_ips)
+        fetch.resolver = lambda host, _: self.obs_ips if host == self.obs_host else ("8.8.8.8",)
+        with self.assertRaisesRegex(FetchError, "external_address_forbidden"):
+            fetch.fetch("https://apk.example.com/a.apk", hosts, io.BytesIO())
+        self.assertEqual(len(transport.calls), 1)
+
+    def test_obs_configuration_requires_exact_host_and_individual_shared_ips(self):
+        self.assertIsNone(ObsGateway.from_config("", ""))
+        for host, pins in [(self.obs_host, ""), ("", self.obs_ips[0]), ("*.myhuaweicloud.com", self.obs_ips[0]),
+                           (self.obs_host, "100.64.0.0/10"), (self.obs_host, "127.0.0.1"),
+                           (self.obs_host, "8.8.8.8"), (self.obs_host, "::1")]:
+            with self.subTest(host=host, pins=pins), self.assertRaises(ValueError):
+                ObsGateway.from_config(host, pins)
+
     def test_full_stream_no_credentials_and_range_optional(self):
         fetch, transport = fetcher([Response(Content_Length=len(RAW))])
         output = io.BytesIO()

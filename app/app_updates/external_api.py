@@ -11,7 +11,7 @@ from starlette.requests import ClientDisconnect
 
 from .apk_verifier import ApkVerifier, Toolchain
 from .contract import ExternalArtifactRequest, SourceRequest
-from .external_fetch import ExternalFetcher
+from .external_fetch import ExternalFetcher, ObsGateway
 from .external_jobs import ExternalJobs
 from .uploads import UploadError
 from .verification_jobs import BuildCompatibility
@@ -28,7 +28,8 @@ def configured_external(database, settings):
         compatibility = BuildCompatibility(**json.loads(Path(settings.app_apk_compatibility_path).read_text(encoding="utf-8")))
         compatibility.validate()
         return ExternalJobs(database, ApkVerifier(Toolchain.from_settings(settings)), ExternalFetcher(
-            max_bytes=settings.app_apk_max_bytes, seconds=settings.app_apk_external_seconds),
+            max_bytes=settings.app_apk_max_bytes, seconds=settings.app_apk_external_seconds,
+            obs_gateway=ObsGateway.from_config(settings.app_apk_obs_bucket_host, settings.app_apk_obs_gateway_ips)),
             root=settings.app_apk_external_root, compatibility=compatibility,
             max_jobs=settings.app_apk_max_jobs, lease_seconds=settings.app_apk_lease_seconds)
     except Exception as exc:
